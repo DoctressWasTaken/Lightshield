@@ -7,4 +7,4 @@ RUN pip install -r api_component/requirements.txt
 COPY config.json .
 COPY api_component/ .
 
-CMD ['python', 'api_component/run.py']
+CMD ["python", "api_component/run.py"]
