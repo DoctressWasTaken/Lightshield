@@ -20,7 +20,6 @@ async def process_message(message: aio_pika.IncomingMessage):
         info = message.info()
         out = info['headers']['out'].decode()
         id = info['headers']['id'].decode()
-        print(out)
         channel = await connection.channel()
         out_queue = await channel.declare_queue(
             out

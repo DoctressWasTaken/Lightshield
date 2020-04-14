@@ -1,0 +1,18 @@
+version: '3'
+services:
+  rabbitmq:
+    container_name: rabbitmq
+    image: launcher.gcr.io/google/rabbitmq3
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+
+  api_component:
+    container_name: api_component
+    build:
+      dockerfile: api_component/Dockerfile
+      context: .
+    links:
+      - rabbitmq:rabbitmq
+
+volumes:
+  rabbitmq:

@@ -24,6 +24,7 @@ async def main(loop):
     response = await channel.declare_queue(
         'league'
     )
+    ids = []
 
     for i in range(20):
         data = json.dumps([
@@ -36,7 +37,7 @@ async def main(loop):
                 'division': 'I',
                 'page': i+1}
         ])
-
+        ids.append(str(i))
         await channel.default_exchange.publish(
 
             aio_pika.Message(
@@ -45,15 +46,23 @@ async def main(loop):
             ),
             routing_key=routing_key
         )
-
-    await response.consume(callback=process_message)
-    return connection
+    await asyncio.sleep(2)
+    while ids:
+        message = await response.get(timeout=5)
+        await message.ack()
+        info = message.info()
+        print(message.headers_raw)
+        print(message.body)
+        ids.pop(ids.index(message.headers_raw['id'].decode()))
+        print(ids)
+    try:
+        while True:
+            message = await response.get(timeout=5)
+            await message.ack()
+    except:
+        pass
+    await connection.close()
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
-    connection = loop.run_until_complete(main(loop))
-
-    try:
-        loop.run_forever()
-    finally:
-        loop.run_until_complete(connection.close())
+    loop.run_until_complete(main(loop))
