@@ -8,5 +8,5 @@ COPY config.json .
 COPY api_component/ ./api_component/
 RUN ls
 WORKDIR /project/api_component
-
+RUN ls
 CMD ["python", "run.py"]

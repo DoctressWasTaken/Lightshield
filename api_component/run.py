@@ -3,9 +3,11 @@
 import asyncio
 import aio_pika
 import json
+import time
+time.sleep(6000)
 config = json.loads(open('..\config.json').read())
 
-from api import API
+from api_component.api import API
 
 server_ids = ['EUW1', 'NA1']
 apis = {}
