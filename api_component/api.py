@@ -1,5 +1,5 @@
 import json
-from api_component.templates import DefaultEndpoint, Limit
+from templates import DefaultEndpoint, Limit
 import aiohttp
 
 class API:
