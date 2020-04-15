@@ -3,9 +3,7 @@
 import asyncio
 import aio_pika
 import json
-import time
-time.sleep(6000)
-config = json.loads(open('..\config.json').read())
+config = json.loads(open('../config.json').read())
 
 from api_component.api import API
 

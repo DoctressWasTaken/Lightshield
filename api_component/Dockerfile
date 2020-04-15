@@ -6,7 +6,5 @@ COPY api_component/requirements.txt api_component/requirements.txt
 RUN pip install -r api_component/requirements.txt
 COPY config.json .
 COPY api_component/ ./api_component/
-RUN ls
 WORKDIR /project/api_component
-RUN ls
 CMD ["python", "run.py"]
