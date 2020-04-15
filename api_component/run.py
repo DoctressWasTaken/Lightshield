@@ -49,7 +49,7 @@ async def main(loop):
     global connection
 
     connection = await aio_pika.connect_robust(
-        "amqp://guest:guest@localhost/", loop=loop
+        "amqp://guest:guest@" + config['HOST'], loop=loop
     )
 
     queue_name = "requests"
