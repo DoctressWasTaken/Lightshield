@@ -1,0 +1,4 @@
+psycopg2-binary
+aiohttp
+aio-pika
+django

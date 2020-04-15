@@ -15,6 +15,59 @@ services:
     links:
       - rabbitmq:rabbitmq
     restart: always
+    depends_on:
+      - rabbitmq
+
+  postgres:
+    image: postgres
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+  league_updater_euw:
+    container_name: league_updater_euw
+    build:
+      dockerfile: league_updater/Dockerfile
+      context: .
+    links:
+      - rabbitmq:rabbitmq
+      - postgres:postgres
+    restart: always
+    environment:
+      - SERVER=EUW1
+    depends_on:
+      - postgres
+      - rabbitmq
+
+  league_updater_kr:
+    container_name: league_updater_kr
+    build:
+      dockerfile: league_updater/Dockerfile
+      context: .
+    links:
+      - rabbitmq:rabbitmq
+      - postgres:postgres
+    restart: always
+    environment:
+      - SERVER=KR1
+    depends_on:
+      - postgres
+      - rabbitmq
+
+  league_updater_na:
+    container_name: league_updater_na
+    build:
+      dockerfile: league_updater/Dockerfile
+      context: .
+    links:
+      - rabbitmq:rabbitmq
+      - postgres:postgres
+    restart: always
+    environment:
+      - SERVER=NA1
+    depends_on:
+      - postgres
+      - rabbitmq
 
 volumes:
   rabbitmq:
+  postgres:

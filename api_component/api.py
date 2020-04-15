@@ -1,15 +1,22 @@
 import json
 from templates import DefaultEndpoint, Limit
 import aiohttp
+import asyncio
 
 class API:
 
     def __init__(self, server, key):
+        """Initiate the limits and endpoints for the api.
+
+        ::param::server::The server the api is referencing to
+        ::param::key::The api key used to request data
+        """
         print(f"Initiating API for {server}")
-        self.server = server.lower()
+        self.server = server
         self.key = key
         limits = json.loads(open("limits.json").read())
         self.application_limits = []
+
         print("\tInitiating Application Rate limits")
         for limit in limits['APP']:
             self.application_limits.append(
@@ -24,6 +31,13 @@ class API:
                 raise Exception("Blocked")
         return await getattr(self, endpoint).request(self.application_limits, method, params)
 
+    async def run(self, connection):
+        endpoints = [
+            asyncio.create_task(self.league.run(connection)),
+            asyncio.create_task(self.league_exp.run(connection))]
+        await asyncio.gather(*endpoints)
+        return
+
     async def send(self, url):
         url = "https://" + self.server + ".api.riotgames.com/lol/" + url
         print(f"Requesting url {url}")
@@ -36,6 +50,7 @@ class API:
     class League(DefaultEndpoint):
         """League-V4 Endpoints"""
         url = 'league/v4/'
+        name = "LEAGUE"
         methods = {
             'entries': {
                 'params': ['queue', 'tier', 'division', 'page'],
@@ -46,3 +61,4 @@ class API:
 
     class LeagueExperimental(DefaultEndpoint):
         """League-EXP-V4 Endpoints"""
+        name = "LEAGUE-EXP"
