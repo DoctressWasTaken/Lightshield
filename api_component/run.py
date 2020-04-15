@@ -5,7 +5,7 @@ import aio_pika
 import json
 config = json.loads(open('../config.json').read())
 
-from api_component.api import API
+from api import API
 
 server_ids = ['EUW1', 'NA1']
 apis = {}
