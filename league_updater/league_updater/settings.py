@@ -22,7 +22,7 @@ class JsonConfig:  # pragma: no cover
         self._config = config
 
     @classmethod
-    def read(cls, envvar='CONFIG_FILE', filename='config.json'):
+    def read(cls, envvar='CONFIG_FILE', filename='../config.json'):
         """Read a JSON configuration file and create a new configuration."""
         filename = os.environ.get(envvar, filename)
         directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
