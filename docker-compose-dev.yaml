@@ -22,8 +22,6 @@ services:
     image: postgres
     volumes:
       - postgres:/var/lib/postgresql/data
-    ports:
-      127.0.0.1:5432:5432
 
   league_updater_euw:
     container_name: league_updater_euw
