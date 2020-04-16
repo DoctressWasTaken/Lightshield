@@ -35,7 +35,7 @@ class Player(models.Model):
     wins_flex = models.IntegerField(null=True)
     losses_flex = models.IntegerField(null=True)
 
-    async def update(self, data):
+    def update(self, data):
 
         self.summoner_name = data['summonerName']
         points = 0
@@ -48,21 +48,34 @@ class Player(models.Model):
                 points += div[1]
                 break
         points += data['leaguePoints']
+        series = None
+        if 'miniSeries' in data:
+            series = data['miniSeries']['progress'][:4]
         if data['queueType'] == 'RANKED_SOLO_5x5':
             self.ranking_solo = points
             self.wins_solo = data['wins']
             self.losses_solo = data['losses']
+            self.series_solo = series
         elif data['queueType'] == 'RANKED_FLEX_SR':
             self.ranking_flex = points
             self.wins_flex = data['wins']
             self.losses_flex = data['losses']
+            self.series_flex = series
 
-class Pagecount(models.Model):
-    """Contains the config data on how many pages were counted the last time in each rank.
+class Page(models.Model):
+    """Page containing players.
 
-    This is set in a separate table for faster updates.
+    Has a specific tier, division, queue and page number.
+    The last ones are marked.
+    If the last page is called and contains data a new page is added until the last page is empty.
     """
+    server = models.TextField()
     tier = models.TextField()
     division = models.TextField()
     queue = models.TextField()
-    pages = models.IntegerField(default=10)
+    page = models.IntegerField()
+    last = models.BooleanField(default=True)
+    requested = models.BooleanField(default=False)
+
+    last_updated = models.DateTimeField(
+        auto_now=True)

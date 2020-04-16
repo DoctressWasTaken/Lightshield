@@ -54,7 +54,7 @@ class DefaultEndpoint:
         print(f"Listening for {self.__class__.__name__} Requests on {self.api.server}_{self.name}")
         channel = await connection.channel()
         queue = await channel.declare_queue(
-            self.api.server + "_" + self.name, durable=True)
+            self.api.server + "_" + self.name, durable=False)
         await queue.purge()
         while True:
             full = False
