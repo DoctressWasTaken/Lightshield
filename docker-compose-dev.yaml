@@ -18,10 +18,15 @@ services:
     depends_on:
       - rabbitmq
 
-  postgres:
-    image: postgres
+  playerdata:
+    container_name: playerdata
+    build:
+      dockerfile: playerdata/Dockerfile
+      context: .
     volumes:
       - postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
 
   league_updater_euw:
     container_name: league_updater_euw
@@ -30,12 +35,12 @@ services:
       context: .
     links:
       - rabbitmq:rabbitmq
-      - postgres:postgres
+      - playerdata:playerdata
     restart: always
     environment:
       - SERVER=EUW1
     depends_on:
-      - postgres
+      - playerdata
       - rabbitmq
 
   league_updater_kr:
@@ -45,12 +50,12 @@ services:
       context: .
     links:
       - rabbitmq:rabbitmq
-      - postgres:postgres
+      - playerdata:playerdata
     restart: always
     environment:
       - SERVER=KR1
     depends_on:
-      - postgres
+      - playerdata
       - rabbitmq
 
   league_updater_na:
@@ -60,12 +65,12 @@ services:
       context: .
     links:
       - rabbitmq:rabbitmq
-      - postgres:postgres
+      - playerdata:playerdata
     restart: always
     environment:
       - SERVER=NA1
     depends_on:
-      - postgres
+      - playerdata
       - rabbitmq
 
 volumes:

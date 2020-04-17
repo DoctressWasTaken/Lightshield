@@ -9,7 +9,7 @@ import threading
 import time
 config = json.loads(open('../config.json').read())
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "league_updater.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "playerdata.settings")
 django.setup()
 
 from django.conf import settings
@@ -20,7 +20,10 @@ tiers = [
     "SILVER",
     "GOLD",
     "PLATINUM",
-    "DIAMOND"
+    "DIAMOND",
+    "MASTER",
+    "GRANDMASTER",
+    "CHALLENGER"
 ]
 divisions = [
     "I",
@@ -52,7 +55,7 @@ class Listener(WorkerThread):
         connection = pika.BlockingConnection(pika.ConnectionParameters(config['HOST']))
         channel = connection.channel()
         channel.basic_qos(prefetch_count=1)
-        listen_queue = settings.SERVER + "_LEAGUE_RET"
+        listen_queue = settings.SERVER + "_LEAGUE-EXP_RET"
         print(f"Listening on {listen_queue}")
         channel.queue_declare(queue=listen_queue)
 
@@ -61,7 +64,6 @@ class Listener(WorkerThread):
                 print("Received interrupt. Shutting down.")
                 break
             if all(x is None for x in message):
-                print("No message found")
                 continue
 
             method, properties, body = message
@@ -110,7 +112,7 @@ class Publisher(WorkerThread):
         print("Started Sending worker.")
         # Establish connections and basics
         connection = pika.BlockingConnection(pika.ConnectionParameters(config['HOST']))
-        queue = settings.SERVER + '_LEAGUE'
+        queue = settings.SERVER + '_LEAGUE-EXP'
         print("Sending to " + queue)
         # Sending messages
         channel = connection.channel()
@@ -119,10 +121,8 @@ class Publisher(WorkerThread):
                 server=settings.SERVER,
                 last_updated__lte=timezone.now() - timedelta(hours=2)).all()[:10]
             if not outdated:
-                print("Found no outdated")
                 time.sleep(5)
                 continue
-            print("Found Outdated")
             for entry in outdated:
                 message_body = {
                     "method": "entries",
@@ -155,17 +155,26 @@ def main():
 
     # Create initial pages if none exist:
     print(Page.objects.count())
-    #Page.objects.all().delete()
-    #exit()
     if Page.objects.count() == 0:
         for queue in queues:
             for tier in tiers:
-                for division in divisions:
+                if "tier" not in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
+                    for division in divisions:
+                        p = Page(
+                            server=settings.SERVER,
+                            queue=queue,
+                            tier=tier,
+                            division=division,
+                            page=1,
+                            last=True
+                        )
+                        p.save()
+                else:
                     p = Page(
                         server=settings.SERVER,
                         queue=queue,
                         tier=tier,
-                        division=division,
+                        division="I",
                         page=1,
                         last=True
                     )

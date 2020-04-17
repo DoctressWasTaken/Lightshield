@@ -62,3 +62,23 @@ class API:
     class LeagueExperimental(DefaultEndpoint):
         """League-EXP-V4 Endpoints"""
         name = "LEAGUE-EXP"
+        url = 'league-exp/v4/'
+        methods = {
+            'entries': {
+                'params': ['queue', 'tier', 'division', 'page'],
+                'url': 'entries/%s/%s/%s?page=%s',
+                'allowed_codes': [200]
+            }
+        }
+
+    class Summoner(DefaultEndpoint):
+        """Summoner-V4 Endpoints."""
+        name = "SUMMONER"
+        url = "summoner/v4/"
+        methods = {
+            'summonerId': {
+                'params': ['summonerId'],
+                'url': 'summoners/%s',
+                'allowed_codes': [200]
+            }
+        }
