@@ -1,39 +1,23 @@
 import os
 import django
-from datetime import timedelta
-from django.utils import timezone
 import pika
 import json
+from datetime import timedelta
+from django.utils import timezone
+
 import threading
 import time
+
 config = json.loads(open('../config.json').read())
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "playerdata.settings")
 django.setup()
 
 from django.conf import settings
-from data.models import Player, Page
+from data.models import Player
 
-tiers = [
-    "IRON",
-    "SILVER",
-    "GOLD",
-    "PLATINUM",
-    "DIAMOND",
-    "MASTER",
-    "GRANDMASTER",
-    "CHALLENGER"
-]
-divisions = [
-    "I",
-    "II",
-    "III",
-    "IV"
-]
-queues = [
-    "RANKED_SOLO_5x5",
-    "RANKED_FLEX_SR"
-]
+
+
 
 class WorkerThread(threading.Thread):
     def __init__(self):
@@ -48,13 +32,14 @@ class WorkerThread(threading.Thread):
 
 
 class Listener(WorkerThread):
+    player_bulk = []
 
     def run(self):
         print("Started Listening Worker.")
         connection = pika.BlockingConnection(pika.ConnectionParameters(config['HOST']))
         channel = connection.channel()
         channel.basic_qos(prefetch_count=1)
-        listen_queue = settings.SERVER + "_LEAGUE-EXP_RET"
+        listen_queue = settings.SERVER + "_SUMMONER_RET"
         print(f"Listening on {listen_queue}")
         channel.queue_declare(queue=listen_queue)
 
@@ -69,24 +54,13 @@ class Listener(WorkerThread):
             data = json.loads(body)
 
             headers = properties.headers
-            print(headers)
-            page = Page.objects.get(id=headers['id'])
-            page.requested = False
-            if data:
-                if headers['last']:
-                    page.last = False
-                    p = Page(
-                        server=page.server,
-                        tier=page.tier,
-                        division=page.division,
-                        queue=page.queue,
-                        page=page.page + 1
-                    )
-                    p.save()
-                    Page.objects.filter(id=p.id).all().update(last_updated=timezone.now() - timedelta(days=1))
-
-                self.update_user(data)
-            page.save()
+            player = Player.objects.get(id=headers['id'])
+            player.account_id = data['accountId']
+            player.puuid = data['puuid']
+            self.player_bulk.append(player)
+            if len(self.player_bulk) >= 200:
+                Player.objects.bulk_update(self.player_bulk, ['account_id', 'puuid'])
+                self.player_bulk = []
             channel.basic_ack(delivery_tag=method.delivery_tag)
         connection.close()
 
@@ -111,30 +85,34 @@ class Publisher(WorkerThread):
         print("Started Sending worker.")
         # Establish connections and basics
         connection = pika.BlockingConnection(pika.ConnectionParameters(config['HOST']))
-        queue = settings.SERVER + '_LEAGUE-EXP'
+        queue = settings.SERVER + '_SUMMONER'
         print("Sending to " + queue)
         # Sending messages
         channel = connection.channel()
         while not self._is_interrupted:
-            outdated = Page.objects.filter(
+            time.sleep(10)
+            Player.objects\
+                .filter(requested_ids__lte=timezone.now() - timedelta(minutes=5))\
+                .all()\
+                .update(requested_ids=None)
+
+            no_id_player = Player.objects.filter(
                 server=settings.SERVER,
-                last_updated__lte=timezone.now() - timedelta(hours=2)).all()[:10]
-            if not outdated:
+                account_id__isnull=True,
+                requested_ids__isnull=True).all()[:200]
+            if not no_id_player:
+                print("Found no player that require updating.")
                 time.sleep(5)
                 continue
-            for entry in outdated:
+            for entry in no_id_player:
                 message_body = {
-                    "method": "entries",
+                    "method": "summonerId",
                     "params": {
-                        'queue': entry.queue,
-                        'tier': entry.tier,
-                        'division': entry.division,
-                        'page': entry.page
+                        'summonerId': entry.summoner_id
                     }
                 }
                 headers = {
                     "id": entry.id,
-                    "last": entry.last,
                     "return": queue + "_RET"
                 }
                 channel.basic_publish(
@@ -150,40 +128,13 @@ class Publisher(WorkerThread):
         print("Received interrupt. Shutting down.")
         connection.close()
 
+
+
 def main():
-
-    # Create initial pages if none exist:
-    print(Page.objects.count())
-    if Page.objects.count() == 0:
-        for queue in queues:
-            for tier in tiers:
-                if tier not in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
-                    for division in divisions:
-                        p = Page(
-                            server=settings.SERVER,
-                            queue=queue,
-                            tier=tier,
-                            division=division,
-                            page=1,
-                            last=True
-                        )
-                        p.save()
-                else:
-                    p = Page(
-                        server=settings.SERVER,
-                        queue=queue,
-                        tier=tier,
-                        division="I",
-                        page=1,
-                        last=True
-                    )
-                    p.save()
-        Page.objects.all().update(last_updated=timezone.now() - timedelta(days=1))
-
     listener = Listener()
     listener.start()
 
-    publisher  = Publisher()
+    publisher = Publisher()
     publisher.start()
 
     try:
@@ -194,7 +145,6 @@ def main():
         publisher.stop()
     listener.join()
     publisher.join()
-
 
 if __name__ == "__main__":
     main()

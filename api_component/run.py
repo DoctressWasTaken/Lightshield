@@ -8,7 +8,7 @@ config = json.loads(open('../config.json').read())
 from api import API
 
 
-server_ids = ['EUW1', 'KR1', 'NA1']
+server_ids = ['EUW1', 'KR', 'NA1']
 
 
 async def main(loop):

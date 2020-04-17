@@ -25,8 +25,10 @@ class Player(models.Model):
 
     # IDs
     summoner_id = models.TextField()  # Source: League API
-    account_id = models.TextField(null=True)  # Source: League API
-    puuid = models.TextField(null=True)  # Source: League API
+    account_id = models.TextField(null=True)  # Source: Summoner API
+    puuid = models.TextField(null=True)  # Source: Summoner API
+
+    requested_ids = models.DateTimeField(null=True)
 
     # Ranked data (Source: League API)
     ranking_solo = models.IntegerField(null=True)

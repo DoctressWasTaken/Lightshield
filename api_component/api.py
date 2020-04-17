@@ -24,6 +24,7 @@ class API:
             )
         self.league = self.League(limits['METHODS']['league'], self)
         self.league_exp = self.LeagueExperimental(limits['METHODS']['league-exp'], self)
+        self.summoner = self.Summoner(limits['METHODS']['summoner'], self)
 
     async def request(self, endpoint: str, method: str, params: dict):
         for limit in self.application_limits:
@@ -34,7 +35,8 @@ class API:
     async def run(self, connection):
         endpoints = [
             asyncio.create_task(self.league.run(connection)),
-            asyncio.create_task(self.league_exp.run(connection))]
+            asyncio.create_task(self.league_exp.run(connection)),
+            asyncio.create_task(self.summoner.run(connection))]
         await asyncio.gather(*endpoints)
         return
 

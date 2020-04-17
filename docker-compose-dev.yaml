@@ -24,7 +24,7 @@ services:
       dockerfile: playerdata/Dockerfile
       context: .
     volumes:
-      - postgres:/var/lib/postgresql/data
+      - playerdata:/var/lib/postgresql/data
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
 
@@ -53,7 +53,7 @@ services:
       - playerdata:playerdata
     restart: always
     environment:
-      - SERVER=KR1
+      - SERVER=KR
     depends_on:
       - playerdata
       - rabbitmq
@@ -73,6 +73,51 @@ services:
       - playerdata
       - rabbitmq
 
+  summoner_id_updater_euw:
+    container_name: summoner_id_updater_euw
+    build:
+      dockerfile: summoner_id_updater/Dockerfile
+      context: .
+    links:
+      - rabbitmq:rabbitmq
+      - playerdata:playerdata
+    restart: always
+    environment:
+      - SERVER=EUW1
+    depends_on:
+      - playerdata
+      - rabbitmq
+
+  summoner_id_updater_na:
+    container_name: summoner_id_updater_na
+    build:
+      dockerfile: summoner_id_updater/Dockerfile
+      context: .
+    links:
+      - rabbitmq:rabbitmq
+      - playerdata:playerdata
+    restart: always
+    environment:
+      - SERVER=NA1
+    depends_on:
+      - playerdata
+      - rabbitmq
+
+  summoner_id_updater_kr:
+    container_name: summoner_id_updater_kr
+    build:
+      dockerfile: summoner_id_updater/Dockerfile
+      context: .
+    links:
+      - rabbitmq:rabbitmq
+      - playerdata:playerdata
+    restart: always
+    environment:
+      - SERVER=KR
+    depends_on:
+      - playerdata
+      - rabbitmq
+
 volumes:
   rabbitmq:
-  postgres:
+  playerdata:
