@@ -28,47 +28,16 @@ services:
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
 
-  league_updater_euw:
-    container_name: league_updater_euw
+  league_updater:
+    container_name: league_updater
     build:
       dockerfile: league_updater/Dockerfile
       context: .
+    environment:
+      - SERVER="-"
     links:
-      - rabbitmq:rabbitmq
       - playerdata:playerdata
     restart: always
-    environment:
-      - SERVER=EUW1
-    depends_on:
-      - rabbitmq
-
-  league_updater_kr:
-    container_name: league_updater_kr
-    build:
-      dockerfile: league_updater/Dockerfile
-      context: .
-    links:
-      - rabbitmq:rabbitmq
-      - playerdata:playerdata
-    restart: always
-    environment:
-      - SERVER=KR
-    depends_on:
-      - rabbitmq
-
-  league_updater_na:
-    container_name: league_updater_na
-    build:
-      dockerfile: league_updater/Dockerfile
-      context: .
-    links:
-      - rabbitmq:rabbitmq
-      - playerdata:playerdata
-    restart: always
-    environment:
-      - SERVER=NA1
-    depends_on:
-      - rabbitmq
 
   summoner_id_updater_euw:
     container_name: summoner_id_updater_euw

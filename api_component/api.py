@@ -52,17 +52,6 @@ class API:
                 print(response.headers)
             return data, headers, status
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as response:
-                data = await response.json()
-                print(data)
-                headers = response.headers
-                status = response.status
-                if response.status == 429:
-                    print(response.headers)
-                return data, headers, status
-
-
     class League(DefaultEndpoint):
         """League-V4 Endpoints"""
         url = 'league/v4/'

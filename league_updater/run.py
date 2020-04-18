@@ -1,19 +1,25 @@
 """League updater - Run Module."""
 import os
 import django
+import aiohttp
+import asyncio
 from datetime import timedelta
 from django.utils import timezone
-import pika
 import json
 import threading
+import queue
 import time
 config = json.loads(open('../config.json').read())
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "playerdata.settings")
 django.setup()
+from asgiref.sync import  sync_to_async
 
 from django.conf import settings
 from data.models import Player, Page
+
+user = queue.Queue()
+servers = ['EUW1', 'KR', 'NA1']
 
 tiers = [
     "IRON",
@@ -31,14 +37,13 @@ divisions = [
     "III",
     "IV"
 ]
-queues = [
-    "RANKED_SOLO_5x5",
-    "RANKED_FLEX_SR"
-]
+queues = "RANKED_SOLO_5x5"
 
 
 class WorkerThread(threading.Thread):
-    def __init__(self):
+    def __init__(self, **kwargs):
+        for arg in kwargs:
+            setattr(self, arg, kwargs[arg])
         super(WorkerThread, self).__init__()
         self._is_interrupted = False
 
@@ -49,205 +54,200 @@ class WorkerThread(threading.Thread):
         pass
 
 
-class Listener(WorkerThread):
+class LoadBalancer(WorkerThread):
+
+    min = None
+    max = None
+    breakpoint = None
 
     def run(self):
-        connection = pika.BlockingConnection(pika.ConnectionParameters(config['HOST']))
-        channel = connection.channel()
-        channel.basic_qos(prefetch_count=1)
-        listen_queue = settings.SERVER + "_LEAGUE-EXP_RET"
-        print(f"Listening on {listen_queue}")
-        q = channel.queue_declare(queue=listen_queue, durable=True)
-
-        for message in channel.consume(listen_queue, inactivity_timeout=1):
-            if self._is_interrupted:
-                print("Received interrupt. Shutting down.")
-                break
-            if all(x is None for x in message):
-                continue
-
-            method, properties, body = message
-            data = json.loads(body)
-
-            headers = properties.headers
-            print(headers)
-
-            page = Page.objects.filter(
-                server=settings.SERVER,
-                tier=headers['tier'],
-                division=headers['division'],
-                queue=headers['queue'],
-                page=headers['page']
-            ).first()
-
-            if not page:
-                print("Page not found, removing message.")
-                channel.basic_ack(delivery_tag=method.delivery_tag)
-                continue
-            page.requested = False
-            if data:
-                if headers['last']:
-                    page.last = False
-                    p = Page(
-                        server=page.server,
-                        tier=page.tier,
-                        division=page.division,
-                        queue=page.queue,
-                        page=page.page + 1
-                    )
-                    p.save()
-                    Page.objects.filter(id=p.id).all().update(last_updated=timezone.now() - timedelta(days=1))
-
-                self.update_user(data)
-            page.save()
-            channel.basic_ack(delivery_tag=method.delivery_tag)
-        connection.close()
-
-    def update_user(self, data):
-        print("Adding/Updating user")
-        changed_user = []
-        new_user = []
-        for entry in data:
-            player = Player.objects.filter(
-                server=settings.SERVER,
-                summoner_id=entry['summonerId']).first()
-
-            if not player:
-                player = Player(
-                    server=settings.SERVER,
-                    summoner_id=entry['summonerId'])
-                player.update(entry)
-                new_user.append(player)
-                continue
-            if player.update(entry):
-                changed_user.append(player)
-        Player.objects.bulk_create(new_user)
-        Player.objects.bulk_update(changed_user, [
-            'summoner_name',
-            'ranking_solo',
-            'ranking_flex',
-            'series_solo',
-            'series_flex',
-            'wins_solo',
-            'losses_solo',
-            'wins_flex',
-            'losses_flex',
-            'update_solo',
-            'update_flex'])
-
-class Publisher(WorkerThread):
-
-    def run(self):
-        print("Started Sending worker.")
-        # Establish connections and basics
-        connection = pika.BlockingConnection(pika.ConnectionParameters(config['HOST']))
-        queue = settings.SERVER + '_LEAGUE-EXP'
-        print("Sending to " + queue)
-        # Sending messages
-        channel = connection.channel()
+        print("Started Load Balancer")
+        workers = []
         while not self._is_interrupted:
-            q = channel.queue_declare(queue=queue, durable=True)
-            length = q.method.message_count
-            if length > 50:
-                print("Too many tickets, waiting.")
+            print(f"Currently harbouring {user.qsize()} tasks.")
+            if len(workers) < self.min:
+                print("Adding needed worker.")
+                worker = Worker()
+                worker.start()
+                workers.append(worker)
+
+            if user.qsize() > self.breakpoint and len(workers) < self.max:
+                print(f"Adding extra worker [Now: {len(workers)}].")
+                worker = Worker()
+                worker.start()
+                workers.append(worker)
+
+            if user.qsize() == 0 and len(workers) > self.min:
+                print(f"Removing extra worker [Now: {len(workers)}].")
+                worker = workers.pop()
+                worker.stop()
+                worker.join()
+            time.sleep(1)
+
+        for worker in workers:
+            worker.stop()
+        for worker in workers:
+            worker.join()
+
+class Worker(WorkerThread):
+
+    def run(self):
+        new_player = []
+        existing_player = []
+        while not self._is_interrupted:
+            try:
+                element = user.get(timeout=1)
+            except:
                 time.sleep(1)
                 continue
-            outdated = Page.objects.filter(
-                    server=settings.SERVER,
-                    last_updated__lte=timezone.now() - timedelta(minutes=5),
-                    last=True).all()[:10]
-            if not outdated:
-                time.sleep(1)
-                continue
-                outdated = Page.objects.filter(
-                        server=settings.SERVER,
-                        last_updated__lte=timezone.now() - timedelta(minutes=5))\
-                    .order_by('last_updated').all()[:10]
-            if not outdated:
-                time.sleep(1)
-                continue
+            for player_data in element:
+                player = Player.objects.filter(
+                        summoner_id=player_data['summonerId'],
+                        server=settings.SERVER).first()
+                if player:
+                    player.update(player_data)
+                    existing_player.append(player)
+                    continue
+                player = Player(
+                    summoner_id=player_data['summonerId'],
+                    server=settings.SERVER)
+                new_player.append(player)
+            if len(new_player) > 200:
+                Player.objects.bulk_create(new_player)
+                new_player = []
+            if len(existing_player) > 200:
+                Player.objects.bulk_update(
+                    existing_player,
+                    ['summoner_name',
+                     'ranking_solo',
+                     'series_solo',
+                     'wins_solo',
+                     'losses_solo',
+                     'update_solo'])
+                existing_player = []
 
-            for entry in outdated:
-                message_body = {
-                    "method": "entries",
-                    "params": {
-                        'queue': entry.queue,
-                        'tier': entry.tier,
-                        'division': entry.division,
-                        'page': entry.page
-                    }
-                }
-                headers = {
-                    'queue': entry.queue,
-                    'tier': entry.tier,
-                    'division': entry.division,
-                    'page': entry.page,
-                    "last": entry.last,
-                    "return": queue + "_RET"
-                }
-                channel.basic_publish(
-                    exchange="",
-                    routing_key=queue,
-                    body=json.dumps(message_body),
-                    properties=pika.BasicProperties(
-                        headers=headers,
-                        delivery_mode=2
-                    )
-                )
-                entry.requested = True
-                entry.save()
-        print("Received interrupt. Shutting down.")
-        connection.close()
+        print("Shutting down worker. Committing remaining changes.")
+        Player.objects.bulk_create(new_player)
+        new_player = []
+        Player.objects.bulk_update(
+            existing_player,
+            ['summoner_name',
+             'ranking_solo',
+             'series_solo',
+             'wins_solo',
+             'losses_solo',
+             'update_solo'])
 
-def main():
+def prep():
+    """Set up database worker threads and prepare db.
 
+    If no pages are set up declares the initial pages.
+
+    Starts worker, queue and load balancer.
+    """
     # Create initial pages if none exist:
-    if Page.objects.filter(server=settings.SERVER).count() == 0:
-        for queue in queues:
+    for server in servers:
+        if Page.objects.filter(server=server).count() == 0:
             for tier in tiers:
                 if tier not in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
                     for division in divisions:
                         p = Page(
-                            server=settings.SERVER,
-                            queue=queue,
+                            server=server,
                             tier=tier,
-                            division=division,
-                            page=1,
-                            last=True
+                            division=division
                         )
                         p.save()
                 else:
                     p = Page(
-                        server=settings.SERVER,
-                        queue=queue,
+                        server=server,
                         tier=tier,
-                        division="I",
-                        page=1,
-                        last=True
+                        division="I"
                     )
                     p.save()
-        Page.objects.all().update(last_updated=timezone.now() - timedelta(days=1))
+        Page.objects.filter(server=server).all().update(last_updated=timezone.now() - timedelta(days=1))
 
-    listeners = []
-    for i in range(5):
-        listener = Listener()
-        listener.start()
-        listeners.append(listener)
+    load_balancer = LoadBalancer(min=1, max=10, breakpoint=50)
+    load_balancer.start()
 
-    publisher  = Publisher()
-    publisher.start()
+    return load_balancer
 
+
+async def fetch(url, session, headers):
+    """Fetch data and return."""
+    print(f"fetching {url}")
     try:
-        while True:
-            time.sleep(60)
-    except KeyboardInterrupt:
-        for listener in listeners:
-            listener.stop()
-        publisher.stop()
-    for listener in listeners:
-        listener.join()
-    publisher.join()
+        async with session.get(url, headers=headers) as response:
+            resp = await response.json()
+            return response.status, resp, response.headers
+    except:
+        return 999, [], {}
+
+async def server_updater(server, headers):
+    """Server specific task started from the main function."""
+    divisions = await sync_to_async(list)(Page.objects.filter(server=server).order_by('id').all())
+    url = f'https://{server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s'
+
+    while True:
+        for element in divisions:
+            start_page = 1
+            forced_timeout = 0
+            empty_count = 0
+            while empty_count == 0:
+                await asyncio.sleep(forced_timeout)
+                # calling 9 pages per batch
+                tasks = []
+                async with aiohttp.ClientSession() as session:
+                    for i in range(9):
+                        tasks.append(
+                            asyncio.create_task(fetch(
+                                url % (element.tier, element.division, start_page + i),
+                                session,
+                                headers=headers
+                            )))
+                    tasks.append(asyncio.create_task(asyncio.sleep(3)))
+                    responses = await asyncio.gather(*tasks)
+                for response in responses[:9]:
+                    if response[0] == 429:
+                        print("Got 429")
+                        if 'Retry-After' in response[2]:
+                            forced_timeout = int(response[2]['Retry-After'])
+                        else:
+                            forced_timeout = 1
+                        print(f"Waiting an additional {forced_timeout}.")
+                    elif response[0] != 200:
+                        empty_count = 0
+                        start_page += 9
+                        break
+                    else:
+                        if len(response[1]) == 0:
+                            empty_count += 1
+                        else:
+                            await sync_to_async(user.put)(response[1])
+
+                if empty_count == 0:
+                    start_page += 9
+
+            element.page_limit = start_page + 9 - empty_count
+            await sync_to_async(element.save)()
+
+
+async def main():
+    """Pull data"""
+    server_tasks = []
+
+    headers = {'X-Riot-Token': config['API_KEY']}
+
+    for server in servers:
+        server_tasks.append(
+            asyncio.create_task(server_updater(server, headers))
+        )
+    await asyncio.gather(*server_tasks)
 
 
 if __name__ == "__main__":
-    main()
+    load_balancer = prep()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        load_balancer.stop()
+    load_balancer.stop()
