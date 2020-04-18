@@ -41,7 +41,7 @@ class Listener(WorkerThread):
         channel.basic_qos(prefetch_count=1)
         listen_queue = settings.SERVER + "_SUMMONER_RET"
         print(f"Listening on {listen_queue}")
-        channel.queue_declare(queue=listen_queue)
+        channel.queue_declare(queue=listen_queue, durable=True)
 
         for message in channel.consume(listen_queue, inactivity_timeout=1):
             if self._is_interrupted:
@@ -52,7 +52,6 @@ class Listener(WorkerThread):
 
             method, properties, body = message
             data = json.loads(body)
-
             headers = properties.headers
             player = Player.objects.get(id=headers['id'])
             player.account_id = data['accountId']
@@ -90,7 +89,14 @@ class Publisher(WorkerThread):
         # Sending messages
         channel = connection.channel()
         while not self._is_interrupted:
-            time.sleep(10)
+            print(f"Total of {Player.objects.count()} player found.")
+            q = channel.queue_declare(queue=queue, durable=True)
+            length = q.method.message_count
+            print(f"Found {length} tasks.")
+            if length > 200:
+                print("Too many tickets, waiting.")
+                time.sleep(10)
+                continue
             Player.objects\
                 .filter(requested_ids__lte=timezone.now() - timedelta(minutes=5))\
                 .all()\
@@ -104,6 +110,8 @@ class Publisher(WorkerThread):
                 print("Found no player that require updating.")
                 time.sleep(5)
                 continue
+            else:
+                print(f"Adding {len(no_id_player)} to the existing {length} requests.")
             for entry in no_id_player:
                 message_body = {
                     "method": "summonerId",

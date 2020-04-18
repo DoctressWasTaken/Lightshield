@@ -1,3 +1,4 @@
+"""League updater - Run Module."""
 import os
 import django
 from datetime import timedelta
@@ -35,6 +36,7 @@ queues = [
     "RANKED_FLEX_SR"
 ]
 
+
 class WorkerThread(threading.Thread):
     def __init__(self):
         super(WorkerThread, self).__init__()
@@ -50,13 +52,12 @@ class WorkerThread(threading.Thread):
 class Listener(WorkerThread):
 
     def run(self):
-        print("Started Listening Worker.")
         connection = pika.BlockingConnection(pika.ConnectionParameters(config['HOST']))
         channel = connection.channel()
         channel.basic_qos(prefetch_count=1)
         listen_queue = settings.SERVER + "_LEAGUE-EXP_RET"
         print(f"Listening on {listen_queue}")
-        channel.queue_declare(queue=listen_queue)
+        q = channel.queue_declare(queue=listen_queue, durable=True)
 
         for message in channel.consume(listen_queue, inactivity_timeout=1):
             if self._is_interrupted:
@@ -70,7 +71,19 @@ class Listener(WorkerThread):
 
             headers = properties.headers
             print(headers)
-            page = Page.objects.get(id=headers['id'])
+
+            page = Page.objects.filter(
+                server=settings.SERVER,
+                tier=headers['tier'],
+                division=headers['division'],
+                queue=headers['queue'],
+                page=headers['page']
+            ).first()
+
+            if not page:
+                print("Page not found, removing message.")
+                channel.basic_ack(delivery_tag=method.delivery_tag)
+                continue
             page.requested = False
             if data:
                 if headers['last']:
@@ -92,7 +105,8 @@ class Listener(WorkerThread):
 
     def update_user(self, data):
         print("Adding/Updating user")
-        user = []
+        changed_user = []
+        new_user = []
         for entry in data:
             player = Player.objects.filter(
                 server=settings.SERVER,
@@ -102,8 +116,24 @@ class Listener(WorkerThread):
                 player = Player(
                     server=settings.SERVER,
                     summoner_id=entry['summonerId'])
-            player.update(entry)
-            player.save()
+                player.update(entry)
+                new_user.append(player)
+                continue
+            if player.update(entry):
+                changed_user.append(player)
+        Player.objects.bulk_create(new_user)
+        Player.objects.bulk_update(changed_user, [
+            'summoner_name',
+            'ranking_solo',
+            'ranking_flex',
+            'series_solo',
+            'series_flex',
+            'wins_solo',
+            'losses_solo',
+            'wins_flex',
+            'losses_flex',
+            'update_solo',
+            'update_flex'])
 
 class Publisher(WorkerThread):
 
@@ -116,12 +146,27 @@ class Publisher(WorkerThread):
         # Sending messages
         channel = connection.channel()
         while not self._is_interrupted:
+            q = channel.queue_declare(queue=queue, durable=True)
+            length = q.method.message_count
+            if length > 50:
+                print("Too many tickets, waiting.")
+                time.sleep(10)
+                continue
             outdated = Page.objects.filter(
-                server=settings.SERVER,
-                last_updated__lte=timezone.now() - timedelta(hours=2)).all()[:10]
+                    server=settings.SERVER,
+                    last_updated__lte=timezone.now() - timedelta(minutes=5),
+                    last=True).all()[:10]
             if not outdated:
                 time.sleep(5)
                 continue
+                outdated = Page.objects.filter(
+                        server=settings.SERVER,
+                        last_updated__lte=timezone.now() - timedelta(minutes=5))\
+                    .order_by('last_updated').all()[:10]
+            if not outdated:
+                time.sleep(5)
+                continue
+
             for entry in outdated:
                 message_body = {
                     "method": "entries",
@@ -133,7 +178,10 @@ class Publisher(WorkerThread):
                     }
                 }
                 headers = {
-                    "id": entry.id,
+                    'queue': entry.queue,
+                    'tier': entry.tier,
+                    'division': entry.division,
+                    'page': entry.page,
                     "last": entry.last,
                     "return": queue + "_RET"
                 }
@@ -142,7 +190,8 @@ class Publisher(WorkerThread):
                     routing_key=queue,
                     body=json.dumps(message_body),
                     properties=pika.BasicProperties(
-                        headers=headers
+                        headers=headers,
+                        delivery_mode=2
                     )
                 )
                 entry.requested = True
@@ -153,7 +202,6 @@ class Publisher(WorkerThread):
 def main():
 
     # Create initial pages if none exist:
-    print(Page.objects.count())
     if Page.objects.count() == 0:
         for queue in queues:
             for tier in tiers:
@@ -180,8 +228,11 @@ def main():
                     p.save()
         Page.objects.all().update(last_updated=timezone.now() - timedelta(days=1))
 
-    listener = Listener()
-    listener.start()
+    listeners = []
+    for i in range(5):
+        listener = Listener()
+        listener.start()
+        listeners.append(listener)
 
     publisher  = Publisher()
     publisher.start()
@@ -190,9 +241,11 @@ def main():
         while True:
             time.sleep(60)
     except KeyboardInterrupt:
-        listener.stop()
+        for listener in listeners:
+            listener.stop()
         publisher.stop()
-    listener.join()
+    for listener in listeners:
+        listener.join()
     publisher.join()
 
 

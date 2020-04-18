@@ -42,12 +42,27 @@ class API:
 
     async def send(self, url):
         url = "https://" + self.server + ".api.riotgames.com/lol/" + url
-        print(f"Requesting url {url}")
+        #print(f"Requesting url {url}")
+        headers = {'X-Riot-Token': self.key}
+        async with aiohttp.request('GET', url, headers=headers) as response:
+            data = await response.json()
+            print(data)
+            headers = response.headers
+            status = response.status
+            if response.status == 429:
+                print(response.headers)
+            return data, headers, status
+
         async with aiohttp.ClientSession() as session:
-            headers = {'X-Riot-Token': self.key}
             async with session.get(url, headers=headers) as response:
-                resp = await response.json()
-                return response
+                data = await response.json()
+                print(data)
+                headers = response.headers
+                status = response.status
+                if response.status == 429:
+                    print(response.headers)
+                return data, headers, status
+
 
     class League(DefaultEndpoint):
         """League-V4 Endpoints"""

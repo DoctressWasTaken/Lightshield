@@ -43,9 +43,15 @@ class Player(models.Model):
     wins_flex = models.IntegerField(null=True)
     losses_flex = models.IntegerField(null=True)
 
-    def update(self, data):
+    update_solo = models.BooleanField(default=True)
+    update_flex = models.BooleanField(default=True)
 
-        self.summoner_name = data['summonerName']
+
+    def update(self, data):
+        changed = False
+        if self.summoner_name != data['summonerName']:
+            self.summoner_name = data['summonerName']
+            changed = True
         points = 0
         for tier in map_tiers:
             if  tier[0] == data['tier']:
@@ -60,15 +66,26 @@ class Player(models.Model):
         if 'miniSeries' in data:
             series = data['miniSeries']['progress'][:4]
         if data['queueType'] == 'RANKED_SOLO_5x5':
+            if points != self.ranking_solo or series != self.series_solo:
+                changed = True
+            if data['wins'] != self.wins_solo or data['losses'] != self.losses_solo:
+                changed = True
+                self.update_solo = True
             self.ranking_solo = points
             self.wins_solo = data['wins']
             self.losses_solo = data['losses']
             self.series_solo = series
         elif data['queueType'] == 'RANKED_FLEX_SR':
+            if points != self.ranking_flex or series != self.series_flex:
+                changed = True
+            if data['wins'] != self.wins_flex or data['losses'] != self.losses_flex:
+                changed = True
+                self.update_flex = True
             self.ranking_flex = points
             self.wins_flex = data['wins']
             self.losses_flex = data['losses']
             self.series_flex = series
+        return changed
 
 class Page(models.Model):
     """Page containing players.

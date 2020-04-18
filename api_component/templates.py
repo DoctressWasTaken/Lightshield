@@ -3,6 +3,7 @@ import asyncio
 from aio_pika.exceptions import QueueEmpty
 import json
 import aio_pika
+from aio_pika import DeliveryMode
 
 class Limit:
 
@@ -17,7 +18,7 @@ class Limit:
     def is_blocked(self):
         """Return if the limit is reached."""
         self.update_bucket()
-        if self.current < self.max:
+        if self.current < self.max * 0.9:
             return False
         else:
             return True
@@ -37,6 +38,7 @@ class Limit:
 
 class DefaultEndpoint:
 
+    tasks = 0
     methods = {}
     url = ""
     name = ""
@@ -53,10 +55,14 @@ class DefaultEndpoint:
     async def run(self, connection):
         print(f"Listening for {self.__class__.__name__} Requests on {self.api.server}_{self.name}")
         channel = await connection.channel()
+        await channel.set_qos(prefetch_count=20)
         queue = await channel.declare_queue(
-            self.api.server + "_" + self.name, durable=False)
-        await queue.purge()
+            self.api.server + "_" + self.name, durable=True)
+        tasks = []
         while True:
+            if self.tasks > 50:
+                await asyncio.sleep(0.1)
+                continue
             full = False
             for limit in self.limits:
                 if limit.is_blocked():
@@ -81,14 +87,31 @@ class DefaultEndpoint:
                 limit.add()
             for limit in self.api.application_limits:
                 limit.add()
-            try:
-                resp = await self.request(data_tuple)
-            except:
-                await message.reject(requeue=True)
-                continue
 
-            await self.return_message(channel, resp, message.headers_raw)
-            await message.ack()
+            tasks.append(
+                asyncio.create_task(self.process_task(data_tuple, message, channel))
+            )
+            await asyncio.sleep(0.01)
+
+        await asyncio.gather(*tasks)
+
+    async def process_task(self, data_tuple, message,  channel):
+        self.tasks += 1
+        print(self.name, self.tasks)
+        try:
+            resp = await self.request(data_tuple)
+        except Exception as err:
+            print(err)
+            await message.reject(requeue=True)
+            self.tasks -= 1
+            print(self.name, self.tasks)
+            return
+        await self.return_message(channel, resp, message.headers_raw)
+        await message.ack()
+        self.tasks -= 1
+        print(self.name, self.tasks)
+
+        return
 
     async def parse_message(self, message):
         msg = json.loads(message.body.decode())
@@ -113,20 +136,20 @@ class DefaultEndpoint:
 
             response = await self.api.send(url)
 
-            if response.status not in method['allowed_codes']:
-                print(response.status)
+            if response[2] not in method['allowed_codes']:
+                print(response[2])
                 print("Not in allowed codes")
                 raise Exception('Not an allowed response code')
-            return await response.json()
+            return response[0]
 
     async def return_message(self, channel, resp, headers):
         return_queue = headers['return'].decode()
         del headers['return']
         await channel.default_exchange.publish(
-
             aio_pika.Message(
                 headers=headers,
-                body=json.dumps(resp).encode()
+                body=json.dumps(resp).encode(),
+                delivery_mode=DeliveryMode.PERSISTENT,
             ),
             routing_key=return_queue
         )
