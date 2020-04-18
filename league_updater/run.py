@@ -150,21 +150,21 @@ class Publisher(WorkerThread):
             length = q.method.message_count
             if length > 50:
                 print("Too many tickets, waiting.")
-                time.sleep(10)
+                time.sleep(1)
                 continue
             outdated = Page.objects.filter(
                     server=settings.SERVER,
                     last_updated__lte=timezone.now() - timedelta(minutes=5),
                     last=True).all()[:10]
             if not outdated:
-                time.sleep(5)
+                time.sleep(1)
                 continue
                 outdated = Page.objects.filter(
                         server=settings.SERVER,
                         last_updated__lte=timezone.now() - timedelta(minutes=5))\
                     .order_by('last_updated').all()[:10]
             if not outdated:
-                time.sleep(5)
+                time.sleep(1)
                 continue
 
             for entry in outdated:

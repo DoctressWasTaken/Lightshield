@@ -40,7 +40,6 @@ services:
     environment:
       - SERVER=EUW1
     depends_on:
-      - playerdata
       - rabbitmq
 
   league_updater_kr:
@@ -55,7 +54,6 @@ services:
     environment:
       - SERVER=KR
     depends_on:
-      - playerdata
       - rabbitmq
 
   league_updater_na:
@@ -70,7 +68,6 @@ services:
     environment:
       - SERVER=NA1
     depends_on:
-      - playerdata
       - rabbitmq
 
   summoner_id_updater_euw:
@@ -85,7 +82,6 @@ services:
     environment:
       - SERVER=EUW1
     depends_on:
-      - playerdata
       - rabbitmq
 
   summoner_id_updater_na:
@@ -100,7 +96,6 @@ services:
     environment:
       - SERVER=NA1
     depends_on:
-      - playerdata
       - rabbitmq
 
   summoner_id_updater_kr:
@@ -115,7 +110,6 @@ services:
     environment:
       - SERVER=KR
     depends_on:
-      - playerdata
       - rabbitmq
 
 volumes:
