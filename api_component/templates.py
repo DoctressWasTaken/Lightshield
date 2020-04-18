@@ -18,7 +18,7 @@ class Limit:
     def is_blocked(self):
         """Return if the limit is reached."""
         self.update_bucket()
-        if self.current < self.max * 0.9:
+        if self.current < self.max * 0.5:
             return False
         else:
             return True
@@ -60,7 +60,7 @@ class DefaultEndpoint:
             self.api.server + "_" + self.name, durable=True)
         tasks = []
         while True:
-            if self.tasks > 50:
+            if self.tasks > 250:
                 await asyncio.sleep(0.1)
                 continue
             full = False
@@ -91,25 +91,24 @@ class DefaultEndpoint:
             tasks.append(
                 asyncio.create_task(self.process_task(data_tuple, message, channel))
             )
-            await asyncio.sleep(0.01)
 
         await asyncio.gather(*tasks)
 
     async def process_task(self, data_tuple, message,  channel):
         self.tasks += 1
-        print(self.name, self.tasks)
+        print(self.api.server, self.name, self.tasks)
         try:
             resp = await self.request(data_tuple)
         except Exception as err:
             print(err)
             await message.reject(requeue=True)
             self.tasks -= 1
-            print(self.name, self.tasks)
+            print(self.api.server, self.name, self.tasks)
             return
         await self.return_message(channel, resp, message.headers_raw)
         await message.ack()
         self.tasks -= 1
-        print(self.name, self.tasks)
+        print(self.api.server, self.name, self.tasks)
 
         return
 

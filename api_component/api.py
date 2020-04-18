@@ -46,7 +46,6 @@ class API:
         headers = {'X-Riot-Token': self.key}
         async with aiohttp.request('GET', url, headers=headers) as response:
             data = await response.json()
-            print(data)
             headers = response.headers
             status = response.status
             if response.status == 429:

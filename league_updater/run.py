@@ -202,7 +202,7 @@ class Publisher(WorkerThread):
 def main():
 
     # Create initial pages if none exist:
-    if Page.objects.count() == 0:
+    if Page.objects.filter(server=settings.SERVER).count() == 0:
         for queue in queues:
             for tier in tiers:
                 if tier not in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
