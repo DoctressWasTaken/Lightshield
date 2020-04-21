@@ -2,4 +2,5 @@ venv/*
 .idea/*
 config.json
 
+*/.py3/*
 db.sqlite3

@@ -27,17 +27,47 @@ services:
       - playerdata:/var/lib/postgresql/data
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+        - 127.0.0.1:5432:5432
 
-  league_updater:
-    container_name: league_updater
+  league_updater_euw:
+    container_name: league_updater_euw
     build:
       dockerfile: league_updater/Dockerfile
       context: .
-    environment:
-      - SERVER="-"
     links:
       - playerdata:playerdata
     restart: always
+    depends_on:
+      - playerdata
+    environment:
+      - SERVER=EUW1
+
+  league_updater_na:
+    container_name: league_updater_na
+    build:
+      dockerfile: league_updater/Dockerfile
+      context: .
+    links:
+      - playerdata:playerdata
+    restart: always
+    depends_on:
+      - playerdata
+    environment:
+      - SERVER=NA1
+
+  league_updater_kr:
+    container_name: league_updater_kr
+    build:
+      dockerfile: league_updater/Dockerfile
+      context: .
+    links:
+      - playerdata:playerdata
+    restart: always
+    depends_on:
+      - playerdata
+    environment:
+      - SERVER=KR
 
   summoner_id_updater_euw:
     container_name: summoner_id_updater_euw
@@ -45,13 +75,10 @@ services:
       dockerfile: summoner_id_updater/Dockerfile
       context: .
     links:
-      - rabbitmq:rabbitmq
       - playerdata:playerdata
     restart: always
     environment:
       - SERVER=EUW1
-    depends_on:
-      - rabbitmq
 
   summoner_id_updater_na:
     container_name: summoner_id_updater_na
@@ -59,13 +86,10 @@ services:
       dockerfile: summoner_id_updater/Dockerfile
       context: .
     links:
-      - rabbitmq:rabbitmq
       - playerdata:playerdata
     restart: always
     environment:
       - SERVER=NA1
-    depends_on:
-      - rabbitmq
 
   summoner_id_updater_kr:
     container_name: summoner_id_updater_kr
@@ -73,13 +97,10 @@ services:
       dockerfile: summoner_id_updater/Dockerfile
       context: .
     links:
-      - rabbitmq:rabbitmq
       - playerdata:playerdata
     restart: always
     environment:
       - SERVER=KR
-    depends_on:
-      - rabbitmq
 
 volumes:
   rabbitmq:

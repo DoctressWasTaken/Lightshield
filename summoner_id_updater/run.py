@@ -1,158 +1,139 @@
 import os
-import django
-import pika
+import psycopg2
+from ratelimit import limits, RateLimitException
 import json
-from datetime import timedelta
-from django.utils import timezone
-
-import threading
+import asyncio
+import aiohttp
 import time
 
 config = json.loads(open('../config.json').read())
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "playerdata.settings")
-django.setup()
+headers = {'X-Riot-Token': config['API_KEY']}
 
-from django.conf import settings
-from data.models import Player
+if not "SERVER" in os.environ:
+    print("No server provided, shutting down")
+    exit()
+server = os.environ['SERVER']
 
+url_template = f"https://{server}.api.riotgames.com/lol/summoner/v4/summoners/%s"
 
+@limits(calls=100, period=10)
+async def fetch(url, session):
+    try:
+        #print("Fetching",url)
+        async with session.get(url, headers=headers) as response:
+            resp = await response.json()
+            return response.status, resp, response.headers
+    except Exception as err:
+        print(err)
+        return 999, [], {}
 
-
-class WorkerThread(threading.Thread):
-    def __init__(self):
-        super(WorkerThread, self).__init__()
-        self._is_interrupted = False
-
-    def stop(self):
-        self._is_interrupted = True
-
-    def run(self):
-        pass
-
-
-class Listener(WorkerThread):
-    player_bulk = []
-
-    def run(self):
-        print("Started Listening Worker.")
-        connection = pika.BlockingConnection(pika.ConnectionParameters(config['HOST']))
-        channel = connection.channel()
-        channel.basic_qos(prefetch_count=1)
-        listen_queue = settings.SERVER + "_SUMMONER_RET"
-        print(f"Listening on {listen_queue}")
-        channel.queue_declare(queue=listen_queue, durable=True)
-
-        for message in channel.consume(listen_queue, inactivity_timeout=1):
-            if self._is_interrupted:
-                print("Received interrupt. Shutting down.")
-                break
-            if all(x is None for x in message):
-                continue
-
-            method, properties, body = message
-            data = json.loads(body)
-            headers = properties.headers
-            player = Player.objects.get(id=headers['id'])
-            player.account_id = data['accountId']
-            player.puuid = data['puuid']
-            self.player_bulk.append(player)
-            if len(self.player_bulk) >= 200:
-                Player.objects.bulk_update(self.player_bulk, ['account_id', 'puuid'])
-                self.player_bulk = []
-            channel.basic_ack(delivery_tag=method.delivery_tag)
-        connection.close()
-
-    def update_user(self, data):
-        print("Adding/Updating user")
-        user = []
-        for entry in data:
-            player = Player.objects.filter(
-                server=settings.SERVER,
-                summoner_id=entry['summonerId']).first()
-
-            if not player:
-                player = Player(
-                    server=settings.SERVER,
-                    summoner_id=entry['summonerId'])
-            player.update(entry)
-            player.save()
-
-class Publisher(WorkerThread):
-
-    def run(self):
-        print("Started Sending worker.")
-        # Establish connections and basics
-        connection = pika.BlockingConnection(pika.ConnectionParameters(config['HOST']))
-        queue = settings.SERVER + '_SUMMONER'
-        print("Sending to " + queue)
-        # Sending messages
-        channel = connection.channel()
-        while not self._is_interrupted:
-            print(f"Total of {Player.objects.count()} player found.")
-            q = channel.queue_declare(queue=queue, durable=True)
-            length = q.method.message_count
-            print(f"Found {length} tasks.")
-            if length > 200:
-                print("Too many tickets, waiting.")
-                time.sleep(10)
-                continue
-            Player.objects\
-                .filter(requested_ids__lte=timezone.now() - timedelta(minutes=5))\
-                .all()\
-                .update(requested_ids=None)
-
-            no_id_player = Player.objects.filter(
-                server=settings.SERVER,
-                account_id__isnull=True,
-                requested_ids__isnull=True).all()[:200]
-            if not no_id_player:
-                print("Found no player that require updating.")
-                time.sleep(5)
-                continue
-            else:
-                print(f"Adding {len(no_id_player)} to the existing {length} requests.")
-            for entry in no_id_player:
-                message_body = {
-                    "method": "summonerId",
-                    "params": {
-                        'summonerId': entry.summoner_id
-                    }
-                }
-                headers = {
-                    "id": entry.id,
-                    "return": queue + "_RET"
-                }
-                channel.basic_publish(
-                    exchange="",
-                    routing_key=queue,
-                    body=json.dumps(message_body),
-                    properties=pika.BasicProperties(
-                        headers=headers
-                    )
-                )
-                entry.requested = True
-                entry.save()
-        print("Received interrupt. Shutting down.")
-        connection.close()
-
-
-
-def main():
-    listener = Listener()
-    listener.start()
-
-    publisher = Publisher()
-    publisher.start()
+async def to_fetch(url, session, summoner_id):
 
     try:
-        while True:
-            time.sleep(60)
-    except KeyboardInterrupt:
-        listener.stop()
-        publisher.stop()
-    listener.join()
-    publisher.join()
+        response = await fetch(url, session)
+        return response + (summoner_id,)
+    except RateLimitException:
+        return 998, [], {}, summoner_id
+
+async def main(data_list):
+    results = []
+    while data_list:
+        forced_timeout = 0
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            tasks.append(asyncio.create_task(asyncio.sleep(10)))
+            for i in range(min(300, len(data_list))):
+                summoner_id = data_list.pop()
+                tasks.append(
+                    asyncio.create_task(
+                        to_fetch(
+                            url_template % ( summoner_id),
+                            session,
+                            summoner_id
+                            )
+                        )
+                    )
+                await asyncio.sleep(0.02)
+            responses = await asyncio.gather(*tasks)
+        responses.pop(0)
+        for response in responses:
+            if response[0] == 429:
+                print("Got 429")
+                if 'Retry-After' in response[2]:
+                    forced_timeout = int(response[2]['Retry-After'])
+                else:
+                    forced_timeout = 1.5
+                print(f"Waiting an additional {forced_timeout} seconds.")
+            if response[0] == 998:
+                forced_timeout = 1.5
+            if response[0] != 200:
+                data_list.append(response[3])
+            else:
+                results.append(response[1])
+        await asyncio.sleep(forced_timeout)
+
+    return results
+        
+
+
+def run():
+    
+    while True:
+        with psycopg2.connect(
+                host=config['DB_HOST'],
+                user=config['DB_USER'],
+                dbname=config['DB_NAME']) as connection:
+            connection.autocommit = True
+            cur = connection.cursor()
+            cur.execute(f"""
+                SELECT summoner_id
+                FROM {server}_player
+                WHERE account_id IS NULL
+                LIMIT 1200;
+                """)
+            data = cur.fetchall()
+            if not data:
+                time.sleep(10)
+                continue
+            data_list = [entry[0] for entry in data]
+            print(f"Found {len(data_list)} elements to upate.") 
+            results = asyncio.run(main(data_list))
+            print(f"Got {len(results)} elements.")
+            cur.execute(f"""
+            CREATE TEMP TABLE {server}_temp_ids
+            AS
+            SELECT summoner_id, account_id, puuid
+            FROM {server}_player
+            WHERE True=False;
+            """)
+            lines = []
+            for entry in results:
+                lines.append(
+                        "('%s', '%s', '%s')" % (
+                            entry['id'],
+                            entry['accountId'],
+                            entry['puuid']))
+            query = f"""
+                INSERT INTO {server}_temp_ids
+                    (summoner_id, account_id, puuid)
+                VALUES {",".join(lines)};
+                """
+            cur.execute(query)
+            cur.execute(f"SELECT Count(*) FROM {server}_temp_ids;")
+            print(cur.fetchall())
+
+            cur.execute(f"""
+                INSERT INTO {server}_player
+                    (summoner_id, account_id, puuid)
+                 SELECT * FROM {server}_temp_ids
+                 ON CONFLICT (summoner_id) DO UPDATE
+                 SET account_id=EXCLUDED.account_id,
+                 puuid=EXCLUDED.puuid;
+                 """)
+            cur.execute(f"""DROP TABLE {server}_temp_ids;""")
+        
 
 if __name__ == "__main__":
-    main()
+
+    run()

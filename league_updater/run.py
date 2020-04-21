@@ -1,253 +1,215 @@
-"""League updater - Run Module."""
-import os
-import django
-import aiohttp
+import psycopg2
 import asyncio
-from datetime import timedelta
-from django.utils import timezone
+import aiohttp
 import json
+import logging
 import threading
-import queue
-import time
+import os
+
+logging.basicConfig(
+        format='%(asctime)s %(message)s', 
+        datefmt='%m/%d/%Y %I:%M:%S %p',
+        level=logging.DEBUG)
+if not 'SERVER' in os.environ:
+    print("No server provided, exiting.")
+    exit()
+
+server = os.environ['SERVER']
 config = json.loads(open('../config.json').read())
+headers = {'X-Riot-Token': config['API_KEY']}
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "playerdata.settings")
-django.setup()
-from asgiref.sync import  sync_to_async
+url = f"https://{server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
 
-from django.conf import settings
-from data.models import Player, Page
-
-user = queue.Queue()
-servers = ['EUW1', 'KR', 'NA1']
 
 tiers = [
-    "IRON",
-    "SILVER",
-    "GOLD",
-    "PLATINUM",
-    "DIAMOND",
-    "MASTER",
-    "GRANDMASTER",
-    "CHALLENGER"
-]
+        "IRON",
+        "BRONZE",
+        "SILVER",
+        "GOLD",
+        "PLATINUM",
+        "DIAMOND",
+        "MASTER",
+        "GRANDMASTER",
+        "CHALLENGER"]
+
 divisions = [
-    "I",
-    "II",
-    "III",
-    "IV"
-]
-queues = "RANKED_SOLO_5x5"
+        "IV",
+        "III",
+        "II",
+        "I"]
+
+map_tiers = {
+        'IRON': 0,
+        'BRONZE': 4,
+        'SILVER': 8,
+        'GOLD': 12,
+        'PLATINUM': 16,
+        'DIAMOND': 20,
+        'MASTER': 24,
+        'GRANDMASTER': 24,
+        'CHALLENGER': 24}
+map_divisions = {
+        'IV': 0,
+        'III': 1,
+        'II': 2,
+        'I': 3}
 
 
-class WorkerThread(threading.Thread):
-    def __init__(self, **kwargs):
-        for arg in kwargs:
-            setattr(self, arg, kwargs[arg])
-        super(WorkerThread, self).__init__()
-        self._is_interrupted = False
 
-    def stop(self):
-        self._is_interrupted = True
+def dump_data(data):
+    logging.info("Starting data dump")
+    logging.info("Transforming data")
+    sets = []
+    for player_set in data:
+        for player in player_set:
+            ranking = map_tiers[player['tier']] * 100
+            ranking += map_divisions[player['rank']] * 100
+            ranking += player['leaguePoints']
+            series = ""
+            if 'miniSeries' in data:
+                series = player['miniSeries']['progress'][:4]
+            sets.append([
+                player['summonerName'],
+                player['summonerId'],
+                str(ranking),
+                series,
+                str(player['wins']),
+                str(player['losses'])])
+    lines = []
+    for s in sets:
+        lines.append("'" + "','".join(s) + "'")
+    lines = list(set(lines))
+    logging.info("Adding to db")
+    con = psycopg2.connect(
+            host=config['DB_HOST'],
+            user=config['DB_USER'],
+            dbname=config['DB_NAME'])
+    cur = con.cursor()
+    cur.execute(f"""
+        CREATE TEMP TABLE temp_player
+        AS 
+        SELECT summoner_name, summoner_id, ranking, series, wins, losses 
+        FROM {server}_player
+        WHERE True=False;
+        """)
+    con.commit()
+    values = ""
+    for entry in lines:
+        values += "(" + entry + "),"
+    values = values[:-1] + ";"
+    cur.execute("""
+        INSERT INTO temp_player
+                (summoner_name, summoner_id, ranking, series, wins, losses)
+        VALUES %s ;
+        """ % (values))
+    con.commit()
 
-    def run(self):
-        pass
+    query = f"""
+            INSERT INTO {server}_player 
+                (summoner_name, summoner_id, ranking, series, wins, losses)
+            SELECT * FROM temp_player
+            ON CONFLICT (summoner_id) DO UPDATE SET 
+            summoner_name=EXCLUDED.summoner_name,
+            ranking=EXCLUDED.ranking,
+            wins=EXCLUDED.wins,
+            losses=EXCLUDED.losses;
+            """
+    cur.execute(query);
+    con.commit()
 
-
-class LoadBalancer(WorkerThread):
-
-    min = None
-    max = None
-    breakpoint = None
-
-    def run(self):
-        print("Started Load Balancer")
-        workers = []
-        while not self._is_interrupted:
-            print(f"Currently harbouring {user.qsize()} tasks.")
-            if len(workers) < self.min:
-                print("Adding needed worker.")
-                worker = Worker()
-                worker.start()
-                workers.append(worker)
-
-            if user.qsize() > self.breakpoint and len(workers) < self.max:
-                print(f"Adding extra worker [Now: {len(workers)}].")
-                worker = Worker()
-                worker.start()
-                workers.append(worker)
-
-            if user.qsize() == 0 and len(workers) > self.min:
-                print(f"Removing extra worker [Now: {len(workers)}].")
-                worker = workers.pop()
-                worker.stop()
-                worker.join()
-            time.sleep(1)
-
-        for worker in workers:
-            worker.stop()
-        for worker in workers:
-            worker.join()
-
-class Worker(WorkerThread):
-
-    def run(self):
-        new_player = []
-        existing_player = []
-        while not self._is_interrupted:
-            try:
-                element = user.get(timeout=1)
-            except:
-                time.sleep(1)
-                continue
-            for player_data in element:
-                player = Player.objects.filter(
-                        summoner_id=player_data['summonerId'],
-                        server=settings.SERVER).first()
-                if player:
-                    player.update(player_data)
-                    existing_player.append(player)
-                    continue
-                player = Player(
-                    summoner_id=player_data['summonerId'],
-                    server=settings.SERVER)
-                new_player.append(player)
-            if len(new_player) > 200:
-                Player.objects.bulk_create(new_player)
-                new_player = []
-            if len(existing_player) > 200:
-                Player.objects.bulk_update(
-                    existing_player,
-                    ['summoner_name',
-                     'ranking_solo',
-                     'series_solo',
-                     'wins_solo',
-                     'losses_solo',
-                     'update_solo'])
-                existing_player = []
-
-        print("Shutting down worker. Committing remaining changes.")
-        Player.objects.bulk_create(new_player)
-        new_player = []
-        Player.objects.bulk_update(
-            existing_player,
-            ['summoner_name',
-             'ranking_solo',
-             'series_solo',
-             'wins_solo',
-             'losses_solo',
-             'update_solo'])
-
-def prep():
-    """Set up database worker threads and prepare db.
-
-    If no pages are set up declares the initial pages.
-
-    Starts worker, queue and load balancer.
-    """
-    # Create initial pages if none exist:
-    for server in servers:
-        if Page.objects.filter(server=server).count() == 0:
-            for tier in tiers:
-                if tier not in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
-                    for division in divisions:
-                        p = Page(
-                            server=server,
-                            tier=tier,
-                            division=division
-                        )
-                        p.save()
-                else:
-                    p = Page(
-                        server=server,
-                        tier=tier,
-                        division="I"
-                    )
-                    p.save()
-        Page.objects.filter(server=server).all().update(last_updated=timezone.now() - timedelta(days=1))
-
-    load_balancer = LoadBalancer(min=1, max=10, breakpoint=50)
-    load_balancer.start()
-
-    return load_balancer
+    cur.execute("""DROP TABLE temp_player;""")
+    con.commit()
+    logging.info("Done")
 
 
-async def fetch(url, session, headers):
-    """Fetch data and return."""
-    print(f"fetching {url}")
+def dump_task(data, prev):
+
+    if prev:
+        prev.join()
+    prev = threading.Thread(target=dump_data, args=(data,))
+    prev.start()
+    return prev
+
+
+async def fetch(url, session, headers, page):
     try:
+        print(f"Fetching {url}")
         async with session.get(url, headers=headers) as response:
             resp = await response.json()
-            return response.status, resp, response.headers
-    except:
-        return 999, [], {}
+            return response.status, resp, response.headers, page
+    except Exception as err:
+        print(err)
+        return 999, [], {}, page
 
-async def server_updater(server, headers):
-    """Server specific task started from the main function."""
-    divisions = await sync_to_async(list)(Page.objects.filter(server=server).order_by('id').all())
-    url = f'https://{server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s'
 
-    while True:
-        for element in divisions:
-            start_page = 1
-            forced_timeout = 0
+async def server_updater():
+    data_sets = []
+    thread = None
+    loop = asyncio.get_event_loop()
+    logging.info(f"Starting cycle")
+    for tier in reversed(tiers):
+        for division in divisions:
+            if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
+                if division != "I":
+                    continue
+            logging.info(f" Starting with {server} - {tier} - {division}")
+            next_page = 1
             empty_count = 0
-            while empty_count == 0:
-                await asyncio.sleep(forced_timeout)
-                # calling 9 pages per batch
-                tasks = []
+            page_batch = []
+            while empty_count == 0 or page_batch:
+                forced_timeout = 0
+                while len(page_batch) < 5:
+                    page_batch.append(next_page)
+                    next_page += 1
                 async with aiohttp.ClientSession() as session:
-                    for i in range(9):
+                    tasks = []
+                    tasks.append(asyncio.create_task(asyncio.sleep(2)))
+                    while page_batch:
+                        page = page_batch.pop()
                         tasks.append(
-                            asyncio.create_task(fetch(
-                                url % (element.tier, element.division, start_page + i),
-                                session,
-                                headers=headers
-                            )))
-                    tasks.append(asyncio.create_task(asyncio.sleep(3)))
+                            asyncio.create_task(
+                                fetch(
+                                    url % (tier, division, page),
+                                    session,
+                                    headers,
+                                    page
+                                )
+                            )
+                        )
                     responses = await asyncio.gather(*tasks)
-                for response in responses[:9]:
+                responses.pop(0)    
+                for response in responses:
                     if response[0] == 429:
                         print("Got 429")
                         if 'Retry-After' in response[2]:
                             forced_timeout = int(response[2]['Retry-After'])
                         else:
-                            forced_timeout = 1
-                        print(f"Waiting an additional {forced_timeout}.")
-                    elif response[0] != 200:
-                        empty_count = 0
-                        start_page += 9
-                        break
+                            forced_timeout = 2
+                        print(f"Waiting n additional {forced_timeout}.")
+                    if response[0] != 200:
+                        print(response)
+                        page_batch.append(response[3])
                     else:
                         if len(response[1]) == 0:
                             empty_count += 1
                         else:
-                            await sync_to_async(user.put)(response[1])
-
-                if empty_count == 0:
-                    start_page += 9
-
-            element.page_limit = start_page + 9 - empty_count
-            await sync_to_async(element.save)()
-
+                            data_sets.append(response[1])
+                 
+                await asyncio.sleep(forced_timeout)
+            thread = await loop.run_in_executor(None, dump_task, data_sets, thread)
+            data_sets = []
 
 async def main():
-    """Pull data"""
-    server_tasks = []
 
-    headers = {'X-Riot-Token': config['API_KEY']}
-
-    for server in servers:
-        server_tasks.append(
-            asyncio.create_task(server_updater(server, headers))
-        )
-    await asyncio.gather(*server_tasks)
+    # Starting an additional task to not work faster than 1 cycle per hour
+    while True:
+        tasks = []
+        tasks.append(
+                asyncio.sleep(3600))
+        tasks.append(
+                asyncio.create_task(server_updater()))
+        await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
-    load_balancer = prep()
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        load_balancer.stop()
-    load_balancer.stop()
+    asyncio.run(main())

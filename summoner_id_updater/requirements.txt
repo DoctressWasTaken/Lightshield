@@ -1,2 +1,4 @@
+aiohttp
+ratelimit
 psycopg2-binary
 pika

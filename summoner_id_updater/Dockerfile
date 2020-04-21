@@ -10,10 +10,6 @@ COPY config.json .
 
 WORKDIR /project/summoner_id_updater
 # Data module
-COPY playerdata/requirements.txt requirements.txt
-RUN pip install -r requirements.txt
-COPY playerdata/ .
-RUN ls
 RUN chmod 500 startup.sh
 
 CMD ["/project/summoner_id_updater/startup.sh"]
