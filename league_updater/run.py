@@ -22,7 +22,7 @@ config = json.loads(open('../config.json').read())
 headers = {'X-Riot-Token': config['API_KEY']}
 h = HTTPHeaders(headers)
 
-url = f"https://{server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+url = f"http://proxy:8000/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
 
 
 tiers = [

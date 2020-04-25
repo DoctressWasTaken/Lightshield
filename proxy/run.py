@@ -1,15 +1,11 @@
-import tornado.ioloop
-import tornado.web
-import time
-from tornado.ioloop import IOLoop
-from tornado.httpserver import HTTPServer
-from tornado.httpclient import AsyncHTTPClient
-from tornado.concurrent import Future
-import requests
-import os, json
 import asyncio
-import datetime, pytz
-from datetime import timezone
+from aiohttp import web
+import aiohttp
+
+from datetime import timezone, datetime, timedelta
+import pytz
+import os
+import json
 import logging
 
 logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
@@ -20,40 +16,48 @@ if "SERVER" not in os.environ:
 
 config = json.loads(open("config.json").read())
 
+if not "SERVER" in os.environ:
+    logging.error("No SERVER env variable provided. Exiting.")
+    exit()
 server = os.environ["SERVER"]
-headers = {'X-Riot-Token': config['API_KEY']}
-url = f"https://{server}.api.riotgames.com/lol"
 
-class Limit():
+headers = {'X-Riot-Token': config['API_KEY']}
+base_url = f"https://{server}.api.riotgames.com/lol"
+
+
+count = 0
+
+class Limit:
 
     def __init__(self, span, count):
-        self.span = int(span)
-        self.max = int(count * 0.9)
+        self.span = int(span) + 1
+        self.max = count
         self.count = 0
-        self.bucket = datetime.datetime.now(timezone.utc)
-        self.last_updated = datetime.datetime.now(timezone.utc)
-        self.blocked = datetime.datetime.now(timezone.utc)
+        self.bucket = datetime.now(timezone.utc)
+        self.last_updated = datetime.now(timezone.utc)
+        self.blocked = datetime.now(timezone.utc)
+        print(f"Initiated {self.max}:{self.span}.")
 
-    def is_blocked(self):
+    async def is_blocked(self):
         print(self.count, self.max)
-        if self.blocked > datetime.datetime.now(timezone.utc):
+        if self.blocked > datetime.now(timezone.utc):
             return True
-        
-        if self.bucket < datetime.datetime.now(timezone.utc):  # Bucket timed out
+
+        if self.bucket < datetime.now(timezone.utc):  # Bucket timed out
             self.count = 0
             return False
         if self.count < self.max:  # Not maxed out
             return False
         return True
 
-    def request(self):
+    async def register(self):
 
-        if self.blocked > datetime.datetime.now(timezone.utc):
+        if self.blocked > datetime.now(timezone.utc):
             logging.info("Limit is blocked.")
             return False
 
-        if self.bucket < datetime.datetime.now(timezone.utc):
-            self.bucket = datetime.datetime.now(timezone.utc) + datetime.timedelta(seconds=self.span)
+        if self.bucket < datetime.now(timezone.utc):
+            self.bucket = datetime.now(timezone.utc) + timedelta(seconds=self.span)
             logging.info(f"Starting bucket until {self.bucket}.")
             self.count = 1
             return True
@@ -66,152 +70,127 @@ class Limit():
         logging.info("Already on limit")
         return False
 
-
-    def sync(self, count, date, retry_after):
-        print("Syncing", self.span)
-        print("Last update:", self.last_updated)
-        print("Date:", date)
+    async def sync(self, current, date, retry_after):
         if self.last_updated > date:
             return
-        print("Updating", self.span, self.count, count)
-        self.count = count
+        if count > self.count:
+            self.count = count
         if self.count > self.max:
-            self.blocked = datetime.datetime.now(timezone.utc) + datetime.timedelta(seconds=retry_after)
+            self.blocked = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
             print("Blocking for", retry_after)
 
 
-
-class ApiHandler():
+class ApiHandler:
 
     def __init__(self):
         limits = json.loads(open("limits.json").read())
-        # global limits
         self.globals = []
         for limit in limits['APP']:
             self.globals.append(
-                    Limit(limit, limits['APP'][limit])
-                        )
-        # method limits
+                    Limit(limit, limits['APP'][limit]))
         self.methods = {}
         for method in limits['METHODS']:
             for limit in limits['METHODS'][method]:
                 self.methods[method] = Limit(limit, limits['METHODS'][method][limit])
-        
 
-    def request(self, method):
-        
-        print("Try to register request")
-        if not self.methods[method].request():
-            return False
+    async def request(self, url, method):
+
+        if await self.methods[method].is_blocked():
+            print("Method limit is blocking")
+            return 428, {}
+        print("Method limit not blocking")
         for limit in self.globals:
-            if not limit.request():
-                return False
-        return True
+            if await limit.is_blocked():
+                print("Global limit is blocking")
+                return 428, {}
+        print("Global limit not blocking")
 
-    def call(self, url, method):
-        print("Called")
-        r = requests.get(url, headers=headers)
-        if r.status_code != 200:
-            print(r.headers)
-        
-        app_current = r.headers['X-App-Rate-Limit-Count']
-        method_current = r.headers['X-Method-Rate-Limit-Count']
-        naive = datetime.datetime.strptime(
-                r.headers['Date'],
-                '%a, %d %b %Y %H:%M:%S GMT')
-        local = pytz.timezone('GMT')
-        local_dt = local.localize(naive, is_dst=None)
-        date = local_dt.astimezone(pytz.utc)
-
-        retry_after = 0
-        if 'Retry-After' in r.headers:
-            retry_after = int(r.headers['Retry-After'])
-
+        if not await self.methods[method].register():
+            print("Method can't register")
+            return 428, {}
+        print("Method registered")
         for limit in self.globals:
-            for current in app_current.split(','):
-                if current.endswith(str(limit.span)):
-                    limit.sync(
-                            int(current.split(":")[0]),
-                            date,
-                            retry_after)
-                    break
-        self.methods[method].sync(
-            int(method_current.split(":")[0]),
-            date,
-            retry_after)
+            if not await limit.register():
+                print("Global can't register")
+                return 428, {}
+        print("Global registered")
 
-        return {
-            "body": r.json(),
-            "code": r.status_code
-            } 
+        print("\n\t\t\t\t\t\tALLOWED REQUEST\n")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(base_url + url, headers=headers) as resp:
+                body = await resp.json()
+                print(resp.status)
+                if resp.status != 200:
+                    print(body)
+                    print(resp.headers)
 
+                app_current = resp.headers['X-App-Rate-Limit-Count']
+                method_current = resp.headers['X-Method-Rate-Limit-Count']
+                naive = datetime.strptime(
+                    resp.headers['Date'],
+                    '%a, %d %b %Y %H:%M:%S GMT')
+                local = pytz.timezone('GMT')
+                local_dt = local.localize(naive, is_dst=None)
+                date = local_dt.astimezone(pytz.utc)
+
+                retry_after = 0
+                if 'Retry-After' in resp.headers:
+                    retry_after = int(resp.headers['Retry-After'])
+
+                for limit in self.globals:
+                    for current in app_current.split(','):
+                        if current.endswith(str(limit.span)):
+                            await limit.sync(
+                                int(current.split(":")[0]),
+                                date,
+                                retry_after)
+                            break
+                await self.methods[method].sync(
+                    int(method_current.split(":")[0]),
+                    date,
+                    retry_after)
+        return 200, {}
 
 class Proxy:
 
     def __init__(self):
         self.api = ApiHandler()
+        self.app = web.Application()
+        self.app.add_routes([
+            web.get('/league-exp/{tail:.*}', self.league_exp),
+            web.get('/summoner/{tail:.*}', self.summoner),
 
-        params = {
-            "api": self.api
-            }
-
-        app = tornado.web.Application([
-            (r"/league/.*", self.LeagueHandler, params),
-            (r"/summoner/.*", self.SummonerHandler, params),
-            (r"/league-exp/.*", self.LeagueExpHandler, params),
-            ])
+        ])
         
-        self.server = HTTPServer(app)
+    def run(self, host="0.0.0.0", port=8080):
+        web.run_app(self.app, port=port, host=host)
 
-    def run(self, port):
-        self.server.bind(port)
-        self.server.start(0)
-        IOLoop.current().start()
 
-    def stop(self):
-        self.server.stop()
+    async def league_exp(self, request):
+        response = await self.api.request(str(request.rel_url), "league-exp")
+        return web.Response(text=json.dumps(response[1]), status=response[0])
 
-    class DefaultHandler(tornado.web.RequestHandler):
-        name = ""
-        url = ""
+    async def summoner(self, request):
+        response = await self.api.request(str(request.rel_url), "summoner")
+        return web.Response(text=json.dumps(response[1]), status=response[0])
 
-        def initialize(self, *args, **kwargs):
-            self.api = kwargs['api']
 
-        def get(self):
-            logging.info(f"Received request for {self.name}. ")
-            if self.api.request(self.name):
-                
-                response = self.api.call(
-                        url
-                        + self.request.uri,
-                        self.name)
-
-                
-                self.set_status(response['code'])
-                self.finish("AAA")
-                #self.finish(json.dumps(response['body']))
-                return
-
-            print("Denied")
-            self.set_status(429)
-            self.finish("error")
+async def league(request):
+    global count
+    print(request.rel_url)
+    if count < 10:
+        print("Setting count to", count + 1)
+        count += 1
+    else:
+        print("Skipping")
+        return web.Response(text="Its full")
+    await asyncio.sleep(2)
+    print("Done", request.rel_url)
+    return web.Response(text="Hello World")
 
 
 
-    class LeagueHandler(DefaultHandler):
-        name = "league"
-        
-    class LeagueExpHandler(DefaultHandler):
-        name = "league-exp"
-        url = f"https://{server}.api.riotgames.com/lol/league-exp/"
-
-    class SummonerHandler(DefaultHandler):
-        name = "summoner"
-        
 if __name__ == '__main__':
     proxy = Proxy()
-    try:
-        proxy.run(port=8888)
-    except:
-        proxy.stop()
+    proxy.run(port=8000, host="0.0.0.0")
+

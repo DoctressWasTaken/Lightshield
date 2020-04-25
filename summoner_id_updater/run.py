@@ -14,7 +14,7 @@ if not "SERVER" in os.environ:
     exit()
 server = os.environ['SERVER']
 
-url_template = f"https://{server}.api.riotgames.com/lol/summoner/v4/summoners/%s"
+url_template = f"http://proxy:8000/summoner/v4/summoners/%s"
 
 @limits(calls=250, period=10)
 async def fetch(url, session):
