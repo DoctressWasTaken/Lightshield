@@ -49,6 +49,9 @@ services:
       - playerdata:playerdata
       - proxy_euw:proxy
     restart: always
+    depends_on:
+      - playerdata
+      - proxy_euw
     environment:
       - SERVER=EUW1
 
@@ -61,6 +64,9 @@ services:
       - playerdata:playerdata
       - proxy_na:proxy
     restart: always
+    depends_on:
+      - playerdata
+      - proxy_na
     environment:
       - SERVER=NA1
 
@@ -75,6 +81,7 @@ services:
     restart: always
     depends_on:
       - playerdata
+      - proxy_kr
     environment:
       - SERVER=KR
 
@@ -87,6 +94,9 @@ services:
       - playerdata:playerdata
       - proxy_euw:proxy
     restart: always
+    depends_on:
+      - playerdata
+      - proxy_euw
     environment:
       - SERVER=EUW1
 
@@ -99,6 +109,9 @@ services:
       - playerdata:playerdata
       - proxy_na:proxy
     restart: always
+    depends_on:
+      - playerdata
+      - proxy_na
     environment:
       - SERVER=NA1
 
@@ -111,6 +124,9 @@ services:
       - playerdata:playerdata
       - proxy_kr:proxy
     restart: always
+    depends_on:
+      - playerdata
+      - proxy_kr
     environment:
       - SERVER=KR
 
