@@ -8,8 +8,10 @@ from tornado.concurrent import Future
 import requests
 import os, json
 import asyncio
-import datetime
+import datetime, pytz
+from datetime import timezone
 import logging
+
 logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
 
 if "SERVER" not in os.environ:
@@ -26,21 +28,18 @@ class Limit():
 
     def __init__(self, span, count):
         self.span = int(span)
-        self.max = count
+        self.max = int(count * 0.9)
         self.count = 0
-        self.bucket = None
-        self.last_updated = datetime.datetime.now()
-        self.blocked = datetime.datetime.now()
+        self.bucket = datetime.datetime.now(timezone.utc)
+        self.last_updated = datetime.datetime.now(timezone.utc)
+        self.blocked = datetime.datetime.now(timezone.utc)
 
     def is_blocked(self):
-
-        if self.blocked > datetime.datetime.now():
+        print(self.count, self.max)
+        if self.blocked > datetime.datetime.now(timezone.utc):
             return True
         
-        if not self.bucket:  # No Bucket
-            return False
-        if self.bucket + datetime.timedelta(seconds=self.span) < datetime.datetime.now():  # Bucket timed out
-            self.bucket = None
+        if self.bucket < datetime.datetime.now(timezone.utc):  # Bucket timed out
             self.count = 0
             return False
         if self.count < self.max:  # Not maxed out
@@ -49,32 +48,36 @@ class Limit():
 
     def request(self):
 
-        if self.blocked > datetime.datetime.now():
+        if self.blocked > datetime.datetime.now(timezone.utc):
+            logging.info("Limit is blocked.")
             return False
 
-        if not self.bucket:
-            self.bucket = datetime.datetime.now()
-            self.count += 1
-            return True
-
-        if self.bucket + datetime.timedelta(seconds=self.span) < datetime.datetime.now():
-            self.bucket = datetime.datetime.now()
+        if self.bucket < datetime.datetime.now(timezone.utc):
+            self.bucket = datetime.datetime.now(timezone.utc) + datetime.timedelta(seconds=self.span)
+            logging.info(f"Starting bucket until {self.bucket}.")
             self.count = 1
             return True
 
         if self.count < self.max:
             self.count += 1
+            logging.info(f"Adding request {self.count} : {self.max}.")
             return True
 
+        logging.info("Already on limit")
         return False
 
+
     def sync(self, count, date, retry_after):
+        print("Syncing", self.span)
+        print("Last update:", self.last_updated)
+        print("Date:", date)
         if self.last_updated > date:
             return
+        print("Updating", self.span, self.count, count)
         self.count = count
         if self.count > self.max:
-            self.blocked = datetime.datetime.now() + datetime.timedelta(seconds=retry_after)
-            
+            self.blocked = datetime.datetime.now(timezone.utc) + datetime.timedelta(seconds=retry_after)
+            print("Blocking for", retry_after)
 
 
 
@@ -96,42 +99,39 @@ class ApiHandler():
         
 
     def request(self, method):
-
-        for limit in self.globals:
-            if limit.is_blocked():
-                return False
-        if self.methods[method].is_blocked():
+        
+        print("Try to register request")
+        if not self.methods[method].request():
             return False
-
         for limit in self.globals:
             if not limit.request():
                 return False
-        if not self.methods[method].request():
-            return False
         return True
 
     def call(self, url, method):
         print("Called")
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
-            print(url)
             print(r.headers)
         
         app_current = r.headers['X-App-Rate-Limit-Count']
         method_current = r.headers['X-Method-Rate-Limit-Count']
-        date = datetime.datetime.strptime(
+        naive = datetime.datetime.strptime(
                 r.headers['Date'],
-                '%a, %d %b %Y %H:%M:%S %Z')
+                '%a, %d %b %Y %H:%M:%S GMT')
+        local = pytz.timezone('GMT')
+        local_dt = local.localize(naive, is_dst=None)
+        date = local_dt.astimezone(pytz.utc)
 
         retry_after = 0
         if 'Retry-After' in r.headers:
-            retry_after = r.headers['Retry-After'] 
+            retry_after = int(r.headers['Retry-After'])
 
         for limit in self.globals:
             for current in app_current.split(','):
                 if current.endswith(str(limit.span)):
                     limit.sync(
-                            current.split(":"),
+                            int(current.split(":")[0]),
                             date,
                             retry_after)
                     break
