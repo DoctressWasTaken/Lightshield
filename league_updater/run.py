@@ -1,6 +1,9 @@
 import psycopg2
 import asyncio
 import aiohttp
+import tornado
+from tornado.httpclient import AsyncHTTPClient
+from tornado.httputil import HTTPHeaders
 import json
 import logging
 import threading
@@ -17,6 +20,7 @@ if not 'SERVER' in os.environ:
 server = os.environ['SERVER']
 config = json.loads(open('../config.json').read())
 headers = {'X-Riot-Token': config['API_KEY']}
+h = HTTPHeaders(headers)
 
 url = f"https://{server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
 
@@ -120,23 +124,18 @@ def dump_data(data):
     cur.execute("""DROP TABLE temp_player;""")
     con.commit()
     logging.info("Done")
+    con.close()
+
+def dump_task(data):
+
+    dump_data(data)
 
 
-def dump_task(data, prev):
-
-    if prev:
-        prev.join()
-    prev = threading.Thread(target=dump_data, args=(data,))
-    prev.start()
-    return prev
-
-
-async def fetch(url, session, headers, page):
+async def fetch(url, http_client, headers, page):
     try:
-        print(f"Fetching {url}")
-        async with session.get(url, headers=headers) as response:
-            resp = await response.json()
-            return response.status, resp, response.headers, page
+        response = await http_client.fetch(url, headers=h)
+        data = json.loads(response.body)
+        return response.code, data, response.headers.get_all(), page
     except Exception as err:
         print(err)
         return 999, [], {}, page
@@ -144,15 +143,16 @@ async def fetch(url, session, headers, page):
 
 async def server_updater():
     data_sets = []
-    thread = None
     loop = asyncio.get_event_loop()
     logging.info(f"Starting cycle")
+    http_client = AsyncHTTPClient()
     for tier in reversed(tiers):
         for division in divisions:
             if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
                 if division != "I":
                     continue
             logging.info(f" Starting with {server} - {tier} - {division}")
+            logging.info(f"Active Threads: {threading.active_count()}")
             next_page = 1
             empty_count = 0
             page_batch = []
@@ -161,22 +161,21 @@ async def server_updater():
                 while len(page_batch) < 5:
                     page_batch.append(next_page)
                     next_page += 1
-                async with aiohttp.ClientSession() as session:
-                    tasks = []
-                    tasks.append(asyncio.create_task(asyncio.sleep(2)))
-                    while page_batch:
-                        page = page_batch.pop()
-                        tasks.append(
-                            asyncio.create_task(
-                                fetch(
-                                    url % (tier, division, page),
-                                    session,
-                                    headers,
-                                    page
-                                )
+                tasks = []
+                tasks.append(asyncio.create_task(asyncio.sleep(2)))
+                while page_batch:
+                    page = page_batch.pop()
+                    tasks.append(
+                        asyncio.create_task(
+                            fetch(
+                                url % (tier, division, page),
+                                http_client,
+                                headers,
+                                page
                             )
                         )
-                    responses = await asyncio.gather(*tasks)
+                    )
+                responses = await asyncio.gather(*tasks)
                 responses.pop(0)    
                 for response in responses:
                     if response[0] == 429:
@@ -196,7 +195,8 @@ async def server_updater():
                             data_sets.append(response[1])
                  
                 await asyncio.sleep(forced_timeout)
-            thread = await loop.run_in_executor(None, dump_task, data_sets, thread)
+            print(f"Done with {server} - {tier} - {division}; Pages: {next_page - 1}.")
+            await loop.run_in_executor(None, dump_task, data_sets)
             data_sets = []
 
 async def main():
@@ -205,7 +205,7 @@ async def main():
     while True:
         tasks = []
         tasks.append(
-                asyncio.sleep(3600))
+                asyncio.sleep(6 * 3600))
         tasks.append(
                 asyncio.create_task(server_updater()))
         await asyncio.gather(*tasks)

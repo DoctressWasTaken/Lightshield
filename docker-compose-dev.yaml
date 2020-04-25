@@ -18,6 +18,12 @@ services:
     depends_on:
       - rabbitmq
 
+  data:
+    container_name: data
+    image: crate
+    ports:
+      - 4201:4200
+
   playerdata:
     container_name: playerdata
     build:
@@ -38,8 +44,6 @@ services:
     links:
       - playerdata:playerdata
     restart: always
-    depends_on:
-      - playerdata
     environment:
       - SERVER=EUW1
 
@@ -51,8 +55,6 @@ services:
     links:
       - playerdata:playerdata
     restart: always
-    depends_on:
-      - playerdata
     environment:
       - SERVER=NA1
 

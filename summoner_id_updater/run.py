@@ -1,15 +1,14 @@
 import os
 import psycopg2
 from ratelimit import limits, RateLimitException
+import aiohttp
 import json
 import asyncio
-import aiohttp
 import time
 
 config = json.loads(open('../config.json').read())
 
 headers = {'X-Riot-Token': config['API_KEY']}
-
 if not "SERVER" in os.environ:
     print("No server provided, shutting down")
     exit()
@@ -17,13 +16,16 @@ server = os.environ['SERVER']
 
 url_template = f"https://{server}.api.riotgames.com/lol/summoner/v4/summoners/%s"
 
-@limits(calls=100, period=10)
+@limits(calls=250, period=10)
 async def fetch(url, session):
     try:
-        #print("Fetching",url)
         async with session.get(url, headers=headers) as response:
             resp = await response.json()
+            if response.status == 429:
+                print(response.headers)
             return response.status, resp, response.headers
+
+
     except Exception as err:
         print(err)
         return 999, [], {}
@@ -38,24 +40,26 @@ async def to_fetch(url, session, summoner_id):
 
 async def main(data_list):
     results = []
+    session = aiohttp.ClientSession()
     while data_list:
         forced_timeout = 0
-        async with aiohttp.ClientSession() as session:
-            tasks = []
-            tasks.append(asyncio.create_task(asyncio.sleep(10)))
-            for i in range(min(300, len(data_list))):
-                summoner_id = data_list.pop()
-                tasks.append(
-                    asyncio.create_task(
-                        to_fetch(
-                            url_template % ( summoner_id),
-                            session,
-                            summoner_id
-                            )
+        tasks = []
+        tasks.append(asyncio.create_task(asyncio.sleep(10)))
+        print("Starting call cycle")
+
+        for i in range(min(250, len(data_list))):
+            summoner_id = data_list.pop()
+            tasks.append(
+                asyncio.create_task(
+                    to_fetch(
+                        url_template % ( summoner_id),
+                        session,
+                        summoner_id
                         )
                     )
-                await asyncio.sleep(0.02)
-            responses = await asyncio.gather(*tasks)
+                )
+            await asyncio.sleep(0.01)
+        responses = await asyncio.gather(*tasks)
         responses.pop(0)
         for response in responses:
             if response[0] == 429:
@@ -68,13 +72,13 @@ async def main(data_list):
             if response[0] == 998:
                 forced_timeout = 1.5
             if response[0] != 200:
+                print(response[0])
                 data_list.append(response[3])
             else:
                 results.append(response[1])
         await asyncio.sleep(forced_timeout)
-
+    await session.close()
     return results
-        
 
 
 def run():
@@ -132,7 +136,7 @@ def run():
                  puuid=EXCLUDED.puuid;
                  """)
             cur.execute(f"""DROP TABLE {server}_temp_ids;""")
-        
+        connection.close() 
 
 if __name__ == "__main__":
 
