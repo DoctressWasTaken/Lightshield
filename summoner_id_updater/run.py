@@ -6,7 +6,7 @@ import json
 import asyncio
 import time
 
-config = json.loads(open('../config.json').read())
+config = json.loads(open('config.json').read())
 
 headers = {'X-Riot-Token': config['API_KEY']}
 if not "SERVER" in os.environ:
@@ -20,11 +20,10 @@ url_template = f"http://proxy:8000/summoner/v4/summoners/%s"
 async def fetch(url, session):
     try:
         async with session.get(url, headers=headers) as response:
-            resp = await response.json()
+            resp = await response.json(content_type=None)
             if response.status == 429:
                 print(response.headers)
             return response.status, resp, response.headers
-
 
     except Exception as err:
         print(err)
@@ -98,6 +97,7 @@ def run():
                 """)
             data = cur.fetchall()
             if not data:
+                print("No items to update found.")
                 time.sleep(10)
                 continue
             data_list = [entry[0] for entry in data]

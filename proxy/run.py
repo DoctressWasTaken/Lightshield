@@ -97,22 +97,22 @@ class ApiHandler:
 
         if await self.methods[method].is_blocked():
             print("Method limit is blocking")
-            return 428, {}
+            return 428, {"error": "error"}
         print("Method limit not blocking")
         for limit in self.globals:
             if await limit.is_blocked():
                 print("Global limit is blocking")
-                return 428, {}
+                return 428, {"error": "error"}
         print("Global limit not blocking")
 
         if not await self.methods[method].register():
             print("Method can't register")
-            return 428, {}
+            return 428, {"error": "error"}
         print("Method registered")
         for limit in self.globals:
             if not await limit.register():
                 print("Global can't register")
-                return 428, {}
+                return 428, {"error": "error"}
         print("Global registered")
 
         print("\n\t\t\t\t\t\tALLOWED REQUEST\n")
@@ -149,7 +149,10 @@ class ApiHandler:
                     int(method_current.split(":")[0]),
                     date,
                     retry_after)
-        return 200, {}
+        if resp.status != 200:
+            return 428, {"error": "error"}
+        
+        return 200, body
 
 class Proxy:
 

@@ -6,6 +6,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: proxy
+    volumes:
+        - ./config.json:/project/config.json:ro
     environment:
       - SERVER=EUW1
     restart: always
@@ -15,6 +17,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: proxy
+    volumes:
+        - ./config.json:/project/config.json:ro
     environment:
       - SERVER=NA1
     restart: always
@@ -24,6 +28,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: proxy
+    volumes:
+        - ./config.json:/project/config.json:ro
     environment:
       - SERVER=KR
     restart: always
@@ -43,12 +49,14 @@ services:
   league_updater_euw:
     container_name: league_updater_euw
     build:
-      dockerfile: league_updater/Dockerfile
-      context: .
+      dockerfile: Dockerfile
+      context: league_updater
     links:
       - playerdata:playerdata
       - proxy_euw:proxy
     restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
     depends_on:
       - playerdata
       - proxy_euw
@@ -58,12 +66,14 @@ services:
   league_updater_na:
     container_name: league_updater_na
     build:
-      dockerfile: league_updater/Dockerfile
-      context: .
+      dockerfile: Dockerfile
+      context: summoner_id_updater
     links:
       - playerdata:playerdata
       - proxy_na:proxy
     restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
     depends_on:
       - playerdata
       - proxy_na
@@ -73,12 +83,14 @@ services:
   league_updater_kr:
     container_name: league_updater_kr
     build:
-      dockerfile: league_updater/Dockerfile
-      context: .
+      dockerfile: Dockerfile
+      context: summoner_id_updater
     links:
       - playerdata:playerdata
       - proxy_kr:proxy
     restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
     depends_on:
       - playerdata
       - proxy_kr
@@ -88,12 +100,14 @@ services:
   summoner_id_updater_euw:
     container_name: summoner_id_updater_euw
     build:
-      dockerfile: summoner_id_updater/Dockerfile
-      context: .
+      dockerfile: Dockerfile
+      context: summoner_id_updater
     links:
       - playerdata:playerdata
       - proxy_euw:proxy
     restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
     depends_on:
       - playerdata
       - proxy_euw
@@ -103,12 +117,14 @@ services:
   summoner_id_updater_na:
     container_name: summoner_id_updater_na
     build:
-      dockerfile: summoner_id_updater/Dockerfile
-      context: .
+      dockerfile: Dockerfile
+      context: summoner_id_updater
     links:
       - playerdata:playerdata
       - proxy_na:proxy
     restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
     depends_on:
       - playerdata
       - proxy_na
@@ -118,12 +134,14 @@ services:
   summoner_id_updater_kr:
     container_name: summoner_id_updater_kr
     build:
-      dockerfile: summoner_id_updater/Dockerfile
-      context: .
+      dockerfile: Dockerfile
+      context: summoner_id_updater
     links:
       - playerdata:playerdata
       - proxy_kr:proxy
     restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
     depends_on:
       - playerdata
       - proxy_kr

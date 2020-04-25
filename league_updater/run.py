@@ -18,9 +18,7 @@ if not 'SERVER' in os.environ:
     exit()
 
 server = os.environ['SERVER']
-config = json.loads(open('../config.json').read())
-headers = {'X-Riot-Token': config['API_KEY']}
-h = HTTPHeaders(headers)
+config = json.loads(open('config.json').read())
 
 url = f"http://proxy:8000/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
 
@@ -131,9 +129,9 @@ def dump_task(data):
     dump_data(data)
 
 
-async def fetch(url, http_client, headers, page):
+async def fetch(url, http_client, page):
     try:
-        response = await http_client.fetch(url, headers=h)
+        response = await http_client.fetch(url)
         data = json.loads(response.body)
         return response.code, data, response.headers.get_all(), page
     except Exception as err:
@@ -170,7 +168,6 @@ async def server_updater():
                             fetch(
                                 url % (tier, division, page),
                                 http_client,
-                                headers,
                                 page
                             )
                         )

@@ -3,13 +3,12 @@ FROM python:3.7
 WORKDIR /project
 RUN python -m pip install --upgrade pip
 # Main Application setup
-COPY league_updater/requirements.txt league_updater/requirements.txt
-RUN pip install -r league_updater/requirements.txt
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt
 # Main Application
-COPY league_updater/ ./league_updater/
-COPY config.json .
+COPY startup.sh .
+COPY run.py . 
 
-WORKDIR /project/league_updater
 RUN chmod 500 startup.sh
 
-CMD ["/project/league_updater/startup.sh"]
+CMD ["/project/startup.sh"]
