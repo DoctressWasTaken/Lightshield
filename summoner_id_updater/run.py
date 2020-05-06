@@ -1,3 +1,5 @@
+"""Summoner ID Updater Module."""
+
 import os
 import psycopg2
 from ratelimit import limits, RateLimitException
@@ -9,15 +11,17 @@ import time
 config = json.loads(open('config.json').read())
 
 headers = {'X-Riot-Token': config['API_KEY']}
-if not "SERVER" in os.environ:
+if "SERVER" not in os.environ:
     print("No server provided, shutting down")
     exit()
 server = os.environ['SERVER']
 
 url_template = f"http://proxy:8000/summoner/v4/summoners/%s"
 
+
 @limits(calls=250, period=10)
 async def fetch(url, session):
+    """Call method."""
     try:
         async with session.get(url, headers=headers) as response:
             resp = await response.json(content_type=None)
@@ -29,15 +33,26 @@ async def fetch(url, session):
         print(err)
         return 999, [], {}
 
-async def to_fetch(url, session, summoner_id):
 
+async def to_fetch(url, session, summoner_id):
+    """Call placeholder method.
+
+    Added to allow catching the RateLimitException
+    without breaking the asyncio.gather.
+    """
     try:
         response = await fetch(url, session)
         return response + (summoner_id,)
     except RateLimitException:
         return 998, [], {}, summoner_id
 
+
 async def main(data_list):
+    """Call data collectively.
+
+    Function that bundles all API calls.
+    Returns once all calls are finished.
+    """
     results = []
     session = aiohttp.ClientSession()
     while data_list:
@@ -51,7 +66,7 @@ async def main(data_list):
             tasks.append(
                 asyncio.create_task(
                     to_fetch(
-                        url_template % ( summoner_id),
+                        url_template % (summoner_id),
                         session,
                         summoner_id
                         )
@@ -81,7 +96,11 @@ async def main(data_list):
 
 
 def run():
-    
+    """Update Summoners without IDs.
+
+    Cycles through packages of data from the DB, pulling results
+    and updating the package.
+    """
     while True:
         with psycopg2.connect(
                 host=config['DB_HOST'],
@@ -101,7 +120,7 @@ def run():
                 time.sleep(10)
                 continue
             data_list = [entry[0] for entry in data]
-            print(f"Found {len(data_list)} elements to upate.") 
+            print(f"Found {len(data_list)} elements to upate.")
             results = asyncio.run(main(data_list))
             print(f"Got {len(results)} elements.")
             cur.execute(f"""
@@ -136,7 +155,8 @@ def run():
                  puuid=EXCLUDED.puuid;
                  """)
             cur.execute(f"""DROP TABLE {server}_temp_ids;""")
-        connection.close() 
+        connection.close()
+
 
 if __name__ == "__main__":
 

@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
-"""Proxy Module.
+"""SummonerID Updater Module.
 
-Funnels all API calls and rate limits them.
+Updates the initially pulled user by extending them  with SummonerID and
+PuuID
 
 :copyright: (c) 2020, see LICENSE
 :license: Apache 2.0, see LICENSE
@@ -29,8 +30,8 @@ def read_requires(filename):  # pragma: no cover
 if __name__ == "__main__":  # pragma: no cover
     install_requires = read_requires('requirements.txt')
     setup(
-        name="Proxy Module",
-        description="Proxy Funnel module of the Riot API Framework.",
+        name="SummonerID Updater Module",
+        description="Update existing user and pull SummonerID & PuuID",
         version='0.0.1',
         packages=find_packages(),
         install_requires=install_requires

@@ -1,19 +1,17 @@
+"""League Updater Module."""
 import psycopg2
 import asyncio
-import aiohttp
-import tornado
 from tornado.httpclient import AsyncHTTPClient
-from tornado.httputil import HTTPHeaders
 import json
 import logging
 import threading
 import os
 
 logging.basicConfig(
-        format='%(asctime)s %(message)s', 
+        format='%(asctime)s %(message)s',
         datefmt='%m/%d/%Y %I:%M:%S %p',
         level=logging.DEBUG)
-if not 'SERVER' in os.environ:
+if 'SERVER' not in os.environ:
     print("No server provided, exiting.")
     exit()
 
@@ -57,8 +55,8 @@ map_divisions = {
         'I': 3}
 
 
-
 def dump_data(data):
+    """Connect and insert data into the connected DB."""
     logging.info("Starting data dump")
     logging.info("Transforming data")
     sets = []
@@ -89,8 +87,8 @@ def dump_data(data):
     cur = con.cursor()
     cur.execute(f"""
         CREATE TEMP TABLE temp_player
-        AS 
-        SELECT summoner_name, summoner_id, ranking, series, wins, losses 
+        AS
+        SELECT summoner_name, summoner_id, ranking, series, wins, losses
         FROM {server}_player
         WHERE True=False;
         """)
@@ -107,16 +105,16 @@ def dump_data(data):
     con.commit()
 
     query = f"""
-            INSERT INTO {server}_player 
+            INSERT INTO {server}_player
                 (summoner_name, summoner_id, ranking, series, wins, losses)
             SELECT * FROM temp_player
-            ON CONFLICT (summoner_id) DO UPDATE SET 
+            ON CONFLICT (summoner_id) DO UPDATE SET
             summoner_name=EXCLUDED.summoner_name,
             ranking=EXCLUDED.ranking,
             wins=EXCLUDED.wins,
             losses=EXCLUDED.losses;
             """
-    cur.execute(query);
+    cur.execute(query)
     con.commit()
 
     cur.execute("""DROP TABLE temp_player;""")
@@ -124,12 +122,17 @@ def dump_data(data):
     logging.info("Done")
     con.close()
 
-def dump_task(data):
 
+def dump_task(data):
+    """Sync wrapper for the syncronized DB connector."""
     dump_data(data)
 
 
 async def fetch(url, http_client, page):
+    """Fetch data from the api.
+
+    Returns Non-200 HTTP Code on error.
+    """
     try:
         response = await http_client.fetch(url)
         data = json.loads(response.body)
@@ -140,6 +143,10 @@ async def fetch(url, http_client, page):
 
 
 async def server_updater():
+    """Get data.
+
+    Core function that sets up call batches by rank category.
+    """
     data_sets = []
     loop = asyncio.get_event_loop()
     logging.info(f"Starting cycle")
@@ -173,7 +180,7 @@ async def server_updater():
                         )
                     )
                 responses = await asyncio.gather(*tasks)
-                responses.pop(0)    
+                responses.pop(0)
                 for response in responses:
                     if response[0] == 429:
                         print("Got 429")
@@ -190,21 +197,22 @@ async def server_updater():
                             empty_count += 1
                         else:
                             data_sets.append(response[1])
-                 
+
                 await asyncio.sleep(forced_timeout)
-            print(f"Done with {server} - {tier} - {division}; Pages: {next_page - 1}.")
+            print(f"Done with {server} - {tier} - {division};"
+                  f" Pages: {next_page - 1}.")
             await loop.run_in_executor(None, dump_task, data_sets)
             data_sets = []
 
-async def main():
 
-    # Starting an additional task to not work faster than 1 cycle per hour
+async def main():
+    """Start loop to request data from the api and update the DB.
+
+    The loop is limited to run once every 6 hours max.
+    """
     while True:
-        tasks = []
-        tasks.append(
-                asyncio.sleep(6 * 3600))
-        tasks.append(
-                asyncio.create_task(server_updater()))
+        tasks = [asyncio.sleep(6 * 3600),
+                 asyncio.create_task(server_updater())]
         await asyncio.gather(*tasks)
 
 

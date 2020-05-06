@@ -1,35 +1,40 @@
 """Match History updater. Pulls matchlists for all player."""
 
 import psycopg2
-
 import asyncio
 import aiohttp
-import threading
-import queue
 import json
 import os
 import time
 
-if not "SERVER" in os.environ:
+if "SERVER" not in os.environ:
     print("No SERVER env variable provided. exiting")
     exit()
 
 server = os.environ['SERVER']
 config = json.loads(open('config.json').read())
 
-
 # accountId, endIndex, beginIndex, queue
-base_url = f"http://proxy:8000/match/v4/matchlists/by-account/%s?endIndex=%s&beginIndex=%s&queue=%s"
+base_url = f"http://proxy:8000/match/v4/matchlists/by-account/" \
+           f"%s?endIndex=%s&beginIndex=%s&queue=%s"
 
 
 async def fetch(url, session, markers):
+    """Call method."""
     async with session.get(url) as response:
         data = await response.json(content_type=None)
         return response.status, data, markers
 
 
 async def call_data(data, session):
-    games = max(data[1] + data[2] + 50, 100)  # Pull an extra 50 matches to make sure none are lost
+    """Generate and call match-history data.
+
+    Generates the required urls and calls the api.
+    Failed calls are repeated,
+    the method returns once all calls are successfull.
+    """
+    games = max(data[1] + data[2] + 50,
+                100)  # Pull an extra 50 matches to make sure none are lost
     id = data[0]
     marker = []
     pointer = 0
@@ -80,6 +85,11 @@ async def call_data(data, session):
 
 
 async def process_data(data):
+    """Async wrapper for api requests.
+
+    Bundles requests for multiple player.
+    Each player again requires multiple requests.
+    """
     async with aiohttp.ClientSession() as session:
         tasks = []
         for entry in data:
@@ -102,9 +112,13 @@ async def process_data(data):
     return matches, player, participations
 
 
-
-
 def main():
+    """Update user match lists.
+
+    Wrapper function that starts the cycle.
+    Pulls data from the DB in syncronous setup,
+    calls requests in async method and uses the returned values to update.
+    """
     # Pull data package
     while True:
         with psycopg2.connect(
@@ -123,7 +137,7 @@ def main():
         if not data:
             time.sleep(5)
             continue
-        matches, player, participations =  asyncio.run(process_data(data))
+        matches, player, participations = asyncio.run(process_data(data))
         with psycopg2.connect(
                 host=config['DB_HOST'],
                 user=config['DB_USER'],
@@ -177,10 +191,10 @@ def main():
             print(f"Updating {len(lines)} player.")
             cur.execute(f"""
                 UPDATE {server}_player
-                SET 
+                SET
                     last_wins = v.last_wins,
                     last_losses = v.last_losses
-                FROM ( VALUES 
+                FROM ( VALUES
                     {",".join(lines)}
                     ) AS v(account_id, last_wins, last_losses)
                 WHERE {server}_player.account_id = v.account_id;
@@ -189,14 +203,4 @@ def main():
 
 
 if __name__ == "__main__":
-
     main()
-
-
-
-
-
-
-
-
-
