@@ -19,13 +19,13 @@ config = json.loads(open('config.json').read())
 
 
 # accountId, endIndex, beginIndex, queue
-base_url = f"https://proxy:8000/match/v4/matchlists/by-account/%s?endIndex=%s&beginIndex=%s&queue=%s"
+base_url = f"http://proxy:8000/match/v4/matchlists/by-account/%s?endIndex=%s&beginIndex=%s&queue=%s"
 
 
-async def fetch(url, session):
+async def fetch(url, session, markers):
     async with session.get(url) as response:
         data = await response.json(content_type=None)
-        return response.status, data
+        return response.status, data, markers
 
 
 async def call_data(data, session):
@@ -34,36 +34,36 @@ async def call_data(data, session):
     marker = []
     pointer = 0
     while games > 0:
-        marker.append(pointer)
         if games > 100:
+            marker.append(
+                (pointer, pointer + 100))
             pointer += 100
             games -= 100
         else:
-            marker.append(pointer + games)
+            marker.append(
+                (pointer, pointer + games))
             games = 0
 
     done = []
     while marker:
         tasks = []
-        for index, entry in enumerate(marker[:-1]):
-            url = base_url % (id, marker[index+1], entry, 420)
+        for entry in marker:
+            url = base_url % (id, entry[1], entry[0], 420)
             tasks.append(
                 asyncio.create_task(
-                    fetch(url, session)
+                    fetch(url, session, entry)
                 )
             )
+            await asyncio.sleep(0.05)
         marker = []
         results = await asyncio.gather(*tasks)
         for entry in results:
             if entry[0] != 200:
-                marker += entry[2]
+                marker.append(entry[2])
             else:
                 done.append(entry[1])
         if marker:
-            marker = list(set(marker))
-            marker.sort()
             await asyncio.sleep(2)
-            continue
 
     matches = []
     participations = []
@@ -99,7 +99,6 @@ async def process_data(data):
         participations += response[2]
 
     matches = list(set(matches))
-
     return matches, player, participations
 
 
@@ -116,73 +115,75 @@ def main():
             cur.execute(f"""
             SELECT account_id, diff_wins, diff_losses
             FROM {server}_player
-            WHERE diff_wins != 0
-            OR diff_losses != 0
+            WHERE diff_wins > 10
+            OR diff_losses > 10
             LIMIT 100;
             """)
             data = cur.fetchall()
         if not data:
             time.sleep(5)
             continue
-        matches, player, participations =  asyncio.run(data)
+        matches, player, participations =  asyncio.run(process_data(data))
         with psycopg2.connect(
                 host=config['DB_HOST'],
                 user=config['DB_USER'],
                 dbname=config['DB_NAME']) as connection:
             cur = connection.cursor()
             cur.execute(f"""
-                CREATE TEMP TABLE temp_{server}_matches
-                AS SELECT account_id
-                FROM {server}_match
-                WHERE True=False;
+                CREATE TEMP TABLE IF NOT EXISTS temp_{server}_matches (
+                    match_id VARCHAR(30));
             """)
             connection.commit()
             lines = []
 
             for entry in matches:
                 lines.append(
-                    "('" + "', '".join(entry) + "')")
-
+                    "('" + str(entry) + "')")
+            print(f"Adding {len(lines)} matches.")
             query = f"""
                 INSERT INTO temp_{server}_matches
-                    (account_id)
+                    (match_id)
                 VALUES {",".join(lines)};
             """
             cur.execute(query)
             connection.commit()
             cur.execute(f"""
                 INSERT INTO {server}_match
-                    (account_id)
-                SELECT * FROM temp_{server}_player
+                    (match_id)
+                SELECT * FROM temp_{server}_matches
                 ON CONFLICT DO NOTHING;
                 """)
             connection.commit()
-            cur.execute(f"DROP TABLE temp_{server}_player;")
+            cur.execute(f"DROP TABLE temp_{server}_matches;")
 
-            # UPDATE player
-            lines = []
-            for entry in player:
-                lines.append(
-                    "('" + "', '".join(entry) + "')")
-            cur.execute(f"""
-                INSERT INTO {server}_player
-                    (account_id, last_wins, last_losses)
-                VALUES {",".join(lines)}
-                ON CONFLICT (account_id) DO UPDATE SET 
-                last_wins=EXCLUDED.last_wins,
-                last_losses=EXCLUDED.last_losses;
-                """)
-            connection.commit()
             # ADD CONNECTIONS (Should not contain duplicates)
             lines = []
             for entry in participations:
                 lines.append(
-                    "('" + "', '".join(entry) + "')")
+                    "('%s', %s, %s)" % (entry[0], entry[1], entry[2]))
+            print(f"Adding {len(lines)} connections.")
             cur.execute(f"""
                 INSERT INTO {server}_participation
                     (account_id, match_id, timestamp)
                 VALUES {",".join(lines)}
                 ON CONFLICT DO NOTHING;
+                """)
+            connection.commit()
+            # UPDATE player
+            lines = []
+            for entry in player:
+                lines.append(
+                    "('%s', %s, %s)" % (entry[0], entry[1], entry[2]))
+            print(f"Updating {len(lines)} player.")
+            cur.execute(f"""
+                UPDATE {server}_player
+                SET 
+                    last_wins = v.last_wins,
+                    last_losses = v.last_losses
+                FROM ( VALUES 
+                    {",".join(lines)}
+                    ) AS v(account_id, last_wins, last_losses)
+                WHERE {server}_player.account_id = v.account_id;
                 """)
             connection.commit()
 

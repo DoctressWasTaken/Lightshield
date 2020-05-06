@@ -1,0 +1,2 @@
+aiohttp
+psycopg2-binary

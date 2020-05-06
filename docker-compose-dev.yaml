@@ -46,6 +46,23 @@ services:
     ports:
         - 127.0.0.1:5432:5432
 
+  match_history_updater:
+    container_name: match_history_updater
+    build:
+      dockerfile: Dockerfile
+      context: match_history_updater
+    links:
+      - playerdata:playerdata
+      - proxy_euw:proxy
+    restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
+    depends_on:
+      - playerdata
+      - proxy_euw
+    environment:
+      - SERVER=EUW1
+     
   league_updater_euw:
     container_name: league_updater_euw
     build:

@@ -119,8 +119,8 @@ class ApiHandler:
         async with aiohttp.ClientSession() as session:
             async with session.get(base_url + url, headers=headers) as resp:
                 body = await resp.json()
-                print(resp.status)
                 if resp.status != 200:
+                    print(resp.status)
                     print(body)
                     print(resp.headers)
 
@@ -162,6 +162,8 @@ class Proxy:
         self.app.add_routes([
             web.get('/league-exp/{tail:.*}', self.league_exp),
             web.get('/summoner/{tail:.*}', self.summoner),
+            web.get('/match/{tail:.*}', self.match),
+            web.get('/{tail:.*}', self.error)
 
         ])
         
@@ -177,19 +179,14 @@ class Proxy:
         response = await self.api.request(str(request.rel_url), "summoner")
         return web.Response(text=json.dumps(response[1]), status=response[0])
 
+    async def match(self, request):
+        response = await self.api.request(str(request.rel_url), "match")
+        return web.Response(text=json.dumps(response[1]), status=response[0])
 
-async def league(request):
-    global count
-    print(request.rel_url)
-    if count < 10:
-        print("Setting count to", count + 1)
-        count += 1
-    else:
-        print("Skipping")
-        return web.Response(text="Its full")
-    await asyncio.sleep(2)
-    print("Done", request.rel_url)
-    return web.Response(text="Hello World")
+    async def error(self, request):
+        print("Received message that could not be processed")
+        print(reuqest.rel_url)
+        return web.Response(text="error", status=500)
 
 
 
