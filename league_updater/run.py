@@ -158,6 +158,8 @@ async def server_updater():
                     continue
             logging.info(f" Starting with {server} - {tier} - {division}")
             logging.info(f"Active Threads: {threading.active_count()}")
+            for thread in threading.enumerate():
+                print(thread)
             next_page = 1
             empty_count = 0
             page_batch = []
