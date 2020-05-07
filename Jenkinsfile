@@ -31,59 +31,38 @@ pipeline {
                 ).trim()
             }
             steps {
-                script {
-                    if (!env.PROXY_CHANGED) {
-                        sh 'echo No changes for proxy found.'
-                    } else {
-                        sh 'echo Recreating proxy.'
-                    }
-                    if (!env.LEAGUE_UPDATER_CHANGED) {
-                        sh 'echo No changes for league_updater found.'
-                    } else {
-                        sh 'echo Recreating league_updater.'
-                    }
-                    if (!env.SUMMONER_ID_UPDATER_CHANGED) {
-                        sh 'echo No changes for summoner_id_updater found.'
-                    } else {
-                        sh 'echo Recreating summoner_id_updater.'
-                    }
-                    if (!env.MATCH_HISTORY_UPDATER_CHANGED) {
-                        sh 'echo No changes for match_history_updater found.'
-                    } else {
-                        sh 'echo Recreating match_history_updater.'
-                    }
+                sh 'echo Ready for rebuilds.'
+            }
+        }
+        stage('Proxy') {
+            when {  equals expected: 'changed', actual: env.PROXY_CHANGED}
+            steps {
+                dir('proxy') {
+                    sh 'tox'
                 }
             }
         }
-        stage('Clean Code Tests') {
+        stage('League_Updater') {
+            when { equals expected: 'changed', actual: env.LEAGUE_UPDATER_CHANGED}
             steps {
-                dir('proxy') {
-                    script {
-                        if (!env.PROXY_CHANGED) {
-                            sh 'tox'
-                        }
-                    }
-                }
                 dir('league_updater') {
-                    script {
-                        if (!env.LEAGUE_UPDATER_CHANGED) {
-                            sh 'tox'
-                        }
-                    }
+                    sh 'tox'
                 }
+            }
+        }
+        stage('SummonerID_Updater') {
+            when { equals expected: 'changed', actual: env.SUMMONER_ID_UPDATER_CHANGED}
+            steps {
                 dir('summoner_id_updater') {
-                    script {
-                        if (!env.SUMMONER_ID_UPDATER_CHANGED) {
-                            sh 'tox'
-                        }
-                    }
+                    sh 'tox'
                 }
+            }
+        }
+        stage('Match_History_Updater') {
+            when { equals expected: 'changed', actual: env.MATCH_HISTORY_UPDATER_CHANGED}
+            steps {
                 dir('match_history_updater') {
-                    script {
-                        if (!env.MATCH_HISTORY_UPDATER_CHANGED) {
-                            sh 'tox'
-                        }
-                    }
+                    sh 'tox'
                 }
             }
         }
