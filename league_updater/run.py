@@ -1,25 +1,39 @@
 """League Updater Module."""
-import psycopg2
 import asyncio
-from tornado.httpclient import AsyncHTTPClient
 import json
 import logging
 import threading
 import os
+import aiohttp
+from aiohttp.client_exceptions import ClientConnectorError
+import datetime, time
+import pika
+
+class EmptyPageException(Exception):
+    """Custom Exception called when at least 1 page is empty."""
+
+    def __init__(self, success, failed):
+        """Accept response data and failed pages."""
+        self.success = success
+        self.failed = failed
+
+class ServerConnectionException(Exception):
+    """Custom Exception called when at least """
+
+
 
 logging.basicConfig(
         format='%(asctime)s %(message)s',
         datefmt='%m/%d/%Y %I:%M:%S %p',
         level=logging.DEBUG)
+
 if 'SERVER' not in os.environ:
     print("No server provided, exiting.")
     exit()
 
 server = os.environ['SERVER']
-config = json.loads(open('config.json').read())
 
 url = f"http://proxy:8000/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
-
 
 tiers = [
         "IRON",
@@ -55,168 +69,133 @@ map_divisions = {
         'I': 3}
 
 
-def dump_data(data):
-    """Connect and insert data into the connected DB."""
-    logging.info("Starting data dump")
-    logging.info("Transforming data")
-    sets = []
-    for player_set in data:
-        for player in player_set:
-            ranking = map_tiers[player['tier']] * 100
-            ranking += map_divisions[player['rank']] * 100
-            ranking += player['leaguePoints']
-            series = ""
-            if 'miniSeries' in data:
-                series = player['miniSeries']['progress'][:4]
-            sets.append([
-                player['summonerName'],
-                player['summonerId'],
-                str(ranking),
-                series,
-                str(player['wins']),
-                str(player['losses'])])
-    lines = []
-    for s in sets:
-        lines.append("'" + "','".join(s) + "'")
-    lines = list(set(lines))
-    logging.info("Adding to db")
-    con = psycopg2.connect(
-            host=config['DB_HOST'],
-            user=config['DB_USER'],
-            dbname=config['DB_NAME'])
-    cur = con.cursor()
-    cur.execute(f"""
-        CREATE TEMP TABLE temp_player
-        AS
-        SELECT summoner_name, summoner_id, ranking, series, wins, losses
-        FROM {server}_player
-        WHERE True=False;
-        """)
-    con.commit()
-    values = ""
-    for entry in lines:
-        values += "(" + entry + "),"
-    values = values[:-1] + ";"
-    cur.execute("""
-        INSERT INTO temp_player
-                (summoner_name, summoner_id, ranking, series, wins, losses)
-        VALUES %s ;
-        """ % (values))
-    con.commit()
-
-    query = f"""
-            INSERT INTO {server}_player
-                (summoner_name, summoner_id, ranking, series, wins, losses)
-            SELECT * FROM temp_player
-            ON CONFLICT (summoner_id) DO UPDATE SET
-            summoner_name=EXCLUDED.summoner_name,
-            ranking=EXCLUDED.ranking,
-            wins=EXCLUDED.wins,
-            losses=EXCLUDED.losses;
-            """
-    cur.execute(query)
-    con.commit()
-
-    cur.execute("""DROP TABLE temp_player;""")
-    con.commit()
-    logging.info("Done")
-    con.close()
-
-
-def dump_task(data):
-    """Sync wrapper for the syncronized DB connector."""
-    dump_data(data)
-
-
-async def fetch(url, http_client, page):
+async def fetch(url, session, page):
     """Fetch data from the api.
 
     Returns Non-200 HTTP Code on error.
     """
-    try:
-        response = await http_client.fetch(url)
-        data = json.loads(response.body)
-        return response.code, data, response.headers.get_all(), page
-    except Exception as err:
-        print(err)
-        return 999, [], {}, page
+    async with session.get(url) as response:
+        resp = await response.json()
+        return response.status, resp, page
 
 
-async def server_updater():
+async def update(tier, division, tasks):
     """Get data.
 
     Core function that sets up call batches by rank category.
     """
     data_sets = []
     loop = asyncio.get_event_loop()
-    logging.info(f"Starting cycle")
-    http_client = AsyncHTTPClient()
+    logging.info(f"Active Threads: {threading.active_count()}")
+    for thread in threading.enumerate():
+        print(thread)
+    call_tasks = []
+    async with aiohttp.ClientSession() as session:
+        for task in tasks:
+            call_tasks.append(
+                asyncio.create_task(
+                    fetch(
+                        url % (tier, division, task),
+                        session,
+                        task
+                    )
+                )
+            )
+        responses = await asyncio.gather(*call_tasks)
+    failed = []
+    empty = 0
+    for response in responses:
+        if response[0] != 200:
+            print(response)
+            failed.append(response[2])
+        else:
+            if len(response[1]) == 0:
+                empty += 1
+            else:
+                data_sets.append(response[1])
+    if empty:
+        raise EmptyPageException(data_sets, failed)
+    return data_sets, failed
+
+
+def server_updater():
+    """Iterate through all rankings and initiate calls."""
     for tier in reversed(tiers):
         for division in divisions:
             if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
                 if division != "I":
                     continue
-            logging.info(f" Starting with {server} - {tier} - {division}")
-            logging.info(f"Active Threads: {threading.active_count()}")
-            for thread in threading.enumerate():
-                print(thread)
-            next_page = 1
-            empty_count = 0
-            page_batch = []
-            while empty_count == 0 or page_batch:
-                forced_timeout = 0
-                while len(page_batch) < 5:
-                    page_batch.append(next_page)
-                    next_page += 1
+
+            pages = 1
+            failed_pages = []
+            data = []
+            empty = False
+            while not empty or failed_pages:
                 tasks = []
-                tasks.append(asyncio.create_task(asyncio.sleep(2)))
-                while page_batch:
-                    page = page_batch.pop()
-                    tasks.append(
-                        asyncio.create_task(
-                            fetch(
-                                url % (tier, division, page),
-                                http_client,
-                                page
-                            )
-                        )
-                    )
-                responses = await asyncio.gather(*tasks)
-                responses.pop(0)
-                for response in responses:
-                    if response[0] == 429:
-                        print("Got 429")
-                        if 'Retry-After' in response[2]:
-                            forced_timeout = int(response[2]['Retry-After'])
-                        else:
-                            forced_timeout = 2
-                        print(f"Waiting n additional {forced_timeout}.")
-                    if response[0] != 200:
-                        print(response)
-                        page_batch.append(response[3])
-                    else:
-                        if len(response[1]) == 0:
-                            empty_count += 1
-                        else:
-                            data_sets.append(response[1])
+                try:
+                    connection = pika.BlockingConnection(
+                        pika.ConnectionParameters('rabbitmq'))
+                    channel = connection.channel()
+                    queue = channel.queue_declare(
+                        queue=f'LEAGUE_{server}',
+                        durable=True)
+                    while queue.method.message_count > 500:
+                        time.sleep(1)
+                        queue = channel.queue_declare(
+                            queue=f'LEAGUE_{server}',
+                            durable=True,
+                            passive=True)
 
-                await asyncio.sleep(forced_timeout)
-            print(f"Done with {server} - {tier} - {division};"
-                  f" Pages: {next_page - 1}.")
-            await loop.run_in_executor(None, dump_task, data_sets)
-            data_sets = []
+                    while failed_pages and len(tasks) < 5:
+                        page = failed_pages.pop()
+                        tasks.append(page)
+                    while not empty and len(tasks) < 5:
+                        tasks.append(pages)
+                        pages += 1
+
+                    success, failed = asyncio.run(
+                        update(tier, division, tasks))
+                    data += success
+                    failed_pages += failed
+
+                    for entry in data:
+                        channel.basic_publish(
+                            exchange='',
+                            routing_key=f'LEAGUE_{server}',
+                            body=json.dumps(entry),
+                            properties=pika.BasicProperties(delivery_mode=2))
+
+                except ClientConnectorError:
+                    # Raised when the proxy cant be reached
+                    print("Failed to reach Proxy")
+                    failed_pages += tasks
+                    time.sleep(1)
+
+                except EmptyPageException as e:
+                    # add results, if no failed remaining exit
+                    empty = True
+                    data += e.success
+                    failed_pages += e.failed
+
+                except RuntimeError:
+                    # Raised when rabbitmq cant connect
+                    print("Failed to reach rabbitmq")
+                    time.sleep(1)
 
 
-async def main():
+
+def main():
     """Start loop to request data from the api and update the DB.
 
     The loop is limited to run once every 6 hours max.
     """
     while True:
-        tasks = [asyncio.sleep(6 * 3600),
-                 asyncio.create_task(server_updater())]
-        await asyncio.gather(*tasks)
+
+        blocked_till = datetime.datetime.now() + datetime.timedelta(hours=6)
+        server_updater()
+        while datetime.datetime.now() < blocked_till:
+            time.sleep(30)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

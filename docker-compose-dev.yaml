@@ -1,8 +1,19 @@
 version: '3'
 services:
 
-  proxy_euw:
-    container_name: proxy_euw
+  rabbitmq:
+    container_name: rabbitmq
+    image: launcher.gcr.io/google/rabbitmq3
+    ports:
+      - '4369:4369'
+      - '5671:5671'
+      - '5672:5672'
+      - '25672:25672'
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+
+  proxy:
+    container_name: proxy
     build:
       dockerfile: Dockerfile
       context: proxy
@@ -10,28 +21,6 @@ services:
         - ./config.json:/project/config.json:ro
     environment:
       - SERVER=EUW1
-    restart: always
-
-  proxy_na:
-    container_name: proxy_na
-    build:
-      dockerfile: Dockerfile
-      context: proxy
-    volumes:
-        - ./config.json:/project/config.json:ro
-    environment:
-      - SERVER=NA1
-    restart: always
-
-  proxy_kr:
-    container_name: proxy_kr
-    build:
-      dockerfile: Dockerfile
-      context: proxy
-    volumes:
-        - ./config.json:/project/config.json:ro
-    environment:
-      - SERVER=KR
     restart: always
 
   playerdata:
@@ -80,40 +69,6 @@ services:
     environment:
       - SERVER=EUW1
 
-  league_updater_na:
-    container_name: league_updater_na
-    build:
-      dockerfile: Dockerfile
-      context: summoner_id_updater
-    links:
-      - playerdata:playerdata
-      - proxy_na:proxy
-    restart: always
-    volumes:
-        - ./config.json:/project/config.json:ro
-    depends_on:
-      - playerdata
-      - proxy_na
-    environment:
-      - SERVER=NA1
-
-  league_updater_kr:
-    container_name: league_updater_kr
-    build:
-      dockerfile: Dockerfile
-      context: summoner_id_updater
-    links:
-      - playerdata:playerdata
-      - proxy_kr:proxy
-    restart: always
-    volumes:
-        - ./config.json:/project/config.json:ro
-    depends_on:
-      - playerdata
-      - proxy_kr
-    environment:
-      - SERVER=KR
-
   summoner_id_updater_euw:
     container_name: summoner_id_updater_euw
     build:
@@ -131,39 +86,6 @@ services:
     environment:
       - SERVER=EUW1
 
-  summoner_id_updater_na:
-    container_name: summoner_id_updater_na
-    build:
-      dockerfile: Dockerfile
-      context: summoner_id_updater
-    links:
-      - playerdata:playerdata
-      - proxy_na:proxy
-    restart: always
-    volumes:
-        - ./config.json:/project/config.json:ro
-    depends_on:
-      - playerdata
-      - proxy_na
-    environment:
-      - SERVER=NA1
-
-  summoner_id_updater_kr:
-    container_name: summoner_id_updater_kr
-    build:
-      dockerfile: Dockerfile
-      context: summoner_id_updater
-    links:
-      - playerdata:playerdata
-      - proxy_kr:proxy
-    restart: always
-    volumes:
-        - ./config.json:/project/config.json:ro
-    depends_on:
-      - playerdata
-      - proxy_kr
-    environment:
-      - SERVER=KR
-
 volumes:
+  rabbitmq:
   playerdata:
