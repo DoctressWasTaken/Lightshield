@@ -37,6 +37,28 @@ services:
     environment:
       - SERVER=EUW1
 
+  summoner_id_updater:
+    container_name: summoner_id_updater
+    build:
+      dockerfile: Dockerfile
+      context: summoner_id_updater
+    links:
+      - proxy:proxy
+      - redis:redis
+    restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
+    environment:
+      - SERVER=EUW1
+
+  redis_summoner_id:
+    container_name: redis_summoner_id
+    image: redis
+    volumes:
+      - ./redis/redis.conf:/user/local/etc/redis/redis.conf
+      - redis_summoner:/data/
+
+
   playerdata:
     container_name: playerdata
     build:
@@ -65,22 +87,8 @@ services:
     environment:
       - SERVER=EUW1
 
-  summoner_id_updater_euw:
-    container_name: summoner_id_updater_euw
-    build:
-      dockerfile: Dockerfile
-      context: summoner_id_updater
-    links:
-      - playerdata:playerdata
-      - proxy:proxy
-    restart: always
-    volumes:
-        - ./config.json:/project/config.json:ro
-    depends_on:
-      - playerdata
-    environment:
-      - SERVER=EUW1
 
 volumes:
+  redis_summoner:
   rabbitmq:
   playerdata:

@@ -1,12 +1,14 @@
 """Summoner ID Updater Module."""
 
 import os
-import psycopg2
 from ratelimit import limits, RateLimitException
 import aiohttp
 import json
 import asyncio
 import time
+import redis
+import pika
+from aiohttp.client_exceptions import ClientConnectorError
 
 config = json.loads(open('config.json').read())
 
@@ -22,19 +24,16 @@ url_template = f"http://proxy:8000/summoner/v4/summoners/%s"
 @limits(calls=250, period=10)
 async def fetch(url, session):
     """Call method."""
-    try:
-        async with session.get(url, headers=headers) as response:
-            resp = await response.json(content_type=None)
-            if response.status == 429:
-                print(response.headers)
-            return response.status, resp, response.headers
 
-    except Exception as err:
-        print(err)
-        return 999, [], {}
+    async with session.get(url, headers=headers) as response:
+        resp = await response.json(content_type=None)
+        if response.status == 429:
+            print(response.headers)
+        return response.status, resp, response.headers
 
 
-async def to_fetch(url, session, summoner_id):
+
+async def to_fetch(url, session, element):
     """Call placeholder method.
 
     Added to allow catching the RateLimitException
@@ -42,9 +41,9 @@ async def to_fetch(url, session, summoner_id):
     """
     try:
         response = await fetch(url, session)
-        return response + (summoner_id,)
+        return response + (element,)
     except RateLimitException:
-        return 998, [], {}, summoner_id
+        return 998, [], {}, element
 
 
 async def main(data_list):
@@ -54,44 +53,36 @@ async def main(data_list):
     Returns once all calls are finished.
     """
     results = []
-    session = aiohttp.ClientSession()
-    while data_list:
-        forced_timeout = 0
-        tasks = []
-        tasks.append(asyncio.create_task(asyncio.sleep(10)))
-        print("Starting call cycle")
+    async with aiohttp.ClientSession() as session:
+        while data_list:
+            forced_timeout = 0
+            tasks = []
+            print("Starting call cycle")
 
-        for i in range(min(250, len(data_list))):
-            summoner_id = data_list.pop()
-            tasks.append(
-                asyncio.create_task(
-                    to_fetch(
-                        url_template % (summoner_id),
-                        session,
-                        summoner_id
+            for i in range(min(250, len(data_list))):
+                element = data_list.pop()
+                tasks.append(
+                    asyncio.create_task(
+                        to_fetch(
+                            url_template % (element[2]['summonerId']),
+                            session,
+                            element
+                            )
                         )
                     )
-                )
-            await asyncio.sleep(0.01)
-        responses = await asyncio.gather(*tasks)
-        responses.pop(0)
-        for response in responses:
-            if response[0] == 429:
-                print("Got 429")
-                if 'Retry-After' in response[2]:
-                    forced_timeout = int(response[2]['Retry-After'])
-                else:
+                await asyncio.sleep(0.01)
+            responses = await asyncio.gather(*tasks)
+            for response in responses:
+                if response[0] == 998:
                     forced_timeout = 1.5
-                print(f"Waiting an additional {forced_timeout} seconds.")
-            if response[0] == 998:
-                forced_timeout = 1.5
-            if response[0] != 200:
-                print(response[0])
-                data_list.append(response[3])
-            else:
-                results.append(response[1])
-        await asyncio.sleep(forced_timeout)
-    await session.close()
+                    data_list.append(response[3])
+                if response[0] != 200:
+                    print(response[0])
+                    data_list.append(response[3])
+                else:
+                    results.append([response[1], response[3]])
+            await asyncio.sleep(forced_timeout)
+
     return results
 
 
@@ -101,61 +92,58 @@ def run():
     Cycles through packages of data from the DB, pulling results
     and updating the package.
     """
-    while True:
-        with psycopg2.connect(
-                host=config['DB_HOST'],
-                user=config['DB_USER'],
-                dbname=config['DB_NAME']) as connection:
-            connection.autocommit = True
-            cur = connection.cursor()
-            cur.execute(f"""
-                SELECT summoner_id
-                FROM {server}_player
-                WHERE account_id IS NULL
-                LIMIT 1200;
-                """)
-            data = cur.fetchall()
-            if not data:
-                print("No items to update found.")
-                time.sleep(10)
-                continue
-            data_list = [entry[0] for entry in data]
-            print(f"Found {len(data_list)} elements to upate.")
-            results = asyncio.run(main(data_list))
-            print(f"Got {len(results)} elements.")
-            cur.execute(f"""
-            CREATE TEMP TABLE {server}_temp_ids
-            AS
-            SELECT summoner_id, account_id, puuid
-            FROM {server}_player
-            WHERE True=False;
-            """)
-            lines = []
-            for entry in results:
-                lines.append(
-                        "('%s', '%s', '%s')" % (
-                            entry['id'],
-                            entry['accountId'],
-                            entry['puuid']))
-            query = f"""
-                INSERT INTO {server}_temp_ids
-                    (summoner_id, account_id, puuid)
-                VALUES {",".join(lines)};
-                """
-            cur.execute(query)
-            cur.execute(f"SELECT Count(*) FROM {server}_temp_ids;")
-            print(cur.fetchall())
+    while True:  # Basic application loop
+        try:
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters('rabbitmq'))
+            channel = connection.channel()
+            channel.basic_qos(prefetch_count=1)
 
-            cur.execute(f"""
-                INSERT INTO {server}_player
-                    (summoner_id, account_id, puuid)
-                 SELECT * FROM {server}_temp_ids
-                 ON CONFLICT (summoner_id) DO UPDATE
-                 SET account_id=EXCLUDED.account_id,
-                 puuid=EXCLUDED.puuid;
-                 """)
-            cur.execute(f"""DROP TABLE {server}_temp_ids;""")
-        connection.close()
+            r = redis.Redis(host='redis', port=6379, db=0)
+
+            while True:  # Basic work loop after connection is established.
+
+                messages = []
+                try:
+                    while len(messages) < 250:
+                        method_frame, header_frame, body = channel.basic_get(
+                                queue=f'LEAGUE_{server}')
+
+                        content = json.loads(body)
+                        accountId = content['accountId']
+
+                        if r.hgetall(f"user:{accountId}"):
+                            channel.basic_ack(
+                                delivery_tag=method_frame.delivery_tag)
+                            continue
+
+                        messages.append([method_frame, header_frame, content])
+                except ValueError as err:
+                    print(err)
+                if len(messages) > 0:
+                    results = asyncio.run(main(messages))
+
+                    for result in results:
+                        message = result[1]
+                        data = result[0]
+                        r.hset(f"user:{message[2]['accountId']}",
+                               mapping={'puuid': data['puuid'],
+                                        'accountId': data['accountId']})
+                        channel.basic_ack(
+                            delivery_tag=message[0].delivery_tag)
+
+
+        except ClientConnectorError:
+            # Raised when the proxy cant be reached
+            print("Failed to reach Proxy")
+            time.sleep(1)
+
+        except RuntimeError:
+            # Raised when rabbitmq cant connect
+            print("Failed to reach rabbitmq")
+            time.sleep(1)
+
+
 
 
 if __name__ == "__main__":
