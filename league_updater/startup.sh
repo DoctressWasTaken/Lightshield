@@ -1,3 +1,3 @@
 #!/bin/sh
-./wait-for-it.sh playerdata:5432
+./wait-for-it.sh proxy:8000
 python -u run.py

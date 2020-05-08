@@ -25,7 +25,9 @@ class ServerConnectionException(Exception):
 logging.basicConfig(
         format='%(asctime)s %(message)s',
         datefmt='%m/%d/%Y %I:%M:%S %p',
-        level=logging.DEBUG)
+        level=logging.INFO)
+
+logging.getLogger("pika").setLevel(logging.WARNING)
 
 if 'SERVER' not in os.environ:
     print("No server provided, exiting.")
@@ -75,7 +77,7 @@ async def fetch(url, session, page):
     Returns Non-200 HTTP Code on error.
     """
     async with session.get(url) as response:
-        resp = await response.json()
+        resp = await response.json(content_type=None)
         return response.status, resp, page
 
 
@@ -140,6 +142,7 @@ def server_updater():
                         queue=f'LEAGUE_{server}',
                         durable=True)
                     while queue.method.message_count > 500:
+                        print("Theres too many messages in the queue, waiting.")
                         time.sleep(1)
                         queue = channel.queue_declare(
                             queue=f'LEAGUE_{server}',
