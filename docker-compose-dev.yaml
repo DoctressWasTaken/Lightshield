@@ -23,6 +23,22 @@ services:
       - SERVER=EUW1
     restart: always
 
+  league_updater_euw:
+    container_name: league_updater_euw
+    build:
+      dockerfile: Dockerfile
+      context: league_updater
+    links:
+      - rabbitmq:rabbitmq
+      - proxy:proxy
+    restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
+    depends_on:
+      - proxy_euw
+    environment:
+      - SERVER=EUW1
+
   playerdata:
     container_name: playerdata
     build:
@@ -40,23 +56,6 @@ services:
     build:
       dockerfile: Dockerfile
       context: match_history_updater
-    links:
-      - playerdata:playerdata
-      - proxy_euw:proxy
-    restart: always
-    volumes:
-        - ./config.json:/project/config.json:ro
-    depends_on:
-      - playerdata
-      - proxy_euw
-    environment:
-      - SERVER=EUW1
-     
-  league_updater_euw:
-    container_name: league_updater_euw
-    build:
-      dockerfile: Dockerfile
-      context: league_updater
     links:
       - playerdata:playerdata
       - proxy_euw:proxy
