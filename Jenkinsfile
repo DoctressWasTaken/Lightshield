@@ -7,7 +7,7 @@ pipeline {
     stages {
         stage('Fetch git') {
             steps {
-                sh 'git fetch https://$github_USR:$github_PSW@$url',
+                sh 'git fetch https://$github_USR:$github_PSW@$url'
                 sh 'git diff master...origin/master -- proxy || echo changed'
             }
         }
