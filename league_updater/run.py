@@ -149,7 +149,8 @@ def server_updater():
                     print(queue.method.message_count)
                     sleep = 1
                     if queue.method.message_count > 1500:
-                        print("There's too many messages in the queue, waiting.")
+                        print("There's too many messages in the queue,"
+                              " waiting.")
                     while queue.method.message_count > 1500:
                         time.sleep(sleep)
                         if sleep < 5:
