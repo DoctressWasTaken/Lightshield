@@ -1,5 +1,5 @@
 aiohttp
 ratelimit
-tornado
 psycopg2-binary
 pika
+redis

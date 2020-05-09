@@ -106,7 +106,10 @@ async def update(tier, division, tasks):
         responses = await asyncio.gather(*call_tasks)
     failed = []
     empty = 0
+    wait = 0
     for response in responses:
+        if response[0] == 428:
+            wait = 1
         if response[0] != 200:
             print(response)
             failed.append(response[2])
@@ -117,6 +120,8 @@ async def update(tier, division, tasks):
                 data_sets.append(response[1])
     if empty:
         raise EmptyPageException(data_sets, failed)
+    await asyncio.sleep(wait)
+
     return data_sets, failed
 
 
@@ -141,6 +146,7 @@ def server_updater():
                     queue = channel.queue_declare(
                         queue=f'LEAGUE_{server}',
                         durable=True)
+                    print(queue.method.message_count)
                     while queue.method.message_count > 500:
                         print("Theres too many messages in the queue, waiting.")
                         time.sleep(1)
@@ -155,18 +161,20 @@ def server_updater():
                     while not empty and len(tasks) < 5:
                         tasks.append(pages)
                         pages += 1
-
+                    print(f"Requesting {tasks}")
                     success, failed = asyncio.run(
                         update(tier, division, tasks))
                     data += success
                     failed_pages += failed
-
-                    for entry in data:
-                        channel.basic_publish(
-                            exchange='',
-                            routing_key=f'LEAGUE_{server}',
-                            body=json.dumps(entry),
-                            properties=pika.BasicProperties(delivery_mode=2))
+                    
+                    while data:
+                        page = data.pop()
+                        for entry in page:
+                            channel.basic_publish(
+                                exchange='',
+                                routing_key=f'LEAGUE_{server}',
+                                body=json.dumps(entry),
+                                properties=pika.BasicProperties(delivery_mode=2))
 
                 except ClientConnectorError:
                     # Raised when the proxy cant be reached

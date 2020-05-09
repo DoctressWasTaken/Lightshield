@@ -57,8 +57,8 @@ async def main(data_list):
         while data_list:
             forced_timeout = 0
             tasks = []
+            tasks.append(asyncio.sleep(10))
             print("Starting call cycle")
-
             for i in range(min(250, len(data_list))):
                 element = data_list.pop()
                 tasks.append(
@@ -72,6 +72,7 @@ async def main(data_list):
                     )
                 await asyncio.sleep(0.01)
             responses = await asyncio.gather(*tasks)
+            responses.pop(0)
             for response in responses:
                 if response[0] == 998:
                     forced_timeout = 1.5
@@ -102,35 +103,40 @@ def run():
             r = redis.Redis(host='redis', port=6379, db=0)
 
             while True:  # Basic work loop after connection is established.
-
+                passed = 0
                 messages = []
-                try:
-                    while len(messages) < 250:
-                        method_frame, header_frame, body = channel.basic_get(
-                                queue=f'LEAGUE_{server}')
+                passed = 0while len(messages) < 250:
+                    message = channel.basic_get(
+                            queue=f'LEAGUE_{server}')
+                    if all(x is None for x in message):  # Empty Queue
+                        break
+                        
+                    content = json.loads(message[2])
+                    summonerId = content['summonerId']
 
-                        content = json.loads(body)
-                        accountId = content['accountId']
-
-                        if r.hgetall(f"user:{accountId}"):
-                            channel.basic_ack(
-                                delivery_tag=method_frame.delivery_tag)
-                            continue
-
-                        messages.append([method_frame, header_frame, content])
-                except ValueError as err:
-                    print(err)
-                if len(messages) > 0:
-                    results = asyncio.run(main(messages))
-
-                    for result in results:
-                        message = result[1]
-                        data = result[0]
-                        r.hset(f"user:{message[2]['accountId']}",
-                               mapping={'puuid': data['puuid'],
-                                        'accountId': data['accountId']})
+                    if r.hgetall(f"user:{summonerId}"):
+                        passed += 1
                         channel.basic_ack(
                             delivery_tag=message[0].delivery_tag)
+                        continue
+
+                    messages.append([message[0], message[1], content])
+
+                if len(messages) == 0:
+                    print("Empty")
+                    time.sleep(1)
+                    continue
+                print(f"Passed a total of {passed} messages before reaching the limit of 250.")
+                results = asyncio.run(main(messages))
+
+                for result in results:
+                    message = result[1]
+                    data = result[0]
+                    r.hset(f"user:{message[2]['summonerId']}",
+                           mapping={'puuid': data['puuid'],
+                                    'accountId': data['accountId']})
+                    channel.basic_ack(
+                        delivery_tag=message[0].delivery_tag)
 
 
         except ClientConnectorError:
