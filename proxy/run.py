@@ -82,7 +82,8 @@ class Limit:
 
         if self.count < self.max:
             self.count += 1
-            logging.info(f"Adding request {self.count} : {self.max}.")
+            if self.max * 0.9 < self.count:
+                logging.info(f"Adding request {self.count} : {self.max}.")
             return True
 
         return False
@@ -146,11 +147,9 @@ class ApiHandler:
 
         if not await self.methods[method].register():
             return 428, {"error": "error"}
-        print("Method registered")
         for limit in self.globals:
             if not await limit.register():
                 return 428, {"error": "error"}
-        print("Global registered")
 
         async with aiohttp.ClientSession() as session:
             async with session.get(base_url + url, headers=headers) as resp:

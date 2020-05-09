@@ -132,7 +132,7 @@ def server_updater():
             if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
                 if division != "I":
                     continue
-
+            print(f"Starting with {tier} {division}.")
             pages = 1
             failed_pages = []
             data = []
@@ -147,9 +147,12 @@ def server_updater():
                         queue=f'LEAGUE_{server}',
                         durable=True)
                     print(queue.method.message_count)
-                    while queue.method.message_count > 500:
+                    sleep = 1
+                    while queue.method.message_count > 1500:
                         print("Theres too many messages in the queue, waiting.")
-                        time.sleep(1)
+                        time.sleep(sleep)
+                        if sleep < 5:
+                            sleep += 1
                         queue = channel.queue_declare(
                             queue=f'LEAGUE_{server}',
                             durable=True,
