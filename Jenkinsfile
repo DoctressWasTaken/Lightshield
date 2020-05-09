@@ -47,36 +47,44 @@ pipeline {
                     ).trim()
             }
             steps {
-                echo 'Nothing happening'
+                echo ""
             }
         }
         stage('Proxy') {
-            when {  equals expected: 'changed', actual: env.PROXY_CHANGED}
+            when {  not { equals expected: null, actual: env.PROXY_CHANGED }}
             steps {
+                echo "Proxy"
+                echo env.PROXY_CHANGED
                 dir('proxy') {
                     sh 'tox'
                 }
             }
         }
         stage('League_Updater') {
-            when { equals expected: 'changed', actual: env.LEAGUE_UPDATER_CHANGED}
+            when { not { equals expected: null, actual: env.LEAGUE_UPDATER_CHANGED}}
             steps {
+                echo "League Updater"
+                echo env.LEAGUE_UPDATER_CHANGED
                 dir('league_updater') {
                     sh 'tox'
                 }
             }
         }
         stage('SummonerID_Updater') {
-            when { equals expected: 'changed', actual: env.SUMMONER_ID_UPDATER_CHANGED}
+            when { not { equals expected: null, actual: env.SUMMONER_ID_UPDATER_CHANGED}}
             steps {
+                echo "SummonerID Updater"
+                echo env.SUMMONER_ID_UPDATER_CHANGED
                 dir('summoner_id_updater') {
                     sh 'tox'
                 }
             }
         }
         stage('Match_History_Updater') {
-            when { equals expected: 'changed', actual: env.MATCH_HISTORY_UPDATER_CHANGED}
+            when { not { equals expected: null, actual: env.MATCH_HISTORY_UPDATER_CHANGED}}
             steps {
+                echo "Match History Updater"
+                echo env.MATCH_HISTORY_UPDATER_CHANGED
                 dir('match_history_updater') {
                     sh 'tox'
                 }
