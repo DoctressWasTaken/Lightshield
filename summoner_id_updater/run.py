@@ -10,9 +10,6 @@ import redis
 import pika
 from aiohttp.client_exceptions import ClientConnectorError
 
-config = json.loads(open('config.json').read())
-
-headers = {'X-Riot-Token': config['API_KEY']}
 if "SERVER" not in os.environ:
     print("No server provided, shutting down")
     exit()
@@ -24,12 +21,11 @@ url_template = f"http://proxy:8000/summoner/v4/summoners/%s"
 @limits(calls=250, period=10)
 async def fetch(url, session):
     """Call method."""
-    async with session.get(url, headers=headers) as response:
+    async with session.get(url) as response:
         resp = await response.json(content_type=None)
         if response.status == 429:
             print(response.headers)
         return response.status, resp, response.headers
-
 
 
 async def to_fetch(url, session, element):
@@ -139,6 +135,11 @@ def run():
                     channel.basic_ack(
                         delivery_tag=message[0].delivery_tag)
 
+                    package = {**message[2], **data}
+
+                    channel.basic_publish(exchange='',
+                                          routing_key=f'SUMMONER_{server}',
+                                          body=json.dumps(package))
 
         except ClientConnectorError:
             # Raised when the proxy cant be reached
