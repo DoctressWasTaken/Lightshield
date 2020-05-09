@@ -24,7 +24,6 @@ url_template = f"http://proxy:8000/summoner/v4/summoners/%s"
 @limits(calls=250, period=10)
 async def fetch(url, session):
     """Call method."""
-
     async with session.get(url, headers=headers) as response:
         resp = await response.json(content_type=None)
         if response.status == 429:

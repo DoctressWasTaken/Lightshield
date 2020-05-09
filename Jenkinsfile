@@ -29,32 +29,25 @@ pipeline {
         }
         stage('Set Changes and Pull') {
             environment {
-            def PROXY_CHANGED = sh(
-                    script: 'git diff ${env.BEFORE}...${env.AFTER} -- proxy || echo changed',
-                    returnStdout: true
-                ).trim()
-                env.PROXY_CHANGED = PROXY_CHANGED
-            def LEAGUE_UPDATER_CHANGED = sh(
-                    script: 'git diff ${env.BEFORE}...${env.AFTER} -- league_updater || echo changed',
-                    returnStdout: true
-                ).trim()
-                env.LEAGUE_UPDATER_CHANGED = LEAGUE_UPDATER_CHANGED
-            def SUMMONER_ID_UPDATER_CHANGED = sh(
-                    script: 'git diff ${env.BEFORE}...${env.AFTER} -- summoner_id_updater || echo changed',
-                    returnStdout: true
-                ).trim()
-                env.SUMMONER_ID_UPDATER_CHANGED = SUMMONER_ID_UPDATER_CHANGED
-            def MATCH_HISTORY_UPDATER_CHANGED = sh(
-                    script: 'git diff ${env.BEFORE}...${env.AFTER} -- match_history_updater || echo changed',
-                    returnStdout: true
-                ).trim()
-                env.MATCH_HISTORY_UPDATER_CHANGED = MATCH_HISTORY_UPDATER_CHANGED
+                def PROXY_CHANGED = sh(
+                        script: 'git diff ${BEFORE}...${AFTER} -- proxy || echo changed',
+                        returnStdout: true
+                    ).trim()
+                def LEAGUE_UPDATER_CHANGED = sh(
+                        script: 'git diff ${BEFORE}...${AFTER} -- league_updater || echo changed',
+                        returnStdout: true
+                    ).trim()
+                def SUMMONER_ID_UPDATER_CHANGED = sh(
+                        script: 'git diff ${BEFORE}...${AFTER} -- summoner_id_updater || echo changed',
+                        returnStdout: true
+                    ).trim()
+                def MATCH_HISTORY_UPDATER_CHANGED = sh(
+                        script: 'git diff ${BEFORE}...${AFTER} -- match_history_updater || echo changed',
+                        returnStdout: true
+                    ).trim()
             }
             steps {
-                echo "Proxy: ${env.PROXY_CHANGED}"
-                echo "League: ${env.LEAGUE_UPDATER_CHANGED}"
-                echo "SummonerID: ${env.SUMMONER_ID_UPDATER_CHANGED}"
-                echo "MatchHistory: ${env.MATCH_HISTORY_UPDATER_CHANGED}"
+                echo 'Nothing happening'
             }
         }
         stage('Proxy') {
