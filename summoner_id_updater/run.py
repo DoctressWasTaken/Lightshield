@@ -101,7 +101,7 @@ def run():
                 passed = 0
                 messages = []
                 passed = 0
-                while len(messages) < 250:
+                while len(messages) < 150:
                     message = channel.basic_get(
                             queue=f'LEAGUE_{server}')
                     if all(x is None for x in message):  # Empty Queue

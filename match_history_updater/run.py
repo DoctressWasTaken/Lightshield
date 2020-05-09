@@ -1,18 +1,19 @@
 """Match History updater. Pulls matchlists for all player."""
 
-import psycopg2
 import asyncio
 import aiohttp
 import json
 import os
 import time
+import pika
+import redis
+from aiohttp.client_exceptions import ClientConnectorError
 
 if "SERVER" not in os.environ:
     print("No SERVER env variable provided. exiting")
     exit()
 
 server = os.environ['SERVER']
-config = json.loads(open('config.json').read())
 
 # accountId, endIndex, beginIndex, queue
 base_url = f"http://proxy:8000/match/v4/matchlists/by-account/" \
@@ -26,29 +27,26 @@ async def fetch(url, session, markers):
         return response.status, data, markers
 
 
-async def call_data(data, session):
+async def call_data(el: dict, session):
     """Generate and call match-history data.
 
     Generates the required urls and calls the api.
     Failed calls are repeated,
     the method returns once all calls are successfull.
     """
-    games = max(data[1] + data[2] + 50,
-                100)  # Pull an extra 50 matches to make sure none are lost
-    id = data[0]
-    marker = []
-    pointer = 0
-    while games > 0:
-        if games > 100:
-            marker.append(
-                (pointer, pointer + 100))
-            pointer += 100
-            games -= 100
-        else:
-            marker.append(
-                (pointer, pointer + games))
-            games = 0
+    element = dict(el)
+    games = element['games']
+    games = max(games + 15,
+                100)  # Pull an extra 15 matches to make sure none are lost
+    games = (games // 100 + 1)  # Round up to the nearest 100
+    content = element['content']
 
+    id = content['accountId']
+    marker = []
+    for i in range(games):
+        marker.append(
+            (i * 100, (i + 1) * 100)
+        )
     done = []
     while marker:
         tasks = []
@@ -71,20 +69,15 @@ async def call_data(data, session):
             await asyncio.sleep(2)
 
     matches = []
-    participations = []
     for partial in done:
         matchlist = partial['matches']
         for match in matchlist:
             matches.append(match['gameId'])
-            participations.append([
-                id,
-                match['gameId'],
-                match['timestamp'] // 1000
-            ])
-    return matches, data, participations
+    element['matches'] = matches
+    return element
 
 
-async def process_data(data):
+async def process_data(tasks):
     """Async wrapper for api requests.
 
     Bundles requests for multiple player.
@@ -92,24 +85,15 @@ async def process_data(data):
     """
     async with aiohttp.ClientSession() as session:
         tasks = []
-        for entry in data:
+        for task in tasks:
             tasks.append(
                 asyncio.create_task(
-                    call_data(entry, session)
+                    call_data(task, session)
                 )
             )
         responses = await asyncio.gather(*tasks)
 
-    matches = []
-    player = []
-    participations = []
-    for response in responses:
-        matches += response[0]
-        player.append(response[1])
-        participations += response[2]
-
-    matches = list(set(matches))
-    return matches, player, participations
+    return responses
 
 
 def main():
@@ -121,85 +105,92 @@ def main():
     """
     # Pull data package
     while True:
-        with psycopg2.connect(
-                host=config['DB_HOST'],
-                user=config['DB_USER'],
-                dbname=config['DB_NAME']) as connection:
-            cur = connection.cursor()
-            cur.execute(f"""
-            SELECT account_id, diff_wins, diff_losses
-            FROM {server}_player
-            WHERE diff_wins > 10
-            OR diff_losses > 10
-            LIMIT 100;
-            """)
-            data = cur.fetchall()
-        if not data:
-            time.sleep(5)
-            continue
-        matches, player, participations = asyncio.run(process_data(data))
-        with psycopg2.connect(
-                host=config['DB_HOST'],
-                user=config['DB_USER'],
-                dbname=config['DB_NAME']) as connection:
-            cur = connection.cursor()
-            cur.execute(f"""
-                CREATE TEMP TABLE IF NOT EXISTS temp_{server}_matches (
-                    match_id VARCHAR(30));
-            """)
-            connection.commit()
-            lines = []
+        try:
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters('rabbitmq'))
+            channel = connection.channel()
+            channel.basic_qos(prefetch_count=1)
 
-            for entry in matches:
-                lines.append(
-                    "('" + str(entry) + "')")
-            print(f"Adding {len(lines)} matches.")
-            query = f"""
-                INSERT INTO temp_{server}_matches
-                    (match_id)
-                VALUES {",".join(lines)};
-            """
-            cur.execute(query)
-            connection.commit()
-            cur.execute(f"""
-                INSERT INTO {server}_match
-                    (match_id)
-                SELECT * FROM temp_{server}_matches
-                ON CONFLICT DO NOTHING;
-                """)
-            connection.commit()
-            cur.execute(f"DROP TABLE temp_{server}_matches;")
+            r = redis.Redis(host='redis', port=6379, db=0)
 
-            # ADD CONNECTIONS (Should not contain duplicates)
-            lines = []
-            for entry in participations:
-                lines.append(
-                    "('%s', %s, %s)" % (entry[0], entry[1], entry[2]))
-            print(f"Adding {len(lines)} connections.")
-            cur.execute(f"""
-                INSERT INTO {server}_participation
-                    (account_id, match_id, timestamp)
-                VALUES {",".join(lines)}
-                ON CONFLICT DO NOTHING;
-                """)
-            connection.commit()
-            # UPDATE player
-            lines = []
-            for entry in player:
-                lines.append(
-                    "('%s', %s, %s)" % (entry[0], entry[1], entry[2]))
-            print(f"Updating {len(lines)} player.")
-            cur.execute(f"""
-                UPDATE {server}_player
-                SET
-                    last_wins = v.last_wins,
-                    last_losses = v.last_losses
-                FROM ( VALUES
-                    {",".join(lines)}
-                    ) AS v(account_id, last_wins, last_losses)
-                WHERE {server}_player.account_id = v.account_id;
-                """)
-            connection.commit()
+            while True:
+                total_calls = 0  # expected total calls to be made
+                tasks = []
+                passed = 0
+                while total_calls < 250:
+                    message = channel.basic_get(
+                        queue=f"SUMMONER_{server}")
+                    if all(x is None for x in message):
+                        break
+
+                    content = json.loads(message[2])
+                    summonerId = content['summonerId']
+
+                    prev = r.hgetall(f'user:{summonerId}')
+                    games = content['wins'] + content['losses']
+
+                    changes = []
+
+                    if prev:
+                        games -= (prev['wins'] + prev['losses'])
+                        if prev['summonerName'] != content['summonerName']:
+                            changes.append("summonerName")
+                        if prev['tier'] != content['tier'] or \
+                            prev['rank'] != content['rank'] or \
+                            prev['leaguePoints'] != content['leaguePoints']:
+                            changes.append("ranking")
+                        if 0 < games < 10:
+                            changes.append("games_small")
+
+                    if games >= 10:
+                        changes.append("games")
+                        total_calls += games // 100 + 1
+                        task = {
+                            'message': message,
+                            'changes': changes,
+                            'content': content,
+                            'games': games
+                        }
+                        tasks.append(task)
+                    elif changes:
+                        pass
+                        # Add User to outgoing User Queue to record changes
+
+                results = asyncio.run(
+                    process_data(tasks))
+
+                for entry in results:
+                    message = entry["message"]
+                    content = entry["content"]
+                    matches = entry["matches"]
+                    changes = entry["changes"]
+                    # Update/Create Redis entry
+                    r.hset(f"user:{content['summonerId']}",
+                           mapping={
+                               "summonerName": content['summonerName'],
+                               "wins": content['wins'],
+                               "losses": content['losses'],
+                               "tier": content['tier'],
+                               "rank": content['rank'],
+                               "leaguePoints": content['leaguePoints']
+                           })
+                    # Add Matches to outgoing Queue
+
+                    # Add User to outgoing Queue
+                    # With all its changes
+                    channel.basic_ack(
+                        delivery_tag=message[0].delivery_tag)
+
+
+        except ClientConnectorError:
+            # Raised when the proxy cant be reached
+            print("Failed to reach Proxy")
+            time.sleep(1)
+
+        except RuntimeError:
+            # Raised when rabbitmq cant connect
+            print("Failed to reach rabbitmq")
+            time.sleep(1)
 
 
 if __name__ == "__main__":

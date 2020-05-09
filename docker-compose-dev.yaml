@@ -58,6 +58,27 @@ services:
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
       - redis_summoner:/data/
 
+  match_history_updater:
+    container_name: match_history_updater
+    build:
+      dockerfile: Dockerfile
+      context: match_history_updater
+    links:
+      - redis_match_history:redis
+      - proxy:proxy
+    restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
+    environment:
+      - SERVER=EUW1
+
+  redis_match_history:
+    container_name: redis_match_history
+    image: redis
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis_match_history:/data/
+
 
   playerdata:
     container_name: playerdata
@@ -71,24 +92,9 @@ services:
     ports:
         - 127.0.0.1:5432:5432
 
-  match_history_updater:
-    container_name: match_history_updater
-    build:
-      dockerfile: Dockerfile
-      context: match_history_updater
-    links:
-      - playerdata:playerdata
-      - proxy:proxy
-    restart: always
-    volumes:
-        - ./config.json:/project/config.json:ro
-    depends_on:
-      - playerdata
-    environment:
-      - SERVER=EUW1
-
 
 volumes:
   redis_summoner:
+  redis_match_history:
   rabbitmq:
   playerdata:
