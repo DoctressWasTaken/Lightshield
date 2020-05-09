@@ -7,8 +7,24 @@ pipeline {
     stages {
         stage('Fetch git') {
             steps {
-                sh 'git fetch https://$github_USR:$github_PSW@$url'
-                sh 'git diff master...origin/master -- proxy || echo changed'
+                script {
+                    def BEFORE = sh(
+                        script: 'git log --format="%H" -n 1',
+                        returnStdout: true
+                    ).trim()
+                    env.BEFORE = BEFORE
+                }
+               git branch: 'master',
+                credentialsId: '4145361a-82d9-4899-8224-6e9071be7c45',
+                url: 'https://' + env.url
+                script {
+                    def AFTER = sh(
+                        script: 'git log --format="%H" -n 1',
+                        returnStdout: true
+                    ).trim()
+                    env.AFTER = AFTER
+                }
+                echo "FROM ${env.BEFORE} to ${env.AFTER}"
             }
         }
         stage('Set Changes and Pull') {
