@@ -127,7 +127,8 @@ def run():
                     print("Empty")
                     time.sleep(1)
                     continue
-                print(f"Passed a total of {passed} messages before reaching the limit of 250.")
+                print(f"Passed a total of {passed} messages"
+                      f" before reaching the limit of 250.")
                 results = asyncio.run(main(messages))
 
                 for result in results:
