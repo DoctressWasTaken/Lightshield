@@ -105,7 +105,8 @@ def run():
             while True:  # Basic work loop after connection is established.
                 passed = 0
                 messages = []
-                passed = 0while len(messages) < 250:
+                passed = 0
+                while len(messages) < 250:
                     message = channel.basic_get(
                             queue=f'LEAGUE_{server}')
                     if all(x is None for x in message):  # Empty Queue

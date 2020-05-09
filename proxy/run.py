@@ -50,7 +50,6 @@ class Limit:
 
     async def is_blocked(self):
         """Return if a limit is blocked."""
-        print(self.count, self.max)
         if self.blocked > datetime.now(timezone.utc):
             return True
 
@@ -86,7 +85,6 @@ class Limit:
             logging.info(f"Adding request {self.count} : {self.max}.")
             return True
 
-        logging.info("Already on limit")
         return False
 
     async def sync(self, current, date, retry_after):
@@ -98,7 +96,6 @@ class Limit:
         if self.count > self.max:
             self.blocked = datetime.now(timezone.utc) + timedelta(
                 seconds=retry_after)
-            print("Blocking for", retry_after)
 
 
 class ApiHandler:
@@ -141,26 +138,20 @@ class ApiHandler:
         Else: Code returned by the API
         """
         if await self.methods[method].is_blocked():
-            print("Method limit is blocking")
             return 428, {"error": "error"}
-        print("Method limit not blocking")
         for limit in self.globals:
             if await limit.is_blocked():
                 print("Global limit is blocking")
                 return 428, {"error": "error"}
-        print("Global limit not blocking")
 
         if not await self.methods[method].register():
-            print("Method can't register")
             return 428, {"error": "error"}
         print("Method registered")
         for limit in self.globals:
             if not await limit.register():
-                print("Global can't register")
                 return 428, {"error": "error"}
         print("Global registered")
 
-        print("\n\t\t\t\t\t\tALLOWED REQUEST\n")
         async with aiohttp.ClientSession() as session:
             async with session.get(base_url + url, headers=headers) as resp:
                 body = await resp.json()
