@@ -1,2 +1,5 @@
 aiohttp
 psycopg2-binary
+pika
+redis
+

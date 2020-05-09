@@ -110,13 +110,17 @@ def main():
                 pika.ConnectionParameters('rabbitmq'))
             channel = connection.channel()
             channel.basic_qos(prefetch_count=1)
+            queue = channel.queue_declare(
+                    queue=f'SUMMONER_{server}',
+                    durable=True)
 
-            r = redis.Redis(host='redis', port=6379, db=0)
+            r = redis.StrictRedis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 
             while True:
                 total_calls = 0  # expected total calls to be made
                 tasks = []
-                passed = 0
+                skips = 0
+
                 while total_calls < 250:
                     message = channel.basic_get(
                         queue=f"SUMMONER_{server}")
@@ -141,6 +145,7 @@ def main():
                             changes.append("ranking")
                         if 0 < games < 10:
                             changes.append("games_small")
+                            skips += 1
 
                     if games >= 10:
                         changes.append("games")
@@ -155,7 +160,11 @@ def main():
                     elif changes:
                         pass
                         # Add User to outgoing User Queue to record changes
-
+                if len(tasks) == 0:
+                    time.sleep(1)
+                    continue
+                print(f"Skipping {skips}.")
+                print(f"Pulling data for {len(tasks)} user.")
                 results = asyncio.run(
                     process_data(tasks))
 

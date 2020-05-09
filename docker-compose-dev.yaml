@@ -4,11 +4,6 @@ services:
   rabbitmq:
     container_name: rabbitmq
     image: launcher.gcr.io/google/rabbitmq3
-    ports:
-      - '4369:4369'
-      - '5671:5671'
-      - '5672:5672'
-      - '25672:25672'
     volumes:
       - rabbitmq:/var/lib/rabbitmq
 
@@ -46,6 +41,8 @@ services:
       - proxy:proxy
       - redis_summoner_id:redis
     restart: always
+    depends_on:
+        - redis_summoner_id
     volumes:
         - ./config.json:/project/config.json:ro
     environment:

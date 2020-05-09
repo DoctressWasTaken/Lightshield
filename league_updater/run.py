@@ -140,8 +140,10 @@ def server_updater():
             while not empty or failed_pages:
                 tasks = []
                 try:
-                    connection = pika.BlockingConnection(
-                        pika.ConnectionParameters('rabbitmq'))
+                    credentials = pika.PlainCredentials('guest', 'guest')
+                    parameters = pika.ConnectionParameters(
+                            'rabbitmq', 5672, '/', credentials)
+                    connection = pika.BlockingConnection(parameters)
                     channel = connection.channel()
                     queue = channel.queue_declare(
                         queue=f'LEAGUE_{server}',

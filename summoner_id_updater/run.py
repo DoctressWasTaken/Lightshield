@@ -95,10 +95,9 @@ def run():
             channel = connection.channel()
             channel.basic_qos(prefetch_count=1)
 
-            r = redis.Redis(host='redis', port=6379, db=0)
+            r = redis.StrictRedis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
 
             while True:  # Basic work loop after connection is established.
-                passed = 0
                 messages = []
                 passed = 0
                 while len(messages) < 150:
@@ -109,9 +108,16 @@ def run():
                         
                     content = json.loads(message[2])
                     summonerId = content['summonerId']
+                    latest = r.hgetall(f"user:{summonerId}")
+                    print(latest.keys())
+                        
 
-                    if r.hgetall(f"user:{summonerId}"):
+                    if latest:
                         passed += 1
+                        package = {**message[2], **latest}
+                        channel.basic_publish(exchange='',
+                                          routing_key=f'SUMMONER_{server}',
+                                          body=json.dumps(package))
                         channel.basic_ack(
                             delivery_tag=message[0].delivery_tag)
                         continue
@@ -125,7 +131,7 @@ def run():
                 print(f"Passed a total of {passed} messages"
                       f" before reaching the limit of 250.")
                 results = asyncio.run(main(messages))
-
+                print(f"Adding {len(results)} player.")
                 for result in results:
                     message = result[1]
                     data = result[0]
