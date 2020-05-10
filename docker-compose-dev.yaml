@@ -27,8 +27,6 @@ services:
       - rabbitmq:rabbitmq
       - proxy:proxy
     restart: always
-    volumes:
-        - ./config.json:/project/config.json:ro
     environment:
       - SERVER=EUW1
 
@@ -73,17 +71,46 @@ services:
     container_name: redis_match_history
     image: redis
     volumes:
-      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./databases/redis/redis.conf:/usr/local/etc/redis/redis.conf
       - redis_match_history:/data/
 
-
-  playerdata:
-    container_name: playerdata
+  match_updater:
+    container_name: match_updater
     build:
-      dockerfile: playerdata/Dockerfile
-      context: .
+      dockerfile: Dockerfile
+      context: match_updater
+    links:
+      - redis_match:redis
+      - proxy:proxy
+    restart: always
+    environment:
+      - SERVER=EUW1
+
+  redis_match:
+    container_name: redis_match
+    image: redis
     volumes:
-      - playerdata:/var/lib/postgresql/data
+      - ./databases/redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis_match:/data/
+
+
+  db_worker:
+    container_name: db_worker
+    build:
+      dockerfile: Dockerfile
+      context: db_worker/
+    links:
+      - postgres:postgres
+    environment:
+      - SERVER=EUW1
+
+  postgres:
+    container_name: postgres
+    build:
+      dockerfile: Dockerfile
+      context: databases/postgres/
+    volumes:
+      - postgres:/var/lib/postgresql/data
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
     ports:
@@ -93,5 +120,7 @@ services:
 volumes:
   redis_summoner:
   redis_match_history:
+  redis_match:
   rabbitmq:
   playerdata:
+  postgres:

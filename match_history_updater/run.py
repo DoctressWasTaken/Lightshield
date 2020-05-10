@@ -22,6 +22,7 @@ base_url = f"http://proxy:8000/match/v4/matchlists/by-account/" \
 
 async def fetch(url, session, markers):
     """Call method."""
+    print("Is there a call")
     async with session.get(url) as response:
         data = await response.json(content_type=None)
         return response.status, data, markers
@@ -63,6 +64,7 @@ async def call_data(el: dict, session):
         for entry in results:
             if entry[0] != 200:
                 marker.append(entry[2])
+                print(entry[0])
             else:
                 done.append(entry[1])
         if marker:
@@ -84,16 +86,8 @@ async def process_data(tasks):
     Each player again requires multiple requests.
     """
     async with aiohttp.ClientSession() as session:
-        tasks = []
-        for task in tasks:
-            tasks.append(
-                asyncio.create_task(
-                    call_data(task, session)
-                )
-            )
-        responses = await asyncio.gather(*tasks)
-
-    return responses
+        return await asyncio.gather(
+            *[asyncio.create_task(call_data(task, session)) for task in tasks])
 
 
 def main():
@@ -110,20 +104,39 @@ def main():
                 pika.ConnectionParameters('rabbitmq'))
             channel = connection.channel()
             channel.basic_qos(prefetch_count=1)
+            # Incoming
             queue = channel.queue_declare(
-                    queue=f'SUMMONER_{server}',
-                    durable=True)
+                queue=f'MATCH_HISTORY_IN_{server}',
+                durable=True)
 
-            r = redis.StrictRedis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
+            # Outgoing
+            channel.exchange_declare(
+                exchange=f'MATCH_HISTORY_OUT_{server}',
+                exchange_type='direct',
+                durable=True
+            )
+            match_in = channel.queue_declare(
+                queue=f'MATCH_IN_{server}',
+                durable=True)
+            channel.queue_bind(
+                exchange=f'MATCH_HISTORY_OUT_{server}',
+                queue=match_in.method.queue,
+                routing_key='MATCH'
+            )
+
+            r = redis.StrictRedis(host='redis', port=6379, db=0,
+                                  charset="utf-8", decode_responses=True)
 
             while True:
                 total_calls = 0  # expected total calls to be made
                 tasks = []
                 skips = 0
-
-                while total_calls < 250:
+                print("Starting cycle")
+                while total_calls < 25:
                     message = channel.basic_get(
-                        queue=f"SUMMONER_{server}")
+                        queue=f"MATCH_HISTORY_IN_{server}")
+                    print(message)
+
                     if all(x is None for x in message):
                         break
 
@@ -140,8 +153,8 @@ def main():
                         if prev['summonerName'] != content['summonerName']:
                             changes.append("summonerName")
                         if prev['tier'] != content['tier'] or \
-                            prev['rank'] != content['rank'] or \
-                            prev['leaguePoints'] != content['leaguePoints']:
+                                prev['rank'] != content['rank'] or \
+                                prev['leaguePoints'] != content['leaguePoints']:
                             changes.append("ranking")
                         if 0 < games < 10:
                             changes.append("games_small")
@@ -160,9 +173,16 @@ def main():
                     elif changes:
                         pass
                         # Add User to outgoing User Queue to record changes
+                    else:
+                        print(changes)
+                        print(games)
+                    print(total_calls)
+
                 if len(tasks) == 0:
-                    time.sleep(1)
+                    print("Found no tasks, waiting.")
+                    time.sleep(5)
                     continue
+
                 print(f"Skipping {skips}.")
                 print(f"Pulling data for {len(tasks)} user.")
                 results = asyncio.run(
@@ -184,7 +204,11 @@ def main():
                                "leaguePoints": content['leaguePoints']
                            })
                     # Add Matches to outgoing Queue
-
+                    for match_id in matches:
+                        channel.basic_publish(
+                            exchange=f'MATCH_HISTORY_OUT_{server}',
+                            routing_key=f'MATCH',
+                            body=str(match_id))
                     # Add User to outgoing Queue
                     # With all its changes
                     channel.basic_ack(

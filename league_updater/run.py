@@ -9,6 +9,7 @@ from aiohttp.client_exceptions import ClientConnectorError
 import datetime, time
 import pika
 
+
 class EmptyPageException(Exception):
     """Custom Exception called when at least 1 page is empty."""
 
@@ -17,15 +18,11 @@ class EmptyPageException(Exception):
         self.success = success
         self.failed = failed
 
-class ServerConnectionException(Exception):
-    """Custom Exception called when at least """
-
-
 
 logging.basicConfig(
-        format='%(asctime)s %(message)s',
-        datefmt='%m/%d/%Y %I:%M:%S %p',
-        level=logging.INFO)
+    format='%(asctime)s %(message)s',
+    datefmt='%m/%d/%Y %I:%M:%S %p',
+    level=logging.INFO)
 
 logging.getLogger("pika").setLevel(logging.WARNING)
 
@@ -38,37 +35,37 @@ server = os.environ['SERVER']
 url = f"http://proxy:8000/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
 
 tiers = [
-        "IRON",
-        "BRONZE",
-        "SILVER",
-        "GOLD",
-        "PLATINUM",
-        "DIAMOND",
-        "MASTER",
-        "GRANDMASTER",
-        "CHALLENGER"]
+    "IRON",
+    "BRONZE",
+    "SILVER",
+    "GOLD",
+    "PLATINUM",
+    "DIAMOND",
+    "MASTER",
+    "GRANDMASTER",
+    "CHALLENGER"]
 
 divisions = [
-        "IV",
-        "III",
-        "II",
-        "I"]
+    "IV",
+    "III",
+    "II",
+    "I"]
 
 map_tiers = {
-        'IRON': 0,
-        'BRONZE': 4,
-        'SILVER': 8,
-        'GOLD': 12,
-        'PLATINUM': 16,
-        'DIAMOND': 20,
-        'MASTER': 24,
-        'GRANDMASTER': 24,
-        'CHALLENGER': 24}
+    'IRON': 0,
+    'BRONZE': 4,
+    'SILVER': 8,
+    'GOLD': 12,
+    'PLATINUM': 16,
+    'DIAMOND': 20,
+    'MASTER': 24,
+    'GRANDMASTER': 24,
+    'CHALLENGER': 24}
 map_divisions = {
-        'IV': 0,
-        'III': 1,
-        'II': 2,
-        'I': 3}
+    'IV': 0,
+    'III': 1,
+    'II': 2,
+    'I': 3}
 
 
 async def fetch(url, session, page):
@@ -109,7 +106,7 @@ async def update(tier, division, tasks):
     wait = 0
     for response in responses:
         if response[0] == 428:
-            wait = 1
+            wait = 2.5
         if response[0] != 200:
             print(response)
             failed.append(response[2])
@@ -142,12 +139,24 @@ def server_updater():
                 try:
                     credentials = pika.PlainCredentials('guest', 'guest')
                     parameters = pika.ConnectionParameters(
-                            'rabbitmq', 5672, '/', credentials)
+                        'rabbitmq', 5672, '/', credentials)
                     connection = pika.BlockingConnection(parameters)
                     channel = connection.channel()
+                    # Outgoing
+                    channel.exchange_declare(  # Exchange that outputs
+                        exchange=f'LEAGUE_OUT_{server}',
+                        exchange_type='direct',
+                        durable=True
+                    )
+                    # Persistent Queues that need to exist
                     queue = channel.queue_declare(
-                        queue=f'LEAGUE_{server}',
+                        queue=f'SUMMONER_ID_IN_{server}',
                         durable=True)
+                    channel.queue_bind(
+                        exchange=f'LEAGUE_OUT_{server}',
+                        queue=queue.method.queue,
+                        routing_key=f'SUMMONER_V1')
+
                     print(queue.method.message_count)
                     sleep = 1
                     if queue.method.message_count > 1500:
@@ -158,7 +167,7 @@ def server_updater():
                         if sleep < 5:
                             sleep += 1
                         queue = channel.queue_declare(
-                            queue=f'LEAGUE_{server}',
+                            queue=f'SUMMONER_ID_IN_{server}',
                             durable=True,
                             passive=True)
 
@@ -173,15 +182,16 @@ def server_updater():
                         update(tier, division, tasks))
                     data += success
                     failed_pages += failed
-                    
+
                     while data:
                         page = data.pop()
                         for entry in page:
                             channel.basic_publish(
-                                exchange='',
-                                routing_key=f'LEAGUE_{server}',
+                                exchange=f'LEAGUE_OUT_{server}',
+                                routing_key='SUMMONER_V1',
                                 body=json.dumps(entry),
-                                properties=pika.BasicProperties(delivery_mode=2))
+                                properties=pika.BasicProperties(
+                                    delivery_mode=2))
 
                 except ClientConnectorError:
                     # Raised when the proxy cant be reached
@@ -199,7 +209,6 @@ def server_updater():
                     # Raised when rabbitmq cant connect
                     print("Failed to reach rabbitmq")
                     time.sleep(1)
-
 
 
 def main():

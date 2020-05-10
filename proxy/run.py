@@ -155,6 +155,7 @@ class ApiHandler:
             async with session.get(base_url + url, headers=headers) as resp:
                 body = await resp.json()
                 if resp.status != 200:
+                    print("Non-200 RESPONSE:")
                     print(resp.status)
                     print(body)
                     print(resp.headers)
@@ -185,7 +186,7 @@ class ApiHandler:
                     date,
                     retry_after)
         if resp.status != 200:
-            return 428, {"error": "error"}
+            return resp.status, {"error": "error"}
 
         return 200, body
 

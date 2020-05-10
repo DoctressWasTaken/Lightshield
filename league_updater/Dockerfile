@@ -9,9 +9,7 @@ RUN chmod 500 wait-for-it.sh
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 # Main Application
-COPY startup.sh .
-COPY run.py . 
+COPY run.py .
 RUN ls
-RUN chmod 500 startup.sh
 
-CMD ["/project/startup.sh"]
+CMD ["python", "-u", "run.py"]

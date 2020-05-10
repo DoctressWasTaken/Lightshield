@@ -62,9 +62,9 @@ async def main(data_list):
                             url_template % (element[2]['summonerId']),
                             session,
                             element
-                            )
                         )
                     )
+                )
                 await asyncio.sleep(0.01)
             responses = await asyncio.gather(*tasks)
             responses.pop(0)
@@ -95,29 +95,64 @@ def run():
             channel = connection.channel()
             channel.basic_qos(prefetch_count=1)
 
-            r = redis.StrictRedis(host='redis', port=6379, db=0, charset="utf-8", decode_responses=True)
+            # Incoming
+            incoming = channel.queue_declare(
+                queue=f'SUMMONER_ID_IN_{server}',
+                durable=True)
+
+            # Outgoing
+            channel.exchange_declare(
+                exchange=f'SUMMONER_ID_OUT_{server}',
+                exchange_type='direct',
+                durable=True
+            )
+            # Output to the Match_History_Updater
+            match_history_in = channel.queue_declare(
+                queue=f'MATCH_HISTORY_IN_{server}',
+                durable=True
+            )
+            channel.queue_bind(
+                exchange=f'SUMMONER_ID_OUT_{server}',
+                queue=match_history_in.method.queue,
+                routing_key='SUMMONER_V2'
+            )
+            # Output to the DB
+            db_in = channel.queue_declare(
+                queue=f'DB_SUMMONER_IN_{server}',
+                durable=True)
+            channel.queue_bind(
+                exchange=f'SUMMONER_ID_OUT_{server}',
+                queue=match_history_in.method.queue,
+                routing_key='SUMMONER_V2'
+
+            )
+            # TODO: Adding logging output will happen here
+            #  by binding a second queue that outputs only the change events
+
+            r = redis.StrictRedis(host='redis', port=6379, db=0,
+                                  charset="utf-8", decode_responses=True)
 
             while True:  # Basic work loop after connection is established.
                 messages = []
                 passed = 0
                 while len(messages) < 150:
                     message = channel.basic_get(
-                            queue=f'LEAGUE_{server}')
+                        queue=f'SUMMONER_ID_IN_{server}')
                     if all(x is None for x in message):  # Empty Queue
                         break
-                        
+
                     content = json.loads(message[2])
                     summonerId = content['summonerId']
                     latest = r.hgetall(f"user:{summonerId}")
-                    print(latest.keys())
-                        
 
                     if latest:
                         passed += 1
-                        package = {**message[2], **latest}
-                        channel.basic_publish(exchange='',
-                                          routing_key=f'SUMMONER_{server}',
-                                          body=json.dumps(package))
+                        package = {**content, **latest}
+
+                        channel.basic_publish(
+                            exchange=f'SUMMONER_ID_OUT_{server}',
+                            routing_key=f'SUMMONER_V2',
+                            body=json.dumps(package))
                         channel.basic_ack(
                             delivery_tag=message[0].delivery_tag)
                         continue
@@ -143,9 +178,10 @@ def run():
 
                     package = {**message[2], **data}
 
-                    channel.basic_publish(exchange='',
-                                          routing_key=f'SUMMONER_{server}',
-                                          body=json.dumps(package))
+                    channel.basic_publish(
+                        exchange=f'SUMMONER_ID_OUT_{server}',
+                        routing_key=f'SUMMONER_V2',
+                        body=json.dumps(package))
 
         except ClientConnectorError:
             # Raised when the proxy cant be reached
@@ -158,8 +194,5 @@ def run():
             time.sleep(1)
 
 
-
-
 if __name__ == "__main__":
-
     run()

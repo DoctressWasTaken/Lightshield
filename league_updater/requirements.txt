@@ -1,4 +1,2 @@
-psycopg2-binary
-tornado
 aiohttp
 pika
