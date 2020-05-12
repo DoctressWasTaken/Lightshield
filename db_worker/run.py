@@ -60,7 +60,7 @@ class UpdateSummoner(WorkerClass):
         while not self._is_interrupted:  # try loop
             try:
                 connection = pika.BlockingConnection(
-                    pika.ConnectionParameters('rabbitmq'))
+                    pika.ConnectionParameters('rabbitmq', connection_attempts=2, socket_timeout=30))
                 channel = connection.channel()
                 channel.basic_qos(prefetch_count=1)
                 # Incoming
@@ -133,6 +133,9 @@ class UpdateSummoner(WorkerClass):
             except RuntimeError:
                 # Raised when rabbitmq cant connect
                 print("Failed to reach rabbitmq")
+                time.sleep(1)
+            except Exception as err:
+                print(f"Got {err}.")
                 time.sleep(1)
 
 class InsertMatch(WorkerClass):
@@ -218,6 +221,9 @@ class InsertMatch(WorkerClass):
             except RuntimeError:
                 # Raised when rabbitmq cant connect
                 print("Failed to reach rabbitmq")
+                time.sleep(1)
+            except Exception as err:
+                print(f"Got {err}.")
                 time.sleep(1)
 
 def main():

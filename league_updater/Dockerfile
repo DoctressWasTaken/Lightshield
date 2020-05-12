@@ -10,6 +10,5 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 # Main Application
 COPY run.py .
-RUN ls
 
 CMD ["python", "-u", "run.py"]

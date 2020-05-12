@@ -106,7 +106,7 @@ async def update(tier, division, tasks):
     wait = 0
     for response in responses:
         if response[0] == 428:
-            wait = 2.5
+            wait = response[1]['retry_after']
         if response[0] != 200:
             print(response)
             failed.append(response[2])

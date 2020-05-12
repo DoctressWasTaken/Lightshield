@@ -1,13 +1,19 @@
-version: '3'
+version: '2.3'
 services:
 
   rabbitmq:
+    cpus: 4
+    cpu_shares: 2
+    mem_limit: 2g
     container_name: rabbitmq
+    hostname: hedgehog
     image: launcher.gcr.io/google/rabbitmq3
     volumes:
-      - rabbitmq:/var/lib/rabbitmq
+      - rabbitmq:/var/lib/rabbitmq/
 
   proxy:
+    cpus: 1.5
+    mem_limit: 1g
     container_name: proxy
     build:
       dockerfile: Dockerfile
@@ -100,17 +106,17 @@ services:
       dockerfile: Dockerfile
       context: db_worker/
     links:
-      - postgres:postgres
+      - playerdata:playerdata
     environment:
       - SERVER=EUW1
 
-  postgres:
-    container_name: postgres
+  playerdata:
+    container_name: playerdata
     build:
       dockerfile: Dockerfile
       context: databases/postgres/
     volumes:
-      - postgres:/var/lib/postgresql/data
+      - playerdata:/var/lib/postgresql/data
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
     ports:

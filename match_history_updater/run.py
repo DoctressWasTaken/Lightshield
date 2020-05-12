@@ -149,12 +149,12 @@ def main():
                     changes = []
 
                     if prev:
-                        games -= (prev['wins'] + prev['losses'])
+                        games -= (int(prev['wins']) + int(prev['losses']))
                         if prev['summonerName'] != content['summonerName']:
                             changes.append("summonerName")
                         if prev['tier'] != content['tier'] or \
                                 prev['rank'] != content['rank'] or \
-                                prev['leaguePoints'] != content['leaguePoints']:
+                                int(prev['leaguePoints']) != content['leaguePoints']:
                             changes.append("ranking")
                         if 0 < games < 10:
                             changes.append("games_small")

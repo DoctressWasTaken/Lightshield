@@ -26,6 +26,10 @@ headers = {'X-Riot-Token': config['API_KEY']}
 base_url = f"https://{server}.api.riotgames.com/lol"
 count = 0
 
+class LimitBlocked(Exception):
+
+    def __init__(self, retry_after):
+        self.retry_after = retry_after
 
 class Limit:
     """Class that creates objects for each limit identified.
@@ -33,32 +37,38 @@ class Limit:
     Handles tracking of rate limits for this specific limit.
     """
 
-    def __init__(self, span, count):
+    def __init__(self, span, max, name):
         """Initialize Limit data.
 
         :arg::span::The duration of the bucket applied to the Limit.
             The duration is automatically extended by 1 second.
-        :arg::count::The maximal requests in a single bucket.
+        :arg::max::The maximal requests in a single bucket.
         """
-        self.span = int(span) + 1
-        self.max = count
-        self.count = 0
-        self.bucket = datetime.now(timezone.utc)
-        self.last_updated = datetime.now(timezone.utc)
-        self.blocked = datetime.now(timezone.utc)
-        print(f"Initiated {self.max}:{self.span}.")
+        self.span = int(span)  # Duration of the bucket
+        self.max = max - 1  # Max Calls per bucket (Reduced by 1 for safety measures)
+        self.count = 0  # Current Calls in this bucket
+        self.bucket = datetime.now(timezone.utc)  # Cutoff after which no new requests are accepted
+        self.reset = self.bucket + timedelta(seconds=1)  # Moment of reset for the bucket
+        self.last_updated = datetime.now(timezone.utc)  # Latest received response
+        self.blocked = datetime.now(timezone.utc)  
+        print(f"[{name.capitalize()}] Initiated {self.max}:{self.span}.")
 
-    async def is_blocked(self):
-        """Return if a limit is blocked."""
-        if self.blocked > datetime.now(timezone.utc):
-            return True
-
-        if self.bucket < datetime.now(timezone.utc):  # Bucket timed out
+    async def check_reset(self):
+        """Check if the bucket has timed out."""
+        if datetime.now(timezone.utc) > self.reset:
             self.count = 0
-            return False
-        if self.count < self.max:  # Not maxed out
-            return False
+            self.bucket = datetime.now(timezone.utc) + timedelta(seconds=self.span - 1)
+            self.reset = datetime.now(timezone.utc) + timedelta(seconds=self.span)
+
+    async def accept_requests(self):
+        """Check if the bucket is currently accepting requests."""
+        if self.bucket < datetime.now(timezone.utc) < self.reset:
+            raise LimitBlocked(await self.when_reset())
         return True
+
+    async def when_reset(self):
+        """Return seconds until reset."""
+        return (self.reset - datetime.now(timezone.utc)).total_seconds()
 
     async def register(self):
         """Reqister a request.
@@ -69,34 +79,49 @@ class Limit:
         if a later limit blocks despite previous being open,
         the previous limit counts are NOT lowered.
         """
-        if self.blocked > datetime.now(timezone.utc):
-            logging.info("Limit is blocked.")
-            return False
-
-        if self.bucket < datetime.now(timezone.utc):
-            self.bucket = datetime.now(timezone.utc) + timedelta(
-                seconds=self.span)
-            logging.info(f"Starting bucket until {self.bucket}.")
-            self.count = 1
-            return True
-
-        if self.count < self.max:
-            self.count += 1
-            if self.max * 0.9 < self.count:
-                logging.info(f"Adding request {self.count} : {self.max}.")
-            return True
-
-        return False
-
-    async def sync(self, current, date, retry_after):
+        await self.check_reset()
+        # Return if in dead-period
+        await self.accept_requests()
+        
+        # Attempt to add request
+        if self.count >= self.max:
+            raise LimitBlocked(await self.when_reset())
+        self.count += 1
+        
+    async def sync(self, headers, type):
         """Syncronize the locally kept API limits with a request response."""
+        naive = datetime.strptime(
+            headers['Date'],
+            '%a, %d %b %Y %H:%M:%S GMT')
+        local = pytz.timezone('GMT')
+        local_dt = local.localize(naive, is_dst=None)
+        date = local_dt.astimezone(pytz.utc)
         if self.last_updated > date:
             return
-        if count > self.count:
-            self.count = count
-        if self.count > self.max:
-            self.blocked = datetime.now(timezone.utc) + timedelta(
-                seconds=retry_after)
+
+        if type == "global":
+            limits = headers['X-App-Rate-Limit-Count'].split(',')
+            for limit in limits:
+                if limit.split(":")[1] == str(self.span):
+                    current = int(limit.split(":")[0])
+                    break
+        else:
+            limits = headers['X-Method-Rate-Limit-Count']
+            current = int(limits.split(":")[0])
+        if not current:
+            print("The approriated limit could not be found.")
+            return
+
+        if current > self.count:
+            self.count = current
+        if current < self.max:
+            return
+        self.bucket = datetime.now(timezone.utc)
+
+        retry_after = 1
+        if 'Retry_After' in headers:
+            retry_after = int(headers['Retry-After'])
+        self.reset = datetime.now(timezone.utc) + timedelta(seconds=retry_after + 1)
 
 
 class ApiHandler:
@@ -121,12 +146,12 @@ class ApiHandler:
         self.globals = []
         for limit in limits['APP']:
             self.globals.append(
-                Limit(limit, limits['APP'][limit]))
+                Limit(limit, limits['APP'][limit], 'App'))
         self.methods = {}
         for method in limits['METHODS']:
             for limit in limits['METHODS'][method]:
                 self.methods[method] = Limit(limit,
-                                             limits['METHODS'][method][limit])
+                                             limits['METHODS'][method][limit], method)
 
     async def request(self, url, method):
         """Request attempt to the API.
@@ -138,58 +163,32 @@ class ApiHandler:
         Local Ratelimit applies: 428
         Else: Code returned by the API
         """
-        if await self.methods[method].is_blocked():
-            return 428, {"error": "error"}
-        for limit in self.globals:
-            if await limit.is_blocked():
-                print("Global limit is blocking")
-                return 428, {"error": "error"}
+        try:
+            await self.methods[method].register()
+            for limit in self.globals:
+                await limit.register()
+        except LimitBlocked as err:
+            return 428, {"status": "locally_blocked", "retry_after": err.retry_after}
 
-        if not await self.methods[method].register():
-            return 428, {"error": "error"}
-        for limit in self.globals:
-            if not await limit.register():
-                return 428, {"error": "error"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(base_url + url, headers=headers) as resp:
+                    body = await resp.json()
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(base_url + url, headers=headers) as resp:
-                body = await resp.json()
-                if resp.status != 200:
-                    print("Non-200 RESPONSE:")
-                    print(resp.status)
-                    print(body)
-                    print(resp.headers)
+                    for limit in self.globals:
+                        await limit.sync(resp.headers, "global")
+                    await self.methods[method].sync(resp.headers, "method")
+                    if resp.status != 200:
+                        print("Non-200 RESPONSE:")
+                        print(resp.status)
+                        print(body)
+                        print(resp.headers)
+                        return resp.status, {"status": "non-200 response."}
 
-                app_current = resp.headers['X-App-Rate-Limit-Count']
-                method_current = resp.headers['X-Method-Rate-Limit-Count']
-                naive = datetime.strptime(
-                    resp.headers['Date'],
-                    '%a, %d %b %Y %H:%M:%S GMT')
-                local = pytz.timezone('GMT')
-                local_dt = local.localize(naive, is_dst=None)
-                date = local_dt.astimezone(pytz.utc)
+                    return 200, body
 
-                retry_after = 0
-                if 'Retry-After' in resp.headers:
-                    retry_after = int(resp.headers['Retry-After'])
-
-                for limit in self.globals:
-                    for current in app_current.split(','):
-                        if current.endswith(str(limit.span)):
-                            await limit.sync(
-                                int(current.split(":")[0]),
-                                date,
-                                retry_after)
-                            break
-                await self.methods[method].sync(
-                    int(method_current.split(":")[0]),
-                    date,
-                    retry_after)
-        if resp.status != 200:
-            return resp.status, {"error": "error"}
-
-        return 200, body
-
+        except aiohttp.ClientOSError:
+            return 201, {"status": "could not connect"}
 
 class Proxy:
     """The proxy class contains the proxy server to be run.
