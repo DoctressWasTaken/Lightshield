@@ -187,7 +187,8 @@ class ApiHandler:
 
                     return 200, body
 
-        except aiohttp.ClientOSError:
+        except aiohttp.ClientOSError as err:
+            print(err)
             return 201, {"status": "could not connect"}
 
 class Proxy:
