@@ -55,80 +55,95 @@ class WorkerClass(threading.Thread):
 
 class UpdateSummoner(WorkerClass):
 
+    def get_tasks(self, channel):
+        """Get tasks from rabbitmq."""
+        tasks = []
+        while len(tasks) < 250:
+            message = channel.basic_get(
+                queue=f'DB_SUMMONER_IN_{server}'
+            )
+            if all(x is None for x in message):
+                break
+            tasks.append(message)
+        return tasks
+
+    def insert(self, tasks):
+        """Insert the pulled tasks into the db."""
+        lines = []
+        for task in tasks:
+            data = json.loads(task[2])
+            ranking = map_tiers[data['tier']]
+            ranking += map_rank[data['rank']]
+            ranking += data['leaguePoints']
+            tier = map_tiers_numeric[data['tier']]
+            series = None
+            if 'miniSeries' in data:
+                series = data['miniSeries']['progress'][:-1]
+            line = "('%s', '%s', '%s', '%s', %s, %s, '%s', %s, %s)"
+            line = line % (
+                data['summonerName'],
+                data['summonerId'],
+                data['accountId'],
+                data['puuid'],
+                ranking,
+                tier,
+                series,
+                data['wins'],
+                data['losses']
+            )
+            lines.append(line)
+        with psycopg2.connect(
+                host='playerdata',
+                user='db_worker',
+                dbname=f'data_{server.lower()}') as connection:
+            cur = connection.cursor()
+            cur.execute(f"""
+                               INSERT INTO player
+                                   (summonerName, summonerId, accountId, 
+                                   puuid, ranking, tier, series, wins, losses)
+                               VALUES {",".join(lines)}
+                               ON CONFLICT (summonerId) DO UPDATE SET
+                                   summonerName = EXCLUDED.summonerName,
+                                   ranking = EXCLUDED.ranking,
+                                   tier = EXCLUDED.tier,
+                                   series = EXCLUDED.series,
+                                   wins = EXCLUDED.wins,
+                                   losses = EXCLUDED.losses;
+                           """
+                        )
+            connection.commit()
+
+    def ack_tasks(self, tasks, channel):
+        """Acknowledge the tasks being done towards rabbitmq."""
+        for task in tasks:
+            channel.basic_ack(
+                delivery_tag=task[0].delivery_tag)
+
     def run(self):
         print("Initiated Summoner Updater.")
-        while not self._is_interrupted:  # try loop
+        while not self._is_interrupted:  # Try loop
             try:
-                connection = pika.BlockingConnection(
-                    pika.ConnectionParameters('rabbitmq', connection_attempts=2, socket_timeout=30))
-                channel = connection.channel()
-                channel.basic_qos(prefetch_count=1)
-                # Incoming
-                queue = channel.queue_declare(
-                    queue=f'DB_SUMMONER_IN_{server}',
-                    durable=True)
+                with pika.BlockingConnection(
+                        pika.ConnectionParameters(
+                            'rabbitmq',
+                            connection_attempts=2,
+                            socket_timeout=30)) as rabbit_connection:
+                    channel = rabbit_connection.channel()
+                    channel.basic_qos(prefetch_count=1)
+                    # Incoming
+                    queue = channel.queue_declare(
+                        queue=f'DB_SUMMONER_IN_{server}',
+                        durable=True)
 
-                tasks = []
-                while len(tasks) < 250:
-                    message = channel.basic_get(
-                        queue=f'DB_SUMMONER_IN_{server}'
-                    )
-                    if all(x is None for x in message):
-                        break
-
-                    tasks.append(message)
-
-                if len(tasks) == 0:
-                    print("[Summoner] No tasks, sleeping")
-                    time.sleep(5)
-                    continue
-
-                lines = []
-                for task in tasks:
-                    data = json.loads(task[2])
-                    ranking = map_tiers[data['tier']]
-                    ranking += map_rank[data['rank']]
-                    ranking += data['leaguePoints']
-                    tier = map_tiers_numeric[data['tier']]
-                    series = None
-                    if 'miniSeries' in data:
-                        series = data['miniSeries']['progress'][:-1]
-                    line = "('%s', '%s', '%s', '%s', %s, %s, '%s', %s, %s)"
-                    line = line % (
-                        data['summonerName'],
-                        data['summonerId'],
-                        data['accountId'],
-                        data['puuid'],
-                        ranking,
-                        tier,
-                        series,
-                        data['wins'],
-                        data['losses']
-                    )
-                    lines.append(line)
-                with psycopg2.connect(
-                        host='postgres',
-                        user='db_worker',
-                        dbname=f'data_{server.lower()}') as connection:
-                    cur = connection.cursor()
-                    cur.execute(f"""
-                        INSERT INTO player
-                            (summonerName, summonerId, accountId, 
-                            puuid, ranking, tier, series, wins, losses)
-                        VALUES {",".join(lines)}
-                        ON CONFLICT (summonerId) DO UPDATE SET
-                            summonerName = EXCLUDED.summonerName,
-                            ranking = EXCLUDED.ranking,
-                            tier = EXCLUDED.tier,
-                            series = EXCLUDED.series,
-                            wins = EXCLUDED.wins,
-                            losses = EXCLUDED.losses;
-                    """
-                    )
-                    connection.commit()
-                for task in tasks:
-                    channel.basic_ack(
-                        delivery_tag=task[0].delivery_tag)
+                    while not self._is_interrupted:  # Work loop
+                        tasks = self.get_tasks(channel)
+                        if len(tasks) == 0:
+                            print("[Summoner] No tasks, sleeping")
+                            time.sleep(5)
+                            continue
+                        self.insert(tasks)
+                        self.ack_tasks(tasks, channel)
+                        time.sleep(1)
 
             except RuntimeError:
                 # Raised when rabbitmq cant connect
@@ -137,86 +152,99 @@ class UpdateSummoner(WorkerClass):
             except Exception as err:
                 print(f"Got {err}.")
                 time.sleep(1)
+
 
 class InsertMatch(WorkerClass):
 
+    def get_tasks(self, channel):
+        """Get tasks from rabbitmq."""
+        tasks = []
+        while len(tasks) < 250:
+            message = channel.basic_get(
+                queue=f'DB_MATCH_IN_{server}'
+            )
+            if all(x is None for x in message):
+                break
+            tasks.append(message)
+        return tasks
+
+    def insert(self, tasks):
+        """Insert the pulled tasks into the db."""
+
+    lines = []
+    for task in tasks:
+        data = json.loads(task[2])
+        types = {
+            'CUSTOM_GAME': 0,
+            'TUTORIAL_GAME': 1,
+            'MATCHED_GAME': 2
+        }
+        gameType = 3
+        if data['gameType'] in types:
+            gameType = types[data['gameType']]
+
+        line = "(%s, '%s', %s, %s, %s, '%s', '%s', %" \
+               "s, %s, '%s', %s, '%s', '%s')"
+        line = line % (
+            data['gameId'],
+            json.dumps(data['participantIdentities']),
+            data['queueId'],
+            gameType,
+            data['gameDuration'],
+            json.dumps(data['teams']),
+            data['platformId'],
+            data['gameCreation'],
+            data['seasonId'],
+            data['gameVersion'],
+            data['mapId'],
+            data['gameMode'],
+            json.dumps(data['participants'])
+        )
+        lines.append(line)
+    with psycopg2.connect(
+            host='playerdata',
+            user='db_worker',
+            dbname=f'data_{server.lower()}') as connection:
+        cur = connection.cursor()
+        cur.execute(f"""
+                            INSERT INTO matchdto
+                                (matchId, participantIdentities, queue,
+                                    gameType, gameDuration, teams, platformId,
+                                    gameCreation, seasonId, gameVersion, mapId,
+                                    gameMode, participants)
+                            VALUES {",".join(lines)}
+                            ON CONFLICT (matchId) DO NOTHING;
+                        """
+                    )
+        connection.commit()
+
+    def ack_tasks(self, tasks, channel):
+        """Acknowledge the tasks being done towards rabbitmq."""
+        for task in tasks:
+            channel.basic_ack(
+                delivery_tag=task[0].delivery_tag)
+
     def run(self):
         print("Initiated Match inserter.")
-        while not self._is_interrupted:  # try loop
+        while not self._is_interrupted:  # Try loop
             try:
-                connection = pika.BlockingConnection(
-                    pika.ConnectionParameters('rabbitmq'))
-                channel = connection.channel()
-                channel.basic_qos(prefetch_count=1)
-                # Incoming
-                queue = channel.queue_declare(
-                    queue=f'DB_MATCH_IN_{server}',
-                    durable=True)
-
-                tasks = []
-                while len(tasks) < 250:
-                    message = channel.basic_get(
-                        queue=f'DB_MATCH_IN_{server}'
-                    )
-                    if all(x is None for x in message):
-                        break
-
-                    tasks.append(message)
-
-                if len(tasks) == 0:
-                    print("[Matches] No tasks, sleeping")
-                    time.sleep(5)
-                    continue
-
-                lines = []
-                for task in tasks:
-                    data = json.loads(task[2])
-                    types = {
-                        'CUSTOM_GAME': 0,
-                        'TUTORIAL_GAME': 1,
-                        'MATCHED_GAME': 2
-                    }
-                    gameType = 3
-                    if data['gameType'] in types:
-                        gameType = types[data['gameType']]
-
-                    line = "(%s, '%s', %s, %s, %s, '%s', '%s', %" \
-                           "s, %s, '%s', %s, '%s', '%s')"
-                    line = line % (
-                        data['gameId'],
-                        json.dumps(data['participantIdentities']),
-                        data['queueId'],
-                        gameType,
-                        data['gameDuration'],
-                        json.dumps(data['teams']),
-                        data['platformId'],
-                        data['gameCreation'],
-                        data['seasonId'],
-                        data['gameVersion'],
-                        data['mapId'],
-                        data['gameMode'],
-                        json.dumps(data['participants'])
-                    )
-                    lines.append(line)
-                with psycopg2.connect(
-                        host='postgres',
-                        user='db_worker',
-                        dbname=f'data_{server.lower()}') as connection:
-                    cur = connection.cursor()
-                    cur.execute(f"""
-                        INSERT INTO matchdto
-                            (matchId, participantIdentities, queue, gameType,
-                                gameDuration, teams, platformId, gameCreation,
-                                seasonId, gameVersion, mapId, gameMode, 
-                                participants)
-                        VALUES {",".join(lines)}
-                        ON CONFLICT (matchId) DO NOTHING;
-                    """
-                    )
-                    connection.commit()
-                for task in tasks:
-                    channel.basic_ack(
-                        delivery_tag=task[0].delivery_tag)
+                with pika.BlockingConnection(
+                        pika.ConnectionParameters(
+                            'rabbitmq')) as rabbit_connection:
+                    channel = rabbit_connection.channel()
+                    channel.basic_qos(prefetch_count=1)
+                    # Incoming
+                    queue = channel.queue_declare(
+                        queue=f'DB_MATCH_IN_{server}',
+                        durable=True)
+                    while not self._is_interrupted:  # Work loop
+                        tasks = self.get_tasks(channel)
+                        if len(tasks) == 0:
+                            print("[Matches] No tasks, sleeping")
+                            time.sleep(5)
+                            continue
+                        self.insert(tasks)
+                        self.ack_tasks(tasks, channel)
 
             except RuntimeError:
                 # Raised when rabbitmq cant connect
@@ -225,6 +253,7 @@ class InsertMatch(WorkerClass):
             except Exception as err:
                 print(f"Got {err}.")
                 time.sleep(1)
+
 
 def main():
     """Update user match lists.
@@ -242,14 +271,20 @@ def main():
 
     try:
         while True:
-            time.sleep(600)
+            time.sleep(5)
+            if not summoner_updater.is_alive():
+                print("Summoner Updater Thread died. Restarting.")
+                summoner_updater.start()
+            if not match_inserter.is_alive():
+                print("Match Inserter Thread dead. Restarting.")
+                match_inserter.start()
+
     except KeyboardInterrupt:
         print("Gracefully shutting down.")
         summoner_updater.stop()
         match_inserter.stop()
     summoner_updater.join()
     match_inserter.join()
-
 
 
 if __name__ == "__main__":

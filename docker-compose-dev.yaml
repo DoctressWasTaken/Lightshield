@@ -2,7 +2,7 @@ version: '2.3'
 services:
 
   rabbitmq:
-    cpus: 4
+    cpus: 1
     cpu_shares: 2
     mem_limit: 2g
     container_name: rabbitmq
@@ -12,7 +12,7 @@ services:
       - rabbitmq:/var/lib/rabbitmq/
 
   proxy:
-    cpus: 1.5
+    cpus: 0.5
     mem_limit: 1g
     container_name: proxy
     build:
