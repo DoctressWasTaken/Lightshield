@@ -122,7 +122,7 @@ def run():
                 durable=True)
             channel.queue_bind(
                 exchange=f'SUMMONER_ID_OUT_{server}',
-                queue=match_history_in.method.queue,
+                queue=db_in.method.queue,
                 routing_key='SUMMONER_V2'
 
             )

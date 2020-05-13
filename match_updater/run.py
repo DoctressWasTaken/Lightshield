@@ -116,7 +116,7 @@ def main():
                 tasks = []
                 skips = 0
                 print("Starting cycle")
-                while len(tasks) < 200:
+                while len(tasks) < 400:
                     message = channel.basic_get(
                         queue=f"MATCH_IN_{server}")
 

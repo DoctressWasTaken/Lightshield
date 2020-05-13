@@ -92,6 +92,7 @@ class UpdateSummoner(WorkerClass):
                 data['losses']
             )
             lines.append(line)
+            print(f"Inserting {len(line)} lines.")
         with psycopg2.connect(
                 host='playerdata',
                 user='db_worker',
@@ -111,6 +112,7 @@ class UpdateSummoner(WorkerClass):
                                    losses = EXCLUDED.losses;
                            """
                         )
+            print("Insert")
             connection.commit()
 
     def ack_tasks(self, tasks, channel):
@@ -171,52 +173,52 @@ class InsertMatch(WorkerClass):
     def insert(self, tasks):
         """Insert the pulled tasks into the db."""
 
-    lines = []
-    for task in tasks:
-        data = json.loads(task[2])
-        types = {
-            'CUSTOM_GAME': 0,
-            'TUTORIAL_GAME': 1,
-            'MATCHED_GAME': 2
-        }
-        gameType = 3
-        if data['gameType'] in types:
-            gameType = types[data['gameType']]
+        lines = []
+        for task in tasks:
+            data = json.loads(task[2])
+            types = {
+                'CUSTOM_GAME': 0,
+                'TUTORIAL_GAME': 1,
+                'MATCHED_GAME': 2
+            }
+            gameType = 3
+            if data['gameType'] in types:
+                gameType = types[data['gameType']]
 
-        line = "(%s, '%s', %s, %s, %s, '%s', '%s', %" \
-               "s, %s, '%s', %s, '%s', '%s')"
-        line = line % (
-            data['gameId'],
-            json.dumps(data['participantIdentities']),
-            data['queueId'],
-            gameType,
-            data['gameDuration'],
-            json.dumps(data['teams']),
-            data['platformId'],
-            data['gameCreation'],
-            data['seasonId'],
-            data['gameVersion'],
-            data['mapId'],
-            data['gameMode'],
-            json.dumps(data['participants'])
-        )
-        lines.append(line)
-    with psycopg2.connect(
-            host='playerdata',
-            user='db_worker',
-            dbname=f'data_{server.lower()}') as connection:
-        cur = connection.cursor()
-        cur.execute(f"""
-                            INSERT INTO matchdto
-                                (matchId, participantIdentities, queue,
-                                    gameType, gameDuration, teams, platformId,
-                                    gameCreation, seasonId, gameVersion, mapId,
-                                    gameMode, participants)
-                            VALUES {",".join(lines)}
-                            ON CONFLICT (matchId) DO NOTHING;
-                        """
-                    )
-        connection.commit()
+            line = "(%s, '%s', %s, %s, %s, '%s', '%s', %" \
+                   "s, %s, '%s', %s, '%s', '%s')"
+            line = line % (
+                data['gameId'],
+                json.dumps(data['participantIdentities']),
+                data['queueId'],
+                gameType,
+                data['gameDuration'],
+                json.dumps(data['teams']),
+                data['platformId'],
+                data['gameCreation'],
+                data['seasonId'],
+                data['gameVersion'],
+                data['mapId'],
+                data['gameMode'],
+                json.dumps(data['participants'])
+            )
+            lines.append(line)
+        with psycopg2.connect(
+                host='playerdata',
+                user='db_worker',
+                dbname=f'data_{server.lower()}') as connection:
+            cur = connection.cursor()
+            cur.execute(f"""
+                                INSERT INTO matchdto
+                                    (matchId, participantIdentities, queue,
+                                        gameType, gameDuration, teams, platformId,
+                                        gameCreation, seasonId, gameVersion, mapId,
+                                        gameMode, participants)
+                                VALUES {",".join(lines)}
+                                ON CONFLICT (matchId) DO NOTHING;
+                            """
+                        )
+            connection.commit()
 
     def ack_tasks(self, tasks, channel):
         """Acknowledge the tasks being done towards rabbitmq."""
