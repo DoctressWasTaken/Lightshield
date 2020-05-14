@@ -114,6 +114,7 @@ def main():
 
             while True:
                 tasks = []
+                current = []
                 skips = 0
                 print("Starting cycle")
                 while len(tasks) < 400:
@@ -127,8 +128,12 @@ def main():
                     if r.sismember('matches', str(match_id)):
                         skips += 1
                         continue
+                    if match_id in current:
+                        skips += 1
+                        continue
 
                     tasks.append(message)
+                    current.append(match_id)
 
                 if len(tasks) == 0:
                     print("Found no tasks, waiting.")
