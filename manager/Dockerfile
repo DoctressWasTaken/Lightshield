@@ -1,15 +1,11 @@
-FROM python:3.7-slim
+FROM python:3.7
+
 
 WORKDIR /project
 RUN python -m pip install --upgrade pip
-
-# Main Application setup
 COPY requirements.txt .
+COPY container.yaml .
 RUN pip install -r requirements.txt
-# Main Application
 COPY run.py .
 
-RUN ls
-
-CMD python -u run.py
-#CMD ["python", "-u", "run.py"]
+CMD ["python", "-u", "run.py"]

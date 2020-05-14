@@ -8,6 +8,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/sources/
 
   rabbitmq:
     cpus: 1
@@ -27,14 +28,12 @@ services:
       dockerfile: Dockerfile
       context: proxy
     volumes:
-        - ./config.json:/project/config.json
+        - ./config.json:/project/config.json:ro
     environment:
       - SERVER=EUW1
     restart: always
 
   league_updater:
-    cpus: 0.2
-    mem_limit: 100m
     container_name: league_updater
     build:
       dockerfile: Dockerfile
@@ -42,15 +41,11 @@ services:
     links:
       - rabbitmq:rabbitmq
       - proxy:proxy
-    depends_on:
-      - rabbitmq
     restart: always
     environment:
       - SERVER=EUW1
 
   summoner_id_updater:
-    cpus: 0.2
-    mem_limit: 100m
     container_name: summoner_id_updater
     build:
       dockerfile: Dockerfile
@@ -60,15 +55,13 @@ services:
       - redis_summoner_id:redis
     restart: always
     depends_on:
-        - proxy
         - redis_summoner_id
-        - rabbitmq
+    volumes:
+        - ./config.json:/project/config.json:ro
     environment:
       - SERVER=EUW1
 
   redis_summoner_id:
-    cpus: 0.1
-    mem_limit: 200m
     container_name: redis_summoner_id
     image: redis
     volumes:
@@ -76,8 +69,6 @@ services:
       - redis_summoner:/data/
 
   match_history_updater:
-    cpus: 0.2
-    mem_limit: 100m
     container_name: match_history_updater
     build:
       dockerfile: Dockerfile
@@ -85,17 +76,13 @@ services:
     links:
       - redis_match_history:redis
       - proxy:proxy
-    depends_on:
-      - rabbitmq
-      - redis_match_history
-      - proxy
     restart: always
+    volumes:
+        - ./config.json:/project/config.json:ro
     environment:
       - SERVER=EUW1
 
   redis_match_history:
-    cpus: 0.1
-    mem_limit: 200m
     container_name: redis_match_history
     image: redis
     volumes:
@@ -103,8 +90,6 @@ services:
       - redis_match_history:/data/
 
   match_updater:
-    cpus: 0.2
-    mem_limit: 100m
     container_name: match_updater
     build:
       dockerfile: Dockerfile
@@ -113,16 +98,10 @@ services:
       - redis_match:redis
       - proxy:proxy
     restart: always
-    depends_on:
-      - proxy
-      - rabbitmq
-      - redis_match
     environment:
       - SERVER=EUW1
 
   redis_match:
-    cpus: 0.1
-    mem_limit: 200m
     container_name: redis_match
     image: redis
     volumes:
@@ -131,23 +110,16 @@ services:
 
 
   db_worker:
-    cpus: 0.2
-    mem_limit: 100m
     container_name: db_worker
     build:
       dockerfile: Dockerfile
       context: db_worker/
     links:
       - playerdata:playerdata
-    depends_on:
-      - rabbitmq
-      - playerdata
     environment:
       - SERVER=EUW1
 
   playerdata:
-    cpus: 1
-    mem_limit: 1g
     container_name: playerdata
     build:
       dockerfile: Dockerfile

@@ -74,7 +74,10 @@ async def call_data(el: dict, session):
     for partial in done:
         matchlist = partial['matches']
         for match in matchlist:
+            if match['platformId'] != server or match['queue'] != 420:
+                continue
             matches.append(match['gameId'])
+
     element['matches'] = matches
     return element
 
@@ -154,7 +157,8 @@ def main():
                             changes.append("summonerName")
                         if prev['tier'] != content['tier'] or \
                                 prev['rank'] != content['rank'] or \
-                                int(prev['leaguePoints']) != content['leaguePoints']:
+                                int(prev['leaguePoints']) != content[
+                            'leaguePoints']:
                             changes.append("ranking")
                         if 0 < games < 10:
                             changes.append("games_small")
