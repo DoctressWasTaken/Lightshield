@@ -14,36 +14,23 @@ class Watchdog:
     def run(self):
         pass
 
-    def build(self, build, name):
-        print(build)
-        path = os.path.join(
-            "sources",
-            build['context'],
-            ""
-        )
-        print(path)
-        return self.client.images.build(
-            path=path,
-            tag=name)
-
     def startup(self):
         services = self.container['services']
         started = []
         del services['manager']
-        while services:
-            for key in services:
-                service = services[key]
-                if "depends_on" in service:
-                    ready = True
-                    dependencies = service["depends_on"]
-                    for dependency in dependencies:
-                        if dependency not in started:
-                            ready = False
-                            break
-                    if  not ready:
-                        continue
-                if "build" in service:
-                    print(self.build(service["build"], key))
+        to_start = services.keys()
+        print(to_start)
+        c = self.client.containers.run(
+            'riotapi_db_worker',
+            detach=True,
+            remove=False,
+            name="EUW1_db_worker",
+            environment={'SERVER': 'EUW1'})
+        print(c)
+        for i in range(10):
+            print(c.status)
+            time.sleep(5)
+        c.stop()
 
 
 def main():
