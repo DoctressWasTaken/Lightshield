@@ -78,7 +78,7 @@ async def call_data(el: dict, session):
                 continue
             matches.append(match['gameId'])
 
-    element['matches'] = matches
+    element['matches'] = list(set(matches))
     return element
 
 
