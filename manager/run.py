@@ -1,46 +1,51 @@
+import signal
+
 import docker
 import time
 import yaml
 import os
+import json
+from container import Container
 
-class Watchdog:
+config = json.loads(open("config.json").read())
 
-    def __init__(self):
-        self.client = docker.from_env()
-        with open('container.yaml', 'r') as stream:
-            self.container = yaml.safe_load(stream)
+api_key = json.loads(open("secrets.json").read())['API_KEY']
 
+from server import ServerManager
 
-    def run(self):
-        pass
-
-    def startup(self):
-        services = self.container['services']
-        started = []
-        del services['manager']
-        to_start = services.keys()
-        print(to_start)
-        c = self.client.containers.run(
-            'riotapi_db_worker',
-            detach=True,
-            remove=False,
-            name="EUW1_db_worker",
-            environment={'SERVER': 'EUW1'})
-        print(c)
-        for i in range(10):
-            print(c.status)
-            time.sleep(5)
-        c.stop()
-
+def end_handler(sig, frame):
+    """Translate the docker stop signal SIGTERM to KeyboardInterrupt."""
+    raise KeyboardInterrupt
 
 def main():
+    # Startup Process - General
+    client = docker.from_env()
+    postgres = Container(
+        client,
+        'riotapi_postgres',
+        **config["server"]['riotapi_postgres']
+    )
+    postgres.startup(wait_for="0.0.0.0:5432")
+    rabbitmq = Container(
+        client,
+        'riotapi_rabbitmq',
+        **config["server"]['riotapi_rabbitmq'])
+    rabbitmq.startup(wait_for="0.0.0.0:5672")
 
-    # Init Watchdog
-    w = Watchdog()
-    w.startup()
-    # init rabbitmq tracking
-    time.sleep(15)
-    # init db tracking
+    # Startup Process - Depending on Config
+    euw = ServerManager("EUW1", client, rabbitmq, api_key)
+    euw.start()
+
+    # Permanent loop
+    try:
+        signal.signal(signal.SIGTERM, end_handler)
+        while True:
+            print("running")
+            time.sleep(5)
+    except KeyboardInterrupt:
+        print("Received Keyboard interrupt")
+        euw.stop()
+    euw.join()
 
 
 if __name__ == "__main__":

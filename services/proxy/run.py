@@ -18,11 +18,13 @@ logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
 if "SERVER" not in os.environ:
     logging.info("No SERVER env variable provided. Exiting.")
     exit()
+if "API_KEY" not in os.environ:
+    logging.info("No API_KEY env variable provided. Exiting.")
+    exit()
 
-config = json.loads(open("config.json").read())
 server = os.environ["SERVER"]
+headers = {'X-Riot-Token': os.environ['API_KEY']}
 
-headers = {'X-Riot-Token': config['API_KEY']}
 base_url = f"https://{server}.api.riotgames.com/lol"
 count = 0
 

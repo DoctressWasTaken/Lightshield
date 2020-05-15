@@ -15,7 +15,7 @@ from setuptools import setup, find_packages
 
 def open_local(filename):  # pragma: no cover
     """Open a file in this directory."""
-    heredir = os.path.abspath(".")
+    heredir = os.path.abspath("")
     return open(os.path.join(heredir, filename), 'r')
 
 

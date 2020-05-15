@@ -8,152 +8,71 @@ services:
       dockerfile: Dockerfile
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./secrets.json:/project/secrets.json
+
 
   rabbitmq:
-    cpus: 1
-    cpu_shares: 2
-    mem_limit: 2g
-    container_name: rabbitmq
-    hostname: hedgehog
-    image: launcher.gcr.io/google/rabbitmq3
-    volumes:
-      - rabbitmq:/var/lib/rabbitmq/
+    build:
+      context: rabbitmq
+      dockerfile: Dockerfile
 
   proxy:
-    cpus: 0.5
-    mem_limit: 1g
-    container_name: proxy
     build:
       dockerfile: Dockerfile
-      context: proxy
-    volumes:
-        - ./config.json:/project/config.json
-    environment:
-      - SERVER=EUW1
-    restart: always
+      context: services/proxy
 
   league_updater:
-    cpus: 0.2
-    mem_limit: 100m
-    container_name: league_updater
     build:
       dockerfile: Dockerfile
-      context: league_updater
-    links:
-      - rabbitmq:rabbitmq
-      - proxy:proxy
-    depends_on:
-      - rabbitmq
-    restart: always
-    environment:
-      - SERVER=EUW1
+      context: services/league_updater
+
 
   summoner_id_updater:
-    cpus: 0.2
-    mem_limit: 100m
-    container_name: summoner_id_updater
     build:
       dockerfile: Dockerfile
-      context: summoner_id_updater
-    links:
-      - proxy:proxy
-      - redis_summoner_id:redis
-    restart: always
-    depends_on:
-        - proxy
-        - redis_summoner_id
-        - rabbitmq
-    environment:
-      - SERVER=EUW1
+      context: services/summoner_id_updater
+
 
   redis_summoner_id:
-    cpus: 0.1
-    mem_limit: 200m
-    container_name: redis_summoner_id
-    image: redis
-    volumes:
-      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
-      - redis_summoner:/data/
+    build:
+      context: databases/redis
+      dockerfile: Dockerfile
+
 
   match_history_updater:
-    cpus: 0.2
-    mem_limit: 100m
-    container_name: match_history_updater
     build:
       dockerfile: Dockerfile
-      context: match_history_updater
-    links:
-      - redis_match_history:redis
-      - proxy:proxy
-    depends_on:
-      - rabbitmq
-      - redis_match_history
-      - proxy
-    restart: always
-    environment:
-      - SERVER=EUW1
+      context: services/match_history_updater
 
   redis_match_history:
-    cpus: 0.1
-    mem_limit: 200m
-    container_name: redis_match_history
-    image: redis
-    volumes:
-      - ./databases/redis/redis.conf:/usr/local/etc/redis/redis.conf
-      - redis_match_history:/data/
+    build:
+      context: databases/redis
+      dockerfile: Dockerfile
 
   match_updater:
-    cpus: 0.2
-    mem_limit: 100m
-    container_name: match_updater
     build:
       dockerfile: Dockerfile
-      context: match_updater
-    links:
-      - redis_match:redis
-      - proxy:proxy
-    restart: always
-    depends_on:
-      - proxy
-      - rabbitmq
-      - redis_match
-    environment:
-      - SERVER=EUW1
+      context: services/match_updater
 
   redis_match:
-    cpus: 0.1
-    mem_limit: 200m
-    container_name: redis_match
-    image: redis
-    volumes:
-      - ./databases/redis/redis.conf:/usr/local/etc/redis/redis.conf
-      - redis_match:/data/
-
+    build:
+      context: databases/redis
+      dockerfile: Dockerfile
 
   db_worker:
-    cpus: 0.2
-    mem_limit: 100m
-    container_name: db_worker
     build:
       dockerfile: Dockerfile
-      context: db_worker/
-    links:
-      - playerdata:playerdata
-    depends_on:
-      - rabbitmq
-      - playerdata
-    environment:
-      - SERVER=EUW1
+      context: services/db_worker/
 
-  playerdata:
+  postgres:
     cpus: 1
     mem_limit: 1g
-    container_name: playerdata
+    container_name: riotapi_postgres
     build:
       dockerfile: Dockerfile
       context: databases/postgres/
     volumes:
-      - playerdata:/var/lib/postgresql/data
+      - postgres:/var/lib/postgresql/data
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
     ports:

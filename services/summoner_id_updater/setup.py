@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
-"""League Updater Module.
+"""SummonerID Updater Module.
 
-Periodically pulls all ranked user from the API.
+Updates the initially pulled user by extending them  with SummonerID and
+PuuID
 
 :copyright: (c) 2020, see LICENSE
 :license: Apache 2.0, see LICENSE
@@ -15,7 +16,7 @@ from setuptools import setup, find_packages
 
 def open_local(filename):  # pragma: no cover
     """Open a file in this directory."""
-    heredir = os.path.abspath(".")
+    heredir = os.path.abspath("")
     return open(os.path.join(heredir, filename), 'r')
 
 
@@ -29,8 +30,8 @@ def read_requires(filename):  # pragma: no cover
 if __name__ == "__main__":  # pragma: no cover
     install_requires = read_requires('requirements.txt')
     setup(
-        name="League Updater Module",
-        description="Periodically pulls all ranked user from the API.",
+        name="SummonerID Updater Module",
+        description="Update existing user and pull SummonerID & PuuID",
         version='0.0.1',
         packages=find_packages(),
         install_requires=install_requires
