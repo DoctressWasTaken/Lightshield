@@ -7,9 +7,10 @@ RUN python -m pip install --upgrade pip
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 # Main Application
+COPY templates.py .
 COPY run.py .
-
-RUN ls
+COPY summoner.py .
+COPY match.py .
 
 CMD python -u run.py
 #CMD ["python", "-u", "run.py"]
