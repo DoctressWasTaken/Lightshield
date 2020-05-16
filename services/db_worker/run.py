@@ -94,7 +94,7 @@ class UpdateSummoner(WorkerClass):
             lines.append(line)
             print(f"Inserting {len(line)} lines.")
         with psycopg2.connect(
-                host='playerdata',
+                host='postgres',
                 user='db_worker',
                 dbname=f'data_{server.lower()}') as connection:
             cur = connection.cursor()
@@ -204,7 +204,7 @@ class InsertMatch(WorkerClass):
             )
             lines.append(line)
         with psycopg2.connect(
-                host='playerdata',
+                host='postgres',
                 user='db_worker',
                 dbname=f'data_{server.lower()}') as connection:
             cur = connection.cursor()
