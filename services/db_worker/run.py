@@ -1,7 +1,7 @@
 import os
 import time
-from .summoner import UpdateSummoner
-from .match import InsertMatch
+from summoner import UpdateSummoner
+from match import InsertMatch
 
 if 'SERVER' not in os.environ:
     print("No server provided, exiting.")
@@ -16,10 +16,10 @@ def main():
     calls requests in async method and uses the returned values to update.
     """
     # Pull data package
-    summoner_updater = UpdateSummoner(server)
+    summoner_updater = UpdateSummoner(server=server)
     summoner_updater.start()
 
-    match_inserter = InsertMatch(server)
+    match_inserter = InsertMatch(server=server)
     match_inserter.start()
 
     try:

@@ -3,11 +3,13 @@ import time
 import logging
 
 import pika
+import psycopg2
 
-from .templates import WorkerClass
+from templates import WorkerClass
 
-logging.basicConfig(format='%(asctime)s [SUMMONER] %(message)s',
-                    level=logging.INFO)
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+log.setFormatter(logging.Formatter('%(asctime)s [SUMMONER] %(message)s'))
 
 map_tiers = {
     'IRON': 0,
@@ -79,7 +81,7 @@ class UpdateSummoner(WorkerClass):
                 data['losses']
             )
             lines.append(line)
-            logging.info(f"Inserting {len(line)} lines.")
+            log.info(f"Inserting {len(line)} lines.")
         with psycopg2.connect(
                 host='postgres',
                 user='db_worker',
@@ -108,7 +110,7 @@ class UpdateSummoner(WorkerClass):
                 delivery_tag=task[0].delivery_tag)
 
     def run(self):
-        logging.info("Initiated.")
+        log.info("Initiated.")
         while not self._is_interrupted:  # Try loop
             try:
                 with pika.BlockingConnection(
@@ -126,7 +128,7 @@ class UpdateSummoner(WorkerClass):
                     while not self._is_interrupted:  # Work loop
                         tasks = self.get_tasks(channel)
                         if len(tasks) == 0:
-                            logging.info("No tasks, sleeping")
+                            log.info("No tasks, sleeping")
                             time.sleep(5)
                             continue
                         self.insert(tasks)
@@ -135,8 +137,8 @@ class UpdateSummoner(WorkerClass):
 
             except RuntimeError:
                 # Raised when rabbitmq cant connect
-                logging.info("Failed to reach rabbitmq")
+                log.info("Failed to reach rabbitmq")
                 time.sleep(1)
             except Exception as err:
-                logging.info(f"Got {err}.")
+                log.info(f"Got {err}.")
                 time.sleep(1)
