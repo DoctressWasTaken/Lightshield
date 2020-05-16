@@ -1,5 +1,6 @@
 import signal
-
+import asyncio
+from websocket_worker import Worker
 import docker
 import time
 import yaml
@@ -9,7 +10,7 @@ from container import Container
 
 config = json.loads(open("config.json").read())
 
-api_key = json.loads(open("secrets.json").read())['API_KEY']
+os.environ['API_KEY'] = json.loads(open("secrets.json").read())['API_KEY']
 
 from server import ServerManager
 
@@ -37,17 +38,19 @@ def main():
     # Startup Process - Depending on Config
     server_threads = {}
     for server in config['server']:
-        print(server, config['server'][server])
+        print(server, "\t", config['server'][server])
         if config['server'][server]:
             server_threads[server] = ServerManager(server, client, rabbitmq,
-                                                   api_key, config)
+                                                   postgres, config)
+            server_threads[server].startup()
             server_threads[server].start()
 
     # Permanent loop
     try:
         signal.signal(signal.SIGTERM, end_handler)
-        while True:
-            time.sleep(5)
+        w = Worker(server_threads, rabbitmq, postgres)
+        asyncio.run(w.start())
+
     except KeyboardInterrupt:
         print("Received Keyboard interrupt")
         for thread in server_threads:

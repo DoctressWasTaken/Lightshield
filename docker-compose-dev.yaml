@@ -10,7 +10,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./secrets.json:/project/secrets.json
       - ./manager/config.json:/project/config.json
-
+    ports:
+      - 8765:8765
 
   rabbitmq:
     build:
