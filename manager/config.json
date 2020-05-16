@@ -1,0 +1,125 @@
+{
+  "container": {
+    "riotapi_rabbitmq": {
+      "name": "riotapi_rabbitmq",
+      "hostname": "rabbitmq",
+      "cpu_percent": 200,
+      "mem_limit": "2g",
+      "volumes": ["riotapi_rabbitmq:/var/lib/rabbitmq/"],
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_proxy": {
+      "name": "riotapi_proxy",
+      "cpu_percent": 50,
+      "mem_limit": "1g",
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_league_updater": {
+      "name": "riotapi_league_updater",
+      "cpu_percent": 20,
+      "mem_limit": "100mb",
+      "links": {
+        "riotapi_rabbitmq": "rabbitmq",
+        "{server}_riotapi_proxy": "proxy"
+      },
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_summoner_id_updater": {
+      "name": "riotapi_summoner_id_updater",
+      "cpu_percent": 20,
+      "mem_limit": "100m",
+      "links": {
+        "riotapi_rabbitmq": "rabbitmq",
+        "{server}_riotapi_proxy": "proxy",
+        "{server}_riotapi_redis_summoner_id": "redis"
+      },
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_match_history_updater": {
+      "name": "riotapi_match_history_updater",
+      "cpu_percent": 20,
+      "mem_limit": "100m",
+      "links": {
+        "riotapi_rabbitmq": "rabbitmq",
+        "{server}_riotapi_proxy": "proxy",
+        "{server}_riotapi_redis_match_history": "redis"
+      },
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_match_updater": {
+      "name": "riotapi_match_updater",
+      "cpu_percent": 20,
+      "mem_limit": "100m",
+      "links": {
+        "riotapi_rabbitmq": "rabbitmq",
+        "{server}_riotapi_proxy": "proxy",
+        "{server}_riotapi_redis_match": "redis"
+      },
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_db_worker": {
+      "name": "riotapi_db_worker",
+      "cpu_percent": 20,
+      "mem_limit": "100m",
+      "links": {
+        "riotapi_rabbitmq": "rabbitmq",
+        "riotapi_postgres": "postgres"
+      },
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_redis_summoner_id": {
+      "name": "riotapi_redis_summoner_id",
+      "cpu_percent": 10,
+      "mem_limit": "200m",
+      "volumes": ["{server}_redis_summoner_id:/data/"],
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_redis_match_history": {
+      "name": "riotapi_redis_match_history",
+      "cpu_percent": 10,
+      "mem_limit": "200m",
+      "volumes": ["{server}_redis_match_history:/data/"],
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_redis_match": {
+      "name": "riotapi_redis_match",
+      "cpu_percent": 10,
+      "mem_limit": "200m",
+      "volumes": ["{server}_redis_match:/data/"],
+      "restart_policy": {
+        "Name": "always"
+      }
+    },
+    "riotapi_postgres": {
+      "name": "riotapi_postgres",
+      "cpu_percent": 100,
+      "mem_limit": "1g",
+      "volumes": ["riotapi_postgres:/var/lib/postgresql/data"],
+      "environment": {"POSTGRES_HOST_AUTH_METHOD": "trust"}
+    }
+  },
+  "server": ["EUW1"],
+  "cutoffs": {
+    "league_updater": [2000, 500],
+    "summoner_id_updater": [2000, 500],
+    "match_history_updater": [5000, 1000]
+  }
+}
