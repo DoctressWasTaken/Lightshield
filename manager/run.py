@@ -37,6 +37,7 @@ def main():
     # Startup Process - Depending on Config
     server_threads = {}
     for server in config['server']:
+        print(server, config['server'][server])
         if config['server'][server]:
             server_threads[server] = ServerManager(server, client, rabbitmq,
                                                    api_key, config)
@@ -50,9 +51,9 @@ def main():
     except KeyboardInterrupt:
         print("Received Keyboard interrupt")
         for thread in server_threads:
-            thread.stop()
+            server_threads[thread].stop()
     for thread in server_threads:
-        thread.join()
+        server_threads[thread].join()
 
 
 if __name__ == "__main__":

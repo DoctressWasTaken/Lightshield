@@ -1,4 +1,4 @@
-\connect data_eun1;
+\connect data_eune1;
 
 CREATE TABLE IF NOT EXISTS player (
     summonerName VARCHAR(30),

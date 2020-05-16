@@ -10,4 +10,4 @@ brd:
 
 manager-run:
 	docker-compose -f docker-compose-dev.yaml -p riotapi build --parallel
-	docker-compose -f docker-compose-dev.yaml up -t 180 manager
+	docker-compose -f docker-compose-dev.yaml -p riotapi up -t 180 manager
