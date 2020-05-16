@@ -5,7 +5,9 @@
       "hostname": "rabbitmq",
       "cpu_percent": 200,
       "mem_limit": "2g",
-      "volumes": ["riotapi_rabbitmq:/var/lib/rabbitmq/"],
+      "volumes": [
+        "riotapi_rabbitmq:/var/lib/rabbitmq/"
+      ],
       "restart_policy": {
         "Name": "always"
       }
@@ -85,7 +87,9 @@
       "name": "riotapi_redis_summoner_id",
       "cpu_percent": 10,
       "mem_limit": "200m",
-      "volumes": ["{server}_redis_summoner_id:/data/"],
+      "volumes": [
+        "{server}_redis_summoner_id:/data/"
+      ],
       "restart_policy": {
         "Name": "always"
       }
@@ -94,7 +98,9 @@
       "name": "riotapi_redis_match_history",
       "cpu_percent": 10,
       "mem_limit": "200m",
-      "volumes": ["{server}_redis_match_history:/data/"],
+      "volumes": [
+        "{server}_redis_match_history:/data/"
+      ],
       "restart_policy": {
         "Name": "always"
       }
@@ -103,7 +109,9 @@
       "name": "riotapi_redis_match",
       "cpu_percent": 10,
       "mem_limit": "200m",
-      "volumes": ["{server}_redis_match:/data/"],
+      "volumes": [
+        "{server}_redis_match:/data/"
+      ],
       "restart_policy": {
         "Name": "always"
       }
@@ -112,14 +120,39 @@
       "name": "riotapi_postgres",
       "cpu_percent": 100,
       "mem_limit": "1g",
-      "volumes": ["riotapi_postgres:/var/lib/postgresql/data"],
-      "environment": {"POSTGRES_HOST_AUTH_METHOD": "trust"}
+      "volumes": [
+        "riotapi_postgres:/var/lib/postgresql/data"
+      ],
+      "environment": {
+        "POSTGRES_HOST_AUTH_METHOD": "trust"
+      }
     }
   },
-  "server": ["EUW1"],
+  "server": {
+    "BR": false,
+    "EUNE1": false,
+    "EUW1": true,
+    "JP1": false,
+    "KR": false,
+    "LA1": false,
+    "LA2": false,
+    "NA1": false,
+    "OC1": false,
+    "TR1": false,
+    "RU": false
+  },
   "cutoffs": {
-    "league_updater": [2000, 500],
-    "summoner_id_updater": [2000, 500],
-    "match_history_updater": [5000, 1000]
+    "league_updater": [
+      2000,
+      500
+    ],
+    "summoner_id_updater": [
+      2000,
+      500
+    ],
+    "match_history_updater": [
+      5000,
+      1000
+    ]
   }
 }

@@ -1,36 +1,28 @@
 CREATE USER db_worker WITH LOGIN;
+
+CREATE DATABASE data_BR WITH OWNER db_worker;
+CREATE DATABASE data_EUNE1 WITH OWNER db_worker;
 CREATE DATABASE data_EUW1 WITH OWNER db_worker;
+CREATE DATABASE data_JP1 WITH OWNER db_worker;
+CREATE DATABASE data_KR WITH OWNER db_worker;
+CREATE DATABASE data_LA1 WITH OWNER db_worker;
+CREATE DATABASE data_LA2 WITH OWNER db_worker;
+CREATE DATABASE data_NA1 WITH OWNER db_worker;
+CREATE DATABASE data_OC1 WITH OWNER db_worker;
+CREATE DATABASE data_TR1 WITH OWNER db_worker;
+CREATE DATABASE data_RU WITH OWNER db_worker;
 
+
+GRANT ALL PRIVILEGES ON  DATABASE data_BR TO db_worker;
+GRANT ALL PRIVILEGES ON  DATABASE data_EUNE1 TO db_worker;
 GRANT ALL PRIVILEGES ON  DATABASE data_EUW1 TO db_worker;
+GRANT ALL PRIVILEGES ON  DATABASE data_JP1 TO db_worker;
+GRANT ALL PRIVILEGES ON  DATABASE data_KR TO db_worker;
+GRANT ALL PRIVILEGES ON  DATABASE data_LA1 TO db_worker;
+GRANT ALL PRIVILEGES ON  DATABASE data_LA2 TO db_worker;
+GRANT ALL PRIVILEGES ON  DATABASE data_NA1 TO db_worker;
+GRANT ALL PRIVILEGES ON  DATABASE data_OC1 TO db_worker;
+GRANT ALL PRIVILEGES ON  DATABASE data_TR1 TO db_worker;
+GRANT ALL PRIVILEGES ON  DATABASE data_RU  TO db_worker;
 
-\connect data_euw1;
 
-CREATE TABLE IF NOT EXISTS player (
-    summonerName VARCHAR(30),
-    summonerId VARCHAR(50) PRIMARY KEY,
-    accountId VARCHAR(56),
-    puuid VARCHAR(78),
-    ranking INTEGER,
-    tier INTEGER,
-    series VARCHAR(4),
-    wins INTEGER,
-    losses INTEGER
-);
-CREATE TABLE matchdto (
-
-    matchId BIGINT PRIMARY KEY,
-    participantIdentities json,
-    queue INT,
-    gameType INT, --Converting the text to number cause too long
-    gameDuration INT,
-    teams json,
-    platformId VARCHAR(4),
-    gameCreation BIGINT,
-    seasonId INT,
-    gameVersion VARCHAR(20),
-    mapId INT,
-    gameMode VARCHAR(15),
-    participants json
-);
-
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO db_worker;
