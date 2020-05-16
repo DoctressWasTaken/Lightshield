@@ -46,12 +46,15 @@ class UpdateSummoner(WorkerClass):
     def get_tasks(self, channel):
         """Get tasks from rabbitmq."""
         tasks = []
-        while len(tasks) < 250:
+        while len(tasks) < 750:
             message = channel.basic_get(
                 queue=f'DB_SUMMONER_IN_{self.server}'
             )
             if all(x is None for x in message):
-                break
+                if len(tasks) > 250:
+                    break
+                time.sleep(1)
+
             tasks.append(message)
         return tasks
 
