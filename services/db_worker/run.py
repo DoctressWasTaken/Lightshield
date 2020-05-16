@@ -1,5 +1,14 @@
 import os
 import time
+import logging
+
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+ch.setFormatter(logging.Formatter('%(asctime)s [RUN] %(message)s'))
+log.addHandler(ch)
+
 from summoner import UpdateSummoner
 from match import InsertMatch
 
@@ -21,19 +30,18 @@ def main():
 
     match_inserter = InsertMatch(server=server)
     match_inserter.start()
-
     try:
         while True:
             time.sleep(5)
             if not summoner_updater.is_alive():
-                print("Summoner Updater Thread died. Restarting.")
+                log.error("Summoner Updater Thread died. Restarting.")
                 summoner_updater.start()
             if not match_inserter.is_alive():
-                print("Match Inserter Thread dead. Restarting.")
+                log.error("Match Inserter Thread dead. Restarting.")
                 match_inserter.start()
 
     except KeyboardInterrupt:
-        print("Gracefully shutting down.")
+        log.info("Gracefully shutting down.")
         summoner_updater.stop()
         match_inserter.stop()
 

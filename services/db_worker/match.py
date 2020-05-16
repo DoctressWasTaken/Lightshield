@@ -8,6 +8,7 @@ import psycopg2
 from templates import WorkerClass
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 ch.setFormatter(logging.Formatter('%(asctime)s [MATCH] %(message)s'))
