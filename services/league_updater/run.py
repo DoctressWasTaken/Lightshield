@@ -156,20 +156,7 @@ def server_updater():
                         exchange=f'LEAGUE_OUT_{server}',
                         queue=queue.method.queue,
                         routing_key=f'SUMMONER_V1')
-
-                    print(queue.method.message_count)
                     sleep = 1
-                    if queue.method.message_count > 1500:
-                        print("There's too many messages in the queue,"
-                              " waiting.")
-                    while queue.method.message_count > 1500:
-                        time.sleep(sleep)
-                        if sleep < 5:
-                            sleep += 1
-                        queue = channel.queue_declare(
-                            queue=f'SUMMONER_ID_IN_{server}',
-                            durable=True,
-                            passive=True)
 
                     while failed_pages and len(tasks) < 5:
                         page = failed_pages.pop()
