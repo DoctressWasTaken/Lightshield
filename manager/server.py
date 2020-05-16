@@ -1,18 +1,22 @@
 import threading
 import time
+import json
 
 from container import Container
 
 
 class ServerManager(threading.Thread):
 
-    def __init__(self, server, dockerclient, rabbitmq, api_key):
+    def __init__(self, server, dockerclient, rabbitmq, api_key,
+                 config):
         """Initiate relevant variables."""
         super().__init__()
         self._is_interrupted = False
         self.server = server
         self.api_key = api_key
         self.client = dockerclient
+        self.container_data = config['container']
+        self.cutoffs = config['cutoffs']
         self.container = {'rabbitmq': rabbitmq}
 
     def __str__(self):
@@ -29,53 +33,76 @@ class ServerManager(threading.Thread):
         self.container['proxy'] = Container(
             self.client,
             "riotapi_proxy",
-            name=self.server + "_proxy",
-            environment={
-                "API_KEY": self.api_key,
-                "SERVER": self.server})
+            server=self.server,
+            api_key=self.api_key,
+            **self.container_data['riotapi_proxy'])
         self.container['proxy'].startup(wait_for="0.0.0.0:8000")
 
         self.container['redis_summoner_id'] = Container(
             self.client,
             "riotapi_redis_summoner_id",
-            name=self.server + "_redis_summoner_id",
-            volumes=["redis_summoner:/data/"])
+            server=self.server,
+            **self.container_data['riotapi_redis_summoner_id'])
         self.container['redis_summoner_id'].startup()
-        print("Started Redis for Summoner IDs")
 
-        redis_match_history = Container(
+        self.container['redis_match_history'] = Container(
             self.client,
             "riotapi_redis_match_history",
-            name=self.server + "_redis_match_history",
-            volumes=["redis_summoner:/data/"])
-        redis_match_history.startup()
-        print("Started Redis for Match Histories")
+            server=self.server,
+            **self.container_data['riotapi_redis_match_history'])
+        self.container['redis_match_history'].startup(wait=1)
 
-        redis_match = Container(
+        self.container['redis_match'] = Container(
             self.client,
             "riotapi_redis_match",
-            name=self.server + "_redis_match",
-            volumes=["redis_summoner:/data/"])
-        redis_match.startup()
-        print("Started Redis for Matches")
+            server=self.server,
+            **self.container_data['riotapi_redis_match'])
+        self.container['redis_match'].startup(wait=1)
         # initiate all services backwards
-        time.sleep(5)
+        time.sleep(1)
 
-        db_worker = Container(
+        self.container['db_worker'] = Container(
             self.client,
             "riotapi_db_worker",
-            name=self.server + "_db_worker",
-            links={
-                "riotapi_postgres": "postgres",
-                "riotapi_rabbitmq": "rabbitmq"},
-            environment={"SERVER": "EUW1"}
-        )
-        db_worker.startup()
-        while not self._is_interrupted:
-            print("Waiting")
-            time.sleep(1)
-        print("Shutting down")
+            server=self.server,
+            **self.container_data['riotapi_db_worker'])
+        self.container['db_worker'].startup(wait=1)
 
+        self.container['match_updater'] = Container(
+            self.client,
+            "riotapi_match_updater",
+            server=self.server,
+            **self.container_data["riotapi_match_updater"])
+        self.container['match_updater'].startup()
+
+        self.container['match_history_updater'] = Container(
+            self.client,
+            "riotapi_match_history_updater",
+            server=self.server,
+            **self.container_data["riotapi_match_history_updater"])
+        self.container['match_history_updater'].startup()
+
+        self.container['summoner_id_updater'] = Container(
+            self.client,
+            "riotapi_summoner_id_updater",
+            server=self.server,
+            **self.container_data["riotapi_summoner_id_updater"])
+        self.container['summoner_id_updater'].startup()
+
+        self.container['league_updater'] = Container(
+            self.client,
+            "riotapi_league_updater",
+            server=self.server,
+            **self.container_data["riotapi_league_updater"])
+        self.container['league_updater'].startup()
+
+    def _shutdown(self):
+        """Shut down all container running."""
+        for container in self.container:
+            if container == "rabbitmq":
+                continue
+            self.container[container].stop()
+            print("Shut down", container)
 
     def stop(self):
         """Set the thread to stop gracefully."""
@@ -85,3 +112,38 @@ class ServerManager(threading.Thread):
         """Run method initiating tasks."""
 
         self._startup()
+
+        while not self._is_interrupted:
+            # get messages
+            messages = self.container['rabbitmq'].cmd(
+                'rabbitmqctl list_queues  --formatter json'
+            )
+            status = json.loads(
+                messages.output.decode('utf-8').replace("\n", ""))
+            for queue in status:
+                if queue['name'] == "SUMMONER_ID_IN_" + self.server:
+                    if queue['messages'] < self.cutoffs['league_updater'][0]:
+                        self.container['league_updater'].unpause()
+                    elif queue['messages'] > self.cutoffs['league_updater'][1]:
+                        self.container['league_updater'].pause()
+
+                elif queue['name'] == "DB_MATCH_HISTORY_IN_" + self.server:
+                    if queue['messages'] < \
+                            self.cutoffs['summoner_id_updater'][0]:
+                        self.container['summoner_id_updater'].unpause()
+                    elif queue['messages'] > \
+                            self.cutoffs['summoner_id_updater'][1]:
+                        self.container['summoner_id_updater'].pause()
+
+                elif queue['name'] == "MATCH_IN_" + self.server:
+                    if queue['messages'] < \
+                            self.cutoffs['match_history_updater'][0]:
+                        self.container['match_history_updater'].unpause()
+                    elif queue['messages'] > \
+                            self.cutoffs['match_history_updater'][1]:
+                        self.container['match_history_updater'].pause()
+
+            time.sleep(5)
+
+        self._shutdown()
+        print("Exiting", self.server)

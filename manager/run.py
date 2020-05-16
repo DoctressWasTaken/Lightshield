@@ -23,24 +23,23 @@ def main():
     postgres = Container(
         client,
         'riotapi_postgres',
-        **config["server"]['riotapi_postgres']
+        **config["container"]['riotapi_postgres']
     )
     postgres.startup(wait_for="0.0.0.0:5432")
     rabbitmq = Container(
         client,
         'riotapi_rabbitmq',
-        **config["server"]['riotapi_rabbitmq'])
+        **config["container"]['riotapi_rabbitmq'])
     rabbitmq.startup(wait_for="0.0.0.0:5672")
 
     # Startup Process - Depending on Config
-    euw = ServerManager("EUW1", client, rabbitmq, api_key)
+    euw = ServerManager("EUW1", client, rabbitmq, api_key, config)
     euw.start()
 
     # Permanent loop
     try:
         signal.signal(signal.SIGTERM, end_handler)
         while True:
-            print("running")
             time.sleep(5)
     except KeyboardInterrupt:
         print("Received Keyboard interrupt")
