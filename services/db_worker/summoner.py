@@ -54,6 +54,7 @@ class UpdateSummoner(WorkerClass):
                 if len(tasks) > 250:
                     break
                 time.sleep(1)
+                continue
 
             tasks.append(message)
         return tasks
