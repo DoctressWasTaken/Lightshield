@@ -96,7 +96,7 @@ class Services:
                 elif messages > self.cutoffs['league_updater'][1]:
                     self.container['league_updater'].pause()
 
-            elif name == "DB_MATCH_HISTORY_IN_" + self.server:
+            elif name == "MATCH_HISTORY_IN_" + self.server:
                 if messages < self.cutoffs['summoner_id_updater'][0]:
                     self.container['summoner_id_updater'].unpause()
                 elif messages > self.cutoffs['summoner_id_updater'][1]:
