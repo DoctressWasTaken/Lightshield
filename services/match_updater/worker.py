@@ -46,7 +46,12 @@ class Worker:
     async def retrieve_task(self):
         """Return a task from rabbitmq or empty if none are available."""
         await self.connect_rabbit()
-        return await self.rabbit_queue.get(timeout=1, fail=False)
+        while True:
+            try:
+                return await self.rabbit_queue.get(timeout=1, fail=False)
+            except Exception as err:
+                print(err)
+                await asyncio.sleep(0.5)
 
     async def push_task(self, data):
         """Add a task to the outgoing exchange."""
@@ -120,14 +125,17 @@ class Worker:
                     if status == 428:
                         retry_after = int(data['retry_after'])
                         if not self.api_blocked:
-                            self.api_blocked = retry_after
+                            self.api_blocked = retry_after + 0.5
                     print(f"Got {status} for", matchId)
                     await self.connect_rabbit()
                     msg.reject(requeue=True)
+                    self.active -= 1
                     return
-            except:
+            except Exception as err:
+                print(err)
                 await self.connect_rabbit()
                 msg.reject(requeue=True)
+                self.active -= 1
                 return
 
     async def run(self):
