@@ -17,6 +17,7 @@ class Worker:
         self.redis = None
         self.base_url = "http://proxy:8000/match/v4/matches/%s"
         self.api_blocked = False
+        self.active = 0
 
     ## Rabbitmq
     async def connect_rabbit(self):
@@ -101,6 +102,8 @@ class Worker:
         url = self.base_url % (str(matchId))
         async with aiohttp.ClientSession() as session:
             while True:
+                if self.api_blocked:
+                    await asyncio.sleep(self.api_blocked)
                 try:
                     async with session.get(url) as response:
                         data = await response.json(content_type=None)
@@ -108,16 +111,17 @@ class Worker:
                         headers = response.headers
                         if status == 404:  # Drop non-existent matches
                             await self.process_404(msg, matchId)
+                            self.active -= 1
                             return
                         if status == 428:
                             retry_after = int(headers['retry_after'])
                             if not self.api_blocked:
                                 self.api_blocked = retry_after
-                            await asyncio.sleep(retry_after + 0.5)
                         elif status != 200:
                             await asyncio.sleep(0.5)
                         else:
                             await self.process_200(msg, matchId, data)
+                            self.active -= 1
                             return
                 except:
                     await asyncio.sleep(5)
@@ -127,7 +131,7 @@ class Worker:
         while os.environ['STATUS'] == "RUN":
             tasks = []
             current = []
-            while len(tasks) < 2000 and os.environ['STATUS'] == "RUN":
+            while len(tasks) < 10000 and os.environ['STATUS'] == "RUN":
                 if self.api_blocked:
                     self.api_blocked += 20
                     await asyncio.sleep(self.api_blocked - 20)
@@ -139,10 +143,14 @@ class Worker:
                     continue  # Skip existing matchIds
                 if matchId in current:
                     continue  # Skip currently called matchIds
-                print(matchId)
+                while self.active > 100:
+                    await asyncio.sleep(0.1)
+
                 tasks.append(asyncio.create_task(
                     self.process(msg, matchId)
                 ))
-                await asyncio.sleep(0.01)
-
+                self.active += 1
+                await asyncio.sleep(0.03)
+            print("Awaiting requests")
             await asyncio.gather(*tasks)
+            print("Done")
