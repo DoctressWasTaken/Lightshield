@@ -11,9 +11,10 @@ class Worker:
 
     def __init__(self):
         self.server = server = os.environ['SERVER']
-        self.rabbit_connection = None
+        self.rabbit = None
         self.rabbit_exchange = None
         self.rabbit_queue = None
+        self.redis = None
         self.base_url = "http://proxy:8000/match/v4/matches/%s"
         self.api_blocked = False
 
@@ -21,7 +22,7 @@ class Worker:
     async def connect_rabbit(self):
         """Create a connection to rabbitmq."""
         time = 0.5
-        while not self.rabbit_connection or self.rabbit.is_closed:
+        while not self.rabbit or self.rabbit.is_closed:
             self.rabbit = await aio_pika.connect(
                 'amqp://guest:guest@rabbitmq/')
             channel = await self.rabbit.channel()
@@ -117,6 +118,7 @@ class Worker:
                             await asyncio.sleep(0.5)
                         else:
                             await self.process_200(msg, matchId, data)
+                            return
                 except:
                     await asyncio.sleep(5)
 
@@ -137,6 +139,7 @@ class Worker:
                     continue  # Skip existing matchIds
                 if matchId in current:
                     continue  # Skip currently called matchIds
+                print(matchId)
                 tasks.append(asyncio.create_task(
                     self.process(msg, matchId)
                 ))
