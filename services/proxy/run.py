@@ -28,10 +28,12 @@ headers = {'X-Riot-Token': os.environ['API_KEY']}
 base_url = f"https://{server}.api.riotgames.com/lol"
 count = 0
 
+
 class LimitBlocked(Exception):
 
     def __init__(self, retry_after):
         self.retry_after = retry_after
+
 
 class Limit:
     """Class that creates objects for each limit identified.
