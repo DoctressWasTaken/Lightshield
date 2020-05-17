@@ -93,72 +93,71 @@ class Worker:
         Data is sent further through exchange. The ID is added and the message
         is acknowledged.
         """
-        try:
-            await self.add_element(matchId)
-        except Exception as err:
-            print("process")
-            print(err)
-        try:
-            await self.push_task(data)
-        except:
-            print("2")
+        await self.add_element(matchId)
+        await self.push_task(data)
         await msg.ack()
 
     async def process(self, msg, matchId):
         """Process a message."""
         url = self.base_url % (str(matchId))
         async with aiohttp.ClientSession() as session:
-            while True:
-                if self.api_blocked:
-                    await asyncio.sleep(self.api_blocked)
-                try:
-                    async with session.get(url) as response:
-                        data = await response.json(content_type=None)
-                        status = response.status
-                        headers = response.headers
-                        if status == 404:  # Drop non-existent matches
-                            await self.process_404(msg, matchId)
-                            self.active -= 1
-                            return
-                        if status == 428:
-                            retry_after = int(data['retry_after'])
-                            if not self.api_blocked:
-                                self.api_blocked = retry_after
-                        elif status != 200:
-                            await asyncio.sleep(0.5)
-                        else:
-                            await self.process_200(msg, matchId, data)
-                            self.active -= 1
-                            return
-                except Exception as err:
-                    print(err)
-                    await asyncio.sleep(5)
-                    raise err
+            if self.api_blocked:
+                await asyncio.sleep(self.api_blocked)
+            try:
+                async with session.get(url) as response:
+                    data = await response.json(content_type=None)
+                    status = response.status
+                    headers = response.headers
+                    if status == 404:  # Drop non-existent matches
+                        print("Got 404 for", matchId)
+                        await self.process_404(msg, matchId)
+                        self.active -= 1
+                        return
+                    if status == 200:
+                        await self.process_200(msg, matchId, data)
+                        self.active -= 1
+                        return
+                    if status == 428:
+                        retry_after = int(data['retry_after'])
+                        if not self.api_blocked:
+                            self.api_blocked = retry_after
+                    print(f"Got {status} for", matchId)
+                    await self.connect_rabbit()
+                    msg.reject(requeue=True)
+                    return
+            except:
+                await self.connect_rabbit()
+                msg.reject(requeue=True)
+                return
 
     async def run(self):
         while os.environ['STATUS'] == "RUN":
             tasks = []
             current = []
-            while len(tasks) < 10000 and os.environ['STATUS'] == "RUN":
-                if self.api_blocked:
-                    self.api_blocked += 20
-                    await asyncio.sleep(self.api_blocked - 20)
-                    self.api_blocked = None
+            while len(tasks) < 50000 and os.environ['STATUS'] == "RUN":
 
                 msg = await self.retrieve_task()
+
+                if not msg:
+                    await asyncio.sleep(1)
+                    break
                 matchId = int(msg.body.decode('utf-8'))
                 if await self.check_exists(matchId):
                     continue  # Skip existing matchIds
                 if matchId in current:
                     continue  # Skip currently called matchIds
-                while self.active > 100:
-                    await asyncio.sleep(0.1)
-
+                while self.active > 300:
+                    print("Its on max")
+                    await asyncio.sleep(0.5)
+                if self.api_blocked:
+                    print("Api blocked for", self.api_blocked)
+                    await asyncio.sleep(self.api_blocked)
+                    self.api_blocked = None
                 tasks.append(asyncio.create_task(
                     self.process(msg, matchId)
                 ))
                 self.active += 1
-                await asyncio.sleep(0.03)
+                await asyncio.sleep(0.01)
             print("Awaiting requests")
             await asyncio.gather(*tasks)
             print("Done")
