@@ -52,7 +52,7 @@ class Worker:
         """Add a task to the outgoing exchange."""
         await self.connect_rabbit()
         await self.rabbit_exchange.publish(
-            Message(json.dumps(data)), 'MATCH')
+            Message(bytes(json.dumps(data), 'utf-8')), 'MATCH')
 
     ## Redis
     async def connect_redis(self):
@@ -93,8 +93,15 @@ class Worker:
         Data is sent further through exchange. The ID is added and the message
         is acknowledged.
         """
-        await self.add_element(matchId)
-        await self.push_task(data)
+        try:
+            await self.add_element(matchId)
+        except Exception as err:
+            print("process")
+            print(err)
+        try:
+            await self.push_task(data)
+        except:
+            print("2")
         await msg.ack()
 
     async def process(self, msg, matchId):
@@ -114,7 +121,7 @@ class Worker:
                             self.active -= 1
                             return
                         if status == 428:
-                            retry_after = int(headers['retry_after'])
+                            retry_after = int(data['retry_after'])
                             if not self.api_blocked:
                                 self.api_blocked = retry_after
                         elif status != 200:
@@ -123,11 +130,12 @@ class Worker:
                             await self.process_200(msg, matchId, data)
                             self.active -= 1
                             return
-                except:
+                except Exception as err:
+                    print(err)
                     await asyncio.sleep(5)
+                    raise err
 
     async def run(self):
-
         while os.environ['STATUS'] == "RUN":
             tasks = []
             current = []
