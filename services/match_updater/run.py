@@ -3,22 +3,15 @@
 import asyncio
 import uvloop
 import signal
-import aiohttp
-import json
 import os
-import time
-import pika
-from aiohttp.client_exceptions import ClientConnectorError
 
 if "SERVER" not in os.environ:
     print("No SERVER env variable provided. exiting")
     exit()
 
 os.environ['STATUS'] = "RUN"
-# matchId
-base_url = f"http://proxy:8000/match/v4/matches/%s"
 
-from worker import Worker
+from worker import Master
 
 def end_handler(sig, frame):
 
@@ -33,9 +26,8 @@ async def main():
     calls requests in async method and uses the returned values to update.
     """
     # Pull data package
-    w = Worker()
-    await w.connect_rabbit()
-    await w.run()
+    m = Master()
+    await m.run()
 
 
 if __name__ == "__main__":

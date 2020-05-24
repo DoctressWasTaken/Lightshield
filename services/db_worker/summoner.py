@@ -88,7 +88,7 @@ class UpdateSummoner(WorkerClass):
                 data['losses']
             )
             lines.append(line)
-            log.info(f"Inserting {len(line)} lines.")
+        log.info(f"Inserting {len(lines)} lines.")
         with psycopg2.connect(
                 host='postgres',
                 user='db_worker',

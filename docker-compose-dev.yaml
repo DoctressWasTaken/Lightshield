@@ -17,23 +17,34 @@ services:
     build:
       context: rabbitmq
       dockerfile: Dockerfile
+    hostname: rabbitmq
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+
 
   proxy:
     build:
       dockerfile: Dockerfile
-      context: services/proxy
+      context: services/proxy_2
+    environment:
+      - SERVER=EUW1
 
   league_updater:
     build:
       dockerfile: Dockerfile
       context: services/league_updater
+    environment:
+      - SERVER=EUW1
 
 
   summoner_id_updater:
     build:
       dockerfile: Dockerfile
       context: services/summoner_id_updater
-
+    environment:
+      - SERVER=EUW1
+    links:
+      - redis_summoner_id:redis
 
   redis_summoner_id:
     build:
@@ -45,6 +56,10 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_history_updater
+    environment:
+      - SERVER=EUW1
+    links:
+      - redis_match_history:redis
 
   redis_match_history:
     build:
@@ -55,6 +70,10 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_updater
+    environment:
+      - SERVER=EUW1
+    links:
+      - redis_match:redis
 
   redis_match:
     build:
@@ -65,6 +84,10 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/db_worker/
+    environment:
+      - SERVER=EUW1
+    links:
+      - postgres:postres
 
   postgres:
     cpus: 1

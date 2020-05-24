@@ -2,12 +2,12 @@ import aio_pika
 import asyncio
 import os
 import aioredis
-import aiohttp
+import websockets
 from aio_pika import Message
 import json
 
 
-class Worker:
+class Master:
 
     def __init__(self):
         self.server = server = os.environ['SERVER']
@@ -15,9 +15,6 @@ class Worker:
         self.rabbit_exchange = None
         self.rabbit_queue = None
         self.redis = None
-        self.base_url = "http://proxy:8000/match/v4/matches/%s"
-        self.api_blocked = False
-        self.active = 0
 
     ## Rabbitmq
     async def connect_rabbit(self):
@@ -81,91 +78,100 @@ class Worker:
         await self.connect_redis()
         await self.redis.sadd('matches', str(matchId))
 
-    async def process_404(self, msg, matchId):
-        """Process a 404 response.
-
-        No data is sent further. The msg is acknowledged and the ID is added.
-        The ID is added despite the possibility that a match might later
-        be played on that ID, however better to avoid repulling the 404.
-        """
-        await self.add_element(matchId)
-        await self.connect_rabbit()
-        await msg.ack()
-
-    async def process_200(self, msg, matchId, data):
-        """Process a 200 response.
-
-        Data is sent further through exchange. The ID is added and the message
-        is acknowledged.
-        """
-        await self.add_element(matchId)
-        await self.push_task(data)
-        await msg.ack()
-
-    async def process(self, msg, matchId):
+    async def prepare_tasks(self, count):
         """Process a message."""
-        url = self.base_url % (str(matchId))
-        async with aiohttp.ClientSession() as session:
-            if self.api_blocked:
-                await asyncio.sleep(self.api_blocked)
-            try:
-                async with session.get(url) as response:
-                    data = await response.json(content_type=None)
-                    status = response.status
-                    headers = response.headers
-                    if status == 404:  # Drop non-existent matches
-                        print("Got 404 for", matchId)
-                        await self.process_404(msg, matchId)
-                        self.active -= 1
-                        return
-                    if status == 200:
-                        await self.process_200(msg, matchId, data)
-                        self.active -= 1
-                        return
-                    if status == 428:
-                        retry_after = int(data['retry_after'])
-                        if not self.api_blocked:
-                            self.api_blocked = retry_after + 0.5
-                    print(f"Got {status} for", matchId)
-                    await self.connect_rabbit()
-                    msg.reject(requeue=True)
-                    self.active -= 1
-                    return
-            except Exception as err:
-                print(err)
-                await self.connect_rabbit()
-                msg.reject(requeue=True)
-                self.active -= 1
-                return
-
-    async def run(self):
-        while os.environ['STATUS'] == "RUN":
-            tasks = []
-            current = []
-            while len(tasks) < 50000 and os.environ['STATUS'] == "RUN":
-
+        tasks = []
+        ids = []
+        try:
+            while not os.environ['STATUS'] == 'STOP' and len(tasks) < count:
                 msg = await self.retrieve_task()
-
                 if not msg:
-                    await asyncio.sleep(1)
                     break
                 matchId = int(msg.body.decode('utf-8'))
                 if await self.check_exists(matchId):
-                    continue  # Skip existing matchIds
-                if matchId in current:
-                    continue  # Skip currently called matchIds
-                while self.active > 300:
-                    print("Its on max")
-                    await asyncio.sleep(0.5)
-                if self.api_blocked:
-                    print("Api blocked for", self.api_blocked)
-                    await asyncio.sleep(self.api_blocked)
-                    self.api_blocked = None
-                tasks.append(asyncio.create_task(
-                    self.process(msg, matchId)
-                ))
-                self.active += 1
-                await asyncio.sleep(0.01)
-            print("Awaiting requests")
-            await asyncio.gather(*tasks)
-            print("Done")
+                    await msg.ack()
+                    continue
+                if matchId in ids:
+                    await msg.ack()
+                    continue
+                ids.append(matchId)
+                tasks.append(msg)
+            return tasks
+        except Exception as err:
+            print(err)
+
+    async def process_successful(self, successfull_sets):
+        """Process and send out the successfull requests."""
+        for entry in successfull_sets:
+            msg = entry[0]
+            result = entry[1]
+            matchId = int(msg.body.decode('utf-8'))
+            await self.add_element(matchId)
+            await self.push_task(result)
+            await msg.ack()
+
+    async def process_404(self, not_found_sets):
+        """Process the 404 Responses."""
+        for entry in not_found_sets:
+            msg = entry[0]
+            result = entry[1]
+            matchId = int(msg.body.decode('utf-8'))
+            await self.add_element(matchId)
+            await msg.ack()
+
+    async def run(self):
+        """Run method. Handles the creation and deletion of worker tasks."""
+        print("Startup")
+        while not os.environ['STATUS'] == 'STOP':
+            tasks = await self.prepare_tasks(400)
+            if not tasks:
+                print("No tasks found.")
+                await asyncio.sleep(1)
+                continue
+
+            call_tasks = []
+            for id, msg in enumerate(tasks):
+                call_tasks.append([id, int(msg.body.decode('utf-8'))])
+            message = {
+                "endpoint": "match",
+                "url": "/match/v4/matches/%s",
+                "tasks": call_tasks
+            }
+            data_sets = []
+            not_found = []
+            print("Making calls. Total:", len(call_tasks))
+            async with websockets.connect("ws://proxy:6789", max_size=None) as websocket:
+                remaining = len(call_tasks)
+                await websocket.send("Match_Updater")
+                await websocket.send(json.dumps(message))
+                while remaining > 0:
+                    msg = await websocket.recv()
+                    data = json.loads(msg)
+                    if data['status'] == "rejected":
+                        for entry in data['tasks']:
+                            remaining -= 1
+                            await tasks[entry['id']].reject(requeue=True)
+                    elif data['status'] == 'done':
+                        for entry in data['tasks']:
+                            remaining -= 1
+                            if entry['status'] == 200:
+                                if len(entry['result']) == 0:
+                                    empty = True
+                                else:
+                                    data_sets.append([
+                                        tasks[entry['id']],
+                                        entry['result']])
+                            elif entry['status'] == 404:
+                                not_found.append([
+                                        tasks[entry['id']],
+                                        entry['result']])
+                            else:
+                                await tasks[entry['id']].reject(requeue=True)
+                                print(entry['status'])
+                                print(entry['headers'])
+            print("Done with calls. Stats: Successfull:", len(data_sets),
+                  "Total:", len(tasks))
+
+            await self.process_404(not_found)
+            await self.process_successful(data_sets)
+            await asyncio.sleep(1)

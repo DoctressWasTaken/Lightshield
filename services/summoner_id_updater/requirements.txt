@@ -1,4 +1,3 @@
-aiohttp
-ratelimit
 pika
 redis
+websockets

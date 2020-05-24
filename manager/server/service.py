@@ -131,7 +131,7 @@ class Proxy:
             server=self.server,
             api_key=self.api_key,
             **self.container_data['riotapi_proxy'])
-        self.container.startup(wait_for="0.0.0.0:8000")
+        self.container.startup(wait_for="0.0.0.0:6789")
 
     def shutdown(self):
         """Stop all service container."""

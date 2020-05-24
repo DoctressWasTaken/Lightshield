@@ -4,11 +4,9 @@ import json
 import logging
 import threading
 import os
-import aiohttp
-from aiohttp.client_exceptions import ClientConnectorError
 import datetime, time
 import pika
-
+import websockets
 
 class EmptyPageException(Exception):
     """Custom Exception called when at least 1 page is empty."""
@@ -32,7 +30,7 @@ if 'SERVER' not in os.environ:
 
 server = os.environ['SERVER']
 
-url = f"http://proxy:8000/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+url = "/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
 
 tiers = [
     "IRON",
@@ -83,42 +81,45 @@ async def update(tier, division, tasks):
 
     Core function that sets up call batches by rank category.
     """
-    data_sets = []
     loop = asyncio.get_event_loop()
     logging.info(f"Active Threads: {threading.active_count()}")
-    for thread in threading.enumerate():
-        print(thread)
     call_tasks = []
-    async with aiohttp.ClientSession() as session:
-        for task in tasks:
-            call_tasks.append(
-                asyncio.create_task(
-                    fetch(
-                        url % (tier, division, task),
-                        session,
-                        task
-                    )
-                )
-            )
-        responses = await asyncio.gather(*call_tasks)
+    for id, task in enumerate(tasks):
+        call_tasks.append([id, tier, division, task])
+    message = {
+        "endpoint": "league-exp",
+        "url": url,
+        "tasks": call_tasks
+    }
     failed = []
-    empty = 0
-    wait = 0
-    for response in responses:
-        if response[0] == 428:
-            wait = response[1]['retry_after']
-        if response[0] != 200:
-            print(response)
-            failed.append(response[2])
-        else:
-            if len(response[1]) == 0:
-                empty += 1
-            else:
-                data_sets.append(response[1])
+    data_sets = []
+    empty = False
+    print("Making calls. Total:", len(call_tasks))
+    async with websockets.connect("ws://proxy:6789") as websocket:
+        remaining = len(call_tasks)
+        await websocket.send("League_Updater")
+        await websocket.send(json.dumps(message))
+        while remaining > 0:
+            msg = await websocket.recv()
+            data = json.loads(msg)
+            if data['status'] == "rejected":
+                for entry in data['tasks']:
+                    remaining -= 1
+                    failed.append(call_tasks[entry][-1])
+            elif data['status'] == 'done':
+                for entry in data['tasks']:
+                    remaining -= 1
+                    if entry['status'] == 200:
+                        if len(entry['result']) == 0:
+                            empty = True
+                        else:
+                            data_sets += entry['result']
+                    else:
+                        failed.append(call_tasks[int(entry['id'])][-1])
+                        print(entry['status'])
+                        print(entry['headers'])
     if empty:
         raise EmptyPageException(data_sets, failed)
-    await asyncio.sleep(wait)
-
     return data_sets, failed
 
 
@@ -126,7 +127,9 @@ def server_updater():
     """Iterate through all rankings and initiate calls."""
     for tier in reversed(tiers):
         for division in divisions:
+            size = 8
             if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
+                size = 4
                 if division != "I":
                     continue
             print(f"Starting with {tier} {division}.")
@@ -158,10 +161,10 @@ def server_updater():
                         routing_key=f'SUMMONER_V1')
                     sleep = 1
 
-                    while failed_pages and len(tasks) < 5:
+                    while failed_pages and len(tasks) < size:
                         page = failed_pages.pop()
                         tasks.append(page)
-                    while not empty and len(tasks) < 5:
+                    while not empty and len(tasks) < size:
                         tasks.append(pages)
                         pages += 1
                     print(f"Requesting {tasks}")
@@ -171,20 +174,13 @@ def server_updater():
                     failed_pages += failed
 
                     while data:
-                        page = data.pop()
-                        for entry in page:
-                            channel.basic_publish(
-                                exchange=f'LEAGUE_OUT_{server}',
-                                routing_key='SUMMONER_V1',
-                                body=json.dumps(entry),
-                                properties=pika.BasicProperties(
-                                    delivery_mode=2))
-
-                except ClientConnectorError:
-                    # Raised when the proxy cant be reached
-                    print("Failed to reach Proxy")
-                    failed_pages += tasks
-                    time.sleep(1)
+                        summoner = data.pop()
+                        channel.basic_publish(
+                            exchange=f'LEAGUE_OUT_{server}',
+                            routing_key='SUMMONER_V1',
+                            body=json.dumps(summoner),
+                            properties=pika.BasicProperties(
+                                delivery_mode=2))
 
                 except EmptyPageException as e:
                     # add results, if no failed remaining exit

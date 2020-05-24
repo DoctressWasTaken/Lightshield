@@ -1,6 +1,6 @@
-aiohttp
 pika
 redis
 aioredis
 aio_pika
 uvloop
+websockets

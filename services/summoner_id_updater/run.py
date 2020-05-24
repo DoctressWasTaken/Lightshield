@@ -1,44 +1,19 @@
 """Summoner ID Updater Module."""
 
 import os
-from ratelimit import limits, RateLimitException
-import aiohttp
 import json
 import asyncio
 import time
 import redis
 import pika
-from aiohttp.client_exceptions import ClientConnectorError
+import websockets
 
 if "SERVER" not in os.environ:
     print("No server provided, shutting down")
     exit()
 server = os.environ['SERVER']
 
-url_template = f"http://proxy:8000/summoner/v4/summoners/%s"
-
-
-@limits(calls=250, period=10)
-async def fetch(url, session):
-    """Call method."""
-    async with session.get(url) as response:
-        resp = await response.json(content_type=None)
-        if response.status == 429:
-            print(response.headers)
-        return response.status, resp, response.headers
-
-
-async def to_fetch(url, session, element):
-    """Call placeholder method.
-
-    Added to allow catching the RateLimitException
-    without breaking the asyncio.gather.
-    """
-    try:
-        response = await fetch(url, session)
-        return response + (element,)
-    except RateLimitException:
-        return 998, [], {}, element
+url_template = "/summoner/v4/summoners/%s"
 
 
 async def main(data_list):
@@ -47,39 +22,49 @@ async def main(data_list):
     Function that bundles all API calls.
     Returns once all calls are finished.
     """
-    results = []
-    async with aiohttp.ClientSession() as session:
-        while data_list:
-            forced_timeout = 0
-            tasks = []
-            tasks.append(asyncio.sleep(10))
-            print("Starting call cycle")
-            for i in range(min(250, len(data_list))):
-                element = data_list.pop()
-                tasks.append(
-                    asyncio.create_task(
-                        to_fetch(
-                            url_template % (element[2]['summonerId']),
-                            session,
-                            element
-                        )
-                    )
-                )
-                await asyncio.sleep(0.01)
-            responses = await asyncio.gather(*tasks)
-            responses.pop(0)
-            for response in responses:
-                if response[0] == 998:
-                    forced_timeout = 1.5
-                    data_list.append(response[3])
-                if response[0] != 200:
-                    print(response[0])
-                    data_list.append(response[3])
-                else:
-                    results.append([response[1], response[3]])
-            await asyncio.sleep(forced_timeout)
-
-    return results
+    print(f"Starting with {len(data_list)} tasks.")
+    call_tasks = []
+    for id, task in enumerate(data_list):
+        call_tasks.append([id, task[2]['summonerId']])
+    message = {
+        "endpoint": "summoner",
+        "url": url_template,
+        "tasks": call_tasks
+    }
+    failed = []
+    data_sets = []
+    not_found = []  # Should not be retried
+    async with websockets.connect("ws://proxy:6789") as websocket:
+        remaining = len(call_tasks)
+        await websocket.send("Summoner_Id_Updater")
+        await websocket.send(json.dumps(message))
+        while remaining > 0:
+            msg = await websocket.recv()
+            data = json.loads(msg)
+            if data['status'] == "rejected":
+                for task in data['tasks']:
+                    remaining -= 1
+                    failed.append(data_list[task])
+            elif data['status'] == 'done':
+                for entry in data['tasks']:
+                    remaining -= 1
+                    if entry['status'] == 200:
+                        if len(entry['result']) == 0:
+                            empty = True
+                        else:
+                            data_sets.append([
+                                data_list[entry['id']],
+                                entry['result']])
+                    elif entry['status'] == 404:
+                        not_found.append(data_list[entry['id']])
+                    else:
+                        failed.append(data_list[entry['id']])
+                        print(entry['status'])
+                        print(entry['headers'])
+            print(f"{remaining} tasks remaining.")
+    # data_sets: List of lists each containing [original element, content]
+    print(f"Finished with {len(data_list)} tasks.")
+    return data_sets, failed, not_found
 
 
 def run():
@@ -131,17 +116,19 @@ def run():
 
             r = redis.StrictRedis(host='redis', port=6379, db=0,
                                   charset="utf-8", decode_responses=True)
-
+            messages = []
             while True:  # Basic work loop after connection is established.
-                messages = []
                 passed = 0
-                while len(messages) < 150:
+                while len(messages) < 1000:
                     message = channel.basic_get(
                         queue=f'SUMMONER_ID_IN_{server}')
                     if all(x is None for x in message):  # Empty Queue
                         break
-
                     content = json.loads(message[2])
+                    if type(content) != dict or "summonerId" not in content:
+                        channel.basic_ack(
+                            delivery_tag=message[0].delivery_tag)
+                        continue
                     summonerId = content['summonerId']
                     latest = r.hgetall(f"user:{summonerId}")
 
@@ -164,12 +151,19 @@ def run():
                     time.sleep(1)
                     continue
                 print(f"Passed a total of {passed} messages"
-                      f" before reaching the limit of 250.")
-                results = asyncio.run(main(messages))
+                      f" before reaching the limit.")
+                results, fails, not_found = asyncio.run(main(messages))
+                print("Got responses")
+                messages = []
+                for result in not_found:
+                    channel.basic_ack(
+                        delivery_tag=result[0].delivery_tag)
+                for result in fails:
+                    messages.append(result)
                 print(f"Adding {len(results)} player.")
                 for result in results:
-                    message = result[1]
-                    data = result[0]
+                    message = result[0]
+                    data = result[1]
                     r.hset(f"user:{message[2]['summonerId']}",
                            mapping={'puuid': data['puuid'],
                                     'accountId': data['accountId']})
@@ -183,11 +177,6 @@ def run():
                         routing_key=f'SUMMONER_V2',
                         body=json.dumps(package))
 
-        except ClientConnectorError:
-            # Raised when the proxy cant be reached
-            print("Failed to reach Proxy")
-            time.sleep(1)
-
         except RuntimeError:
             # Raised when rabbitmq cant connect
             print("Failed to reach rabbitmq")
@@ -195,4 +184,5 @@ def run():
 
 
 if __name__ == "__main__":
+    time.sleep(5)
     run()
