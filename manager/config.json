@@ -131,12 +131,12 @@
   "server": {
     "BR": false,
     "EUNE1": false,
-    "EUW1": true,
+    "EUW1": false,
     "JP1": false,
     "KR": false,
     "LA1": false,
     "LA2": false,
-    "NA1": false,
+    "NA1": true,
     "OC1": false,
     "TR1": false,
     "RU": false

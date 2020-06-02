@@ -55,32 +55,35 @@ class Databases:
     def get_data_size(self):
         """Check the database current data size."""
         data = {}
-        res = self.postgres.cmd(
-            'psql -U postgres -d data_euw1 -c "SELECT COUNT(*) FROM PLAYER;"')
-        player = int(res.output.decode('utf-8').split('\n')[2])
-        res = self.postgres.cmd(
-            'psql -U postgres -d data_euw1 -c'
-            ' "SELECT COUNT(*) FROM MATCHDTO;"')
-        matches = int(res.output.decode('utf-8').split('\n')[2])
-        data['postgres'] = {'player': player, 'matches': matches}
-        res = self.container['redis_match'].cmd(
-            'redis-cli --raw scard matches')
-        matches = int(res.output.decode('utf-8').strip())
-        data['match'] = matches
+        try:
+            res = self.postgres.cmd(
+                'psql -U postgres -d data_euw1 -c "SELECT COUNT(*) FROM PLAYER;"')
+            player = int(res.output.decode('utf-8').split('\n')[2])
+            res = self.postgres.cmd(
+                'psql -U postgres -d data_euw1 -c'
+                ' "SELECT COUNT(*) FROM MATCHDTO;"')
+            matches = int(res.output.decode('utf-8').split('\n')[2])
+            data['postgres'] = {'player': player, 'matches': matches}
+            res = self.container['redis_match'].cmd(
+                'redis-cli --raw scard matches')
+            matches = int(res.output.decode('utf-8').strip())
+            data['match'] = matches
 
-        res = self.container['redis_summoner_id'].cmd(
-            'redis-cli INFO'
-        )
-        summoners = int(
-            res.output.decode('utf-8').strip().split('\n')[-1].split("=")[
-                1].split(',')[0])
-        data['summoner_id'] = summoners
+            res = self.container['redis_summoner_id'].cmd(
+                'redis-cli INFO'
+            )
+            summoners = int(
+                res.output.decode('utf-8').strip().split('\n')[-1].split("=")[
+                    1].split(',')[0])
+            data['summoner_id'] = summoners
 
-        res = self.container['redis_match_history'].cmd(
-            'redis-cli INFO'
-        )
-        summoner = int(
-            res.output.decode('utf-8').strip().split('\n')[-1].split("=")[
-                1].split(',')[0])
-        data['match_history'] = summoners
+            res = self.container['redis_match_history'].cmd(
+                'redis-cli INFO'
+            )
+            summoner = int(
+                res.output.decode('utf-8').strip().split('\n')[-1].split("=")[
+                    1].split(',')[0])
+            data['match_history'] = summoners
+        except Exception as err:
+            print(err)
         return data
