@@ -1,6 +1,6 @@
 import time
 import docker
-
+import logging
 
 class Container:
 
@@ -20,6 +20,15 @@ class Container:
         self.container = None
         self.image = image
         self.paused = False
+        self.logging = logging.getLogger(self.image)
+        self.logging.setLevel(logging.INFO)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        ch.setFormatter(
+            logging.Formatter(f'%(asctime)s [{self.image}] %(message)s'))
+        self.logging.addHandler(ch)
+
+
         if "environment" not in self.kwargs:
             self.kwargs['environment'] = {}
         if api_key:
@@ -44,31 +53,33 @@ class Container:
     def wait_for(self, target):
         """Use a waiting script to await the service being reachable."""
         cmd = '/project/wait-for-it.sh -q ' + target + ' -- echo "UP"'
-        print(cmd)
+        self.logging.info(cmd)
         res = self.container.exec_run(cmd)
         if res.output.decode("utf-8").strip() == "UP":
             return
-        print(res)
+        self.logging.info(res)
         raise Exception("The Container was not properly started.")
 
-    def check_running(self):
+    def check_status(self):
         """Check if the container is already up."""
         try:
             self.container = self.client.containers.get(self.kwargs['name'])
-            if self.container.status != "running":
-                print("Status of container is", self.container.status)
-                raise Exception
-            print("Found", self.image, "already running.")
-            return True
+            return self.container.status
         except docker.errors.NotFound as err:
-            pass
-        except docker.errors.APIError as err:
-            pass
-        return False
+            return None
 
     def startup(self, wait_for: str = None, wait: int = None):
-        if not self.check_running():
-            print("Starting", self.image)
+
+        status = self.check_status()
+        if status == "running":
+            self.logging.info(f"Container found running.")
+            return
+        if status == "exited":
+            self.logging.info(f"Removed exited. Recreating.")
+            self.container.remove()
+
+        if not status or status == "exited":
+            self.logging.info(f"Starting")
             self.container = self.client.containers.run(
                 self.image,
                 detach=True,
@@ -84,17 +95,21 @@ class Container:
                     if wait:
                         time.sleep(wait)
                     return
+            self.logging.info(f"Container could not be started.")
+
+        elif status == "paused":
+            return
 
     def pause(self):
         if not self.paused:
-            print("Pausing", self.kwargs['name'])
-            self.container.pause()
+            self.logging.info(f"Stopping")
+            self.container.stop()
             self.paused = True
 
     def unpause(self):
         if self.paused:
-            print("Unpausing", self.kwargs['name'])
-            self.container.unpause()
+            self.logging.info("Restarting")
+            self.container.start()
             self.paused = False
 
     def stop(self):

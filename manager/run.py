@@ -38,8 +38,8 @@ def main():
     # Startup Process - Depending on Config
     server_threads = {}
     for server in config['server']:
-        print(server, "\t", config['server'][server])
         if config['server'][server]:
+            print(server, "\t", config['server'][server])
             server_threads[server] = ServerManager(server, client, rabbitmq,
                                                    postgres, config)
             server_threads[server].startup()

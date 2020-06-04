@@ -16,6 +16,39 @@ server = os.environ['SERVER']
 url_template = "/summoner/v4/summoners/%s"
 
 
+async def get_returns(remaining, websocket, data_list):
+    failed = []
+    data_sets = []
+    not_found = []  # Should not be retried
+
+    while remaining > 0:
+        msg = await websocket.recv()
+        data = json.loads(msg)
+        if data['status'] == "rejected":
+            for task in data['tasks']:
+                remaining -= 1
+                failed.append(data_list[task])
+        elif data['status'] == 'done':
+            for entry in data['tasks']:
+                remaining -= 1
+                if entry['status'] == 200:
+                    if len(entry['result']) == 0:
+                        empty = True
+                    else:
+                        data_sets.append([
+                            data_list[entry['id']],
+                            entry['result']])
+                elif entry['status'] == 404:
+                    not_found.append(data_list[entry['id']])
+                else:
+                    failed.append(data_list[entry['id']])
+                    print(entry['status'])
+                    print(entry['headers'])
+        print(f"{remaining} tasks remaining.")
+
+    return data_sets, failed, not_found
+
+
 async def main(data_list):
     """Call data collectively.
 
@@ -38,30 +71,16 @@ async def main(data_list):
         remaining = len(call_tasks)
         await websocket.send("Summoner_Id_Updater")
         await websocket.send(json.dumps(message))
-        while remaining > 0:
-            msg = await websocket.recv()
-            data = json.loads(msg)
-            if data['status'] == "rejected":
-                for task in data['tasks']:
-                    remaining -= 1
-                    failed.append(data_list[task])
-            elif data['status'] == 'done':
-                for entry in data['tasks']:
-                    remaining -= 1
-                    if entry['status'] == 200:
-                        if len(entry['result']) == 0:
-                            empty = True
-                        else:
-                            data_sets.append([
-                                data_list[entry['id']],
-                                entry['result']])
-                    elif entry['status'] == 404:
-                        not_found.append(data_list[entry['id']])
-                    else:
-                        failed.append(data_list[entry['id']])
-                        print(entry['status'])
-                        print(entry['headers'])
-            print(f"{remaining} tasks remaining.")
+        try:
+            data_sets, failed, not_found = await asyncio.wait_for(
+                get_returns(remaining, websocket, data_list), 60)
+        except asyncio.TimeoutError:
+            print("Failed to retrieve all tasks in "
+                  "the selected timeout period."
+                  "Canceling all tasks.")
+
+            return [], [element for element in data_list] ,[]
+
     # data_sets: List of lists each containing [original element, content]
     print(f"Finished with {len(data_list)} tasks.")
     return data_sets, failed, not_found
@@ -118,6 +137,7 @@ def run():
                                   charset="utf-8", decode_responses=True)
             messages = []
             while True:  # Basic work loop after connection is established.
+                print("Starting basic loop cycle.")
                 passed = 0
                 while len(messages) < 1000:
                     message = channel.basic_get(
@@ -161,6 +181,7 @@ def run():
                 for result in fails:
                     messages.append(result)
                 print(f"Adding {len(results)} player.")
+                print("!")
                 for result in results:
                     message = result[0]
                     data = result[1]
@@ -176,6 +197,7 @@ def run():
                         exchange=f'SUMMONER_ID_OUT_{server}',
                         routing_key=f'SUMMONER_V2',
                         body=json.dumps(package))
+                print("!")
 
         except RuntimeError:
             # Raised when rabbitmq cant connect

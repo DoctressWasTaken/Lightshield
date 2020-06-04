@@ -1,3 +1,5 @@
 pika
 redis
 websockets
+aioredis
+aio_pika
