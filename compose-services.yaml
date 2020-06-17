@@ -1,50 +1,37 @@
 version: '2.3'
 services:
 
-  manager:
-    container_name: manager
-    build:
-      context: manager
-      dockerfile: Dockerfile
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./secrets.json:/project/secrets.json
-      - ./manager/config.json:/project/config.json
-    ports:
-      - 8765:8765
-
-  rabbitmq:
-    build:
-      context: rabbitmq
-      dockerfile: Dockerfile
-    hostname: rabbitmq
-    volumes:
-      - rabbitmq:/var/lib/rabbitmq
-
-
   proxy:
     build:
       dockerfile: Dockerfile
-      context: services/proxy_2
+      context: services/proxy_3
     environment:
-      - SERVER=EUW1
+      - SERVER=${SERVER}
+    env_file:
+      - secrets.env
 
   league_updater:
     build:
       dockerfile: Dockerfile
       context: services/league_updater
     environment:
-      - SERVER=EUW1
-
+      - SERVER=${SERVER}
+    external_links:
+      - riotapi_rabbitmq:rabbitmq
+    links:
+      - proxy:proxy
 
   summoner_id_updater:
     build:
       dockerfile: Dockerfile
       context: services/summoner_id_updater
     environment:
-      - SERVER=EUW1
+      - SERVER=${SERVER}
     links:
       - redis_summoner_id:redis
+      - proxy:proxy
+    external_links:
+      - riotapi_rabbitmq:rabbitmq
 
   redis_summoner_id:
     build:
@@ -57,9 +44,12 @@ services:
       dockerfile: Dockerfile
       context: services/match_history_updater
     environment:
-      - SERVER=EUW1
+      - SERVER=${SERVER}
     links:
       - redis_match_history:redis
+      - proxy:proxy
+    external_links:
+      - riotapi_rabbitmq:rabbitmq
 
   redis_match_history:
     build:
@@ -71,9 +61,12 @@ services:
       dockerfile: Dockerfile
       context: services/match_updater
     environment:
-      - SERVER=EUW1
+      - SERVER=${SERVER}
     links:
       - redis_match:redis
+      - proxy:proxy
+    external_links:
+      - riotapi_rabbitmq:rabbitmq
 
   redis_match:
     build:
@@ -85,29 +78,17 @@ services:
       dockerfile: Dockerfile
       context: services/db_worker/
     environment:
-      - SERVER=EUW1
-    links:
+      - SERVER=${SERVER}
+    external_links:
       - postgres:postres
-
-  postgres:
-    cpus: 1
-    mem_limit: 1g
-    container_name: riotapi_postgres
-    build:
-      dockerfile: Dockerfile
-      context: databases/postgres/
-    volumes:
-      - postgres:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_HOST_AUTH_METHOD=trust
-    ports:
-        - 127.0.0.1:5432:5432
-
+      - riotapi_rabbitmq:rabbitmq
 
 volumes:
   redis_summoner:
   redis_match_history:
   redis_match:
-  rabbitmq:
-  playerdata:
-  postgres:
+
+networks:
+  default:
+    external:
+      name: riot_api

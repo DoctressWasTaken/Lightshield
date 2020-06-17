@@ -1,0 +1,37 @@
+version: '2.3'
+services:
+
+  rabbitmq:
+    container_name: riotapi_rabbitmq
+    build:
+      context: rabbitmq
+      dockerfile: Dockerfile
+    mem_limit: 2g
+    cpus: 2
+    hostname: rabbitmq
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+
+  postgres:
+    cpus: 1
+    mem_limit: 1g
+    container_name: riotapi_postgres
+    build:
+      dockerfile: Dockerfile
+      context: databases/postgres/
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+        - 127.0.0.1:5432:5432
+
+
+volumes:
+  rabbitmq:
+  postgres:
+
+networks:
+  default:
+    external:
+      name: riot_api

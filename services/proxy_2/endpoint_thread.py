@@ -127,13 +127,12 @@ class Endpoint(threading.Thread):
 
         if not self.planned_tasks:
             return
-        self.logging.info("Got tasks")
         # Wait, till the endpoint unlocks
         wait = False
         while self.end and datetime.now(timezone.utc) < self.end:
             await asyncio.sleep(0.1)
             if not wait:
-                self.logging.info("Waiting for endpoint to unlock")
+                self.logging.info("Waiting for endpoint to unlock.")
                 wait = True
             if self.is_interrupted:
                 return
@@ -142,10 +141,11 @@ class Endpoint(threading.Thread):
         while not self.app.open:
             await asyncio.sleep(0.1)
             if not wait:
-                self.logging.info("Waiting for app to unlock")
+                self.logging.info("Waiting for app to unlock.")
                 wait = True
             if self.is_interrupted:
                 return
+        self.logging.info("Starting call.")
         async with aiohttp.ClientSession() as session:
             self.end = datetime.now(timezone.utc)
             self.end_type = "estimate"
