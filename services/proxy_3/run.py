@@ -5,6 +5,7 @@ Routes and ratelimits all calls to the API.
 """
 import asyncio  # noqa: F401
 from aiohttp import web
+from aiohttp.web import HTTPInternalServerError
 import aiohttp
 import sys
 import os
@@ -57,10 +58,14 @@ class Proxy:
 
     async def request(self, request):
         """Pass message."""
-        print("Received request.")
-        async with aiohttp.ClientSession() as session:
-            async with session.get(request.url, headers=dict(request.headers)) as response:
-                body = await response.json()
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2.5)) as session:
+                async with session.get(request.url, headers=dict(request.headers)) as response:
+                    body = await response.json()
+        except Exception as err:
+            print("Got", err)
+            raise HTTPInternalServerError()
+
         headers = dict(response.headers)
         returned_headers = {}
         for header in headers:

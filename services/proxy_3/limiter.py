@@ -47,8 +47,7 @@ class LimitHandler:
             local = pytz.timezone('GMT')
             local_dt = local.localize(naive, is_dst=None)
             date = local_dt.astimezone(pytz.utc)
-            print("Corrected bucket by", date - self.bucket)
-            print(self.span)
+            print(f"Corrected bucket {self.span} by {date - self.bucket}.")
             self.bucket = date
 
         if count > self.count:

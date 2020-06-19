@@ -94,9 +94,11 @@ class Worker:
         async with aiohttp.ClientSession() as session:
             tasks = []
             while True:
-                while len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
+                if len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
                     print("Buffer full. Waiting.")
-                    await asyncio.sleep(0.5)
+                    while len(self.buffered_summoners) >= self.max_buffer:
+                        await asyncio.sleep(0.5)
+                    print("Continue")
 
                 if self.retry_after:  #  Wait for retry_after timeout
                     await asyncio.sleep(self.retry_after)
@@ -115,5 +117,5 @@ class Worker:
 
 if __name__ == "__main__":
 
-    worker = Worker(buffer=20)
+    worker = Worker(buffer=30)
     asyncio.run(worker.run())
