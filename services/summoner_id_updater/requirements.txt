@@ -3,3 +3,4 @@ redis
 websockets
 aioredis
 aio_pika
+aiohttp

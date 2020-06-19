@@ -7,6 +7,7 @@ import os
 import datetime, time
 import pika
 import websockets
+import aiohttp
 
 class EmptyPageException(Exception):
     """Custom Exception called when at least 1 page is empty."""
@@ -30,7 +31,7 @@ if 'SERVER' not in os.environ:
 
 server = os.environ['SERVER']
 
-url = "/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+url = f"http://{server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
 
 tiers = [
     "IRON",
@@ -65,133 +66,143 @@ map_divisions = {
     'II': 2,
     'I': 3}
 
+active_tasks = 0
+summoner = []
+failed_pages = []  # Pages that were called but returned a non 200 response
+retry_after = 0
+empty = None  # Set to the page that is returned empty
 
 async def fetch(url, session, page):
     """Fetch data from the api.
 
     Returns Non-200 HTTP Code on error.
     """
-    async with session.get(url) as response:
-        resp = await response.json(content_type=None)
-        return response.status, resp, page
+    global active_tasks
+    global failed_pages
+    global summoner
+    global retry_after
+    global empty
+    print("Starting with page", page)
+    active_tasks += 1
+    async with session.get(url, proxy="http://proxy:8000") as response:
+        try:
+            resp = await response.json(content_type=None)
+        except:
+            print(await response.text())
+        print("Got", response.status)
+        if response.status in [429, 430]:
+            if "Retry-After" in response.headers:
+                retry_after = int(response.headers['Retry-After'])
+        if response.status != 200:
+            failed_pages.append(page)
+        else:
+            if len(resp) == 0:
+                print("Page", page, "empty.")
+                empty = page
+            else:
+                summoner += resp
+    print("Done with page", page)
+
+    active_tasks -= 1
 
 
-async def update(tier, division, tasks):
+async def update(tier, division, buffer):
     """Get data.
 
     Core function that sets up call batches by rank category.
     """
-    loop = asyncio.get_event_loop()
-    logging.info(f"Active Threads: {threading.active_count()}")
-    call_tasks = []
-    for id, task in enumerate(tasks):
-        call_tasks.append([id, tier, division, task])
-    message = {
-        "endpoint": "league-exp",
-        "url": url,
-        "tasks": call_tasks
-    }
-    failed = []
-    data_sets = []
+    global active_tasks
+    global failed_pages
+    global retry_after
+    global empty
     empty = False
-    print("Making calls. Total:", len(call_tasks))
-    async with websockets.connect("ws://proxy:6789") as websocket:
-        remaining = len(call_tasks)
-        await websocket.send("League_Updater")
-        await websocket.send(json.dumps(message))
-        while remaining > 0:
-            msg = await websocket.recv()
-            data = json.loads(msg)
-            if data['status'] == "rejected":
-                for entry in data['tasks']:
-                    remaining -= 1
-                    failed.append(call_tasks[entry][-1])
-            elif data['status'] == 'done':
-                for entry in data['tasks']:
-                    remaining -= 1
-                    if entry['status'] == 200:
-                        if len(entry['result']) == 0:
-                            empty = True
-                        else:
-                            data_sets += entry['result']
-                    else:
-                        failed.append(call_tasks[int(entry['id'])][-1])
-                        print(entry['status'])
-                        print(entry['headers'])
-    if empty:
-        raise EmptyPageException(data_sets, failed)
-    return data_sets, failed
+    global summoner
+    summoner = []
+
+    next_page = 1
+    task_list = []
+    async with aiohttp.ClientSession() as session:
+        while not empty or failed_pages:
+            while active_tasks < buffer:
+                if retry_after > 0:
+                    await asyncio.sleep(retry_after)
+                    retry_after = 0
+
+                if failed_pages:
+                    page = failed_pages.pop()
+                elif not empty:
+                    page = next_page
+                    next_page += 1
+                else:
+                    break
+
+                task_list.append(
+                    asyncio.create_task(fetch(url % (tier, division, page), session, page))
+                )
+                await asyncio.sleep(0.5)
+            await asyncio.sleep(0.5)
+
+        await asyncio.gather(*task_list)
+    print("Returning", len(summoner), "Summoner.")
+    return summoner
 
 
 def server_updater():
     """Iterate through all rankings and initiate calls."""
     for tier in reversed(tiers):
         for division in divisions:
-            size = 8
+            buffer = 8
             if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
-                size = 4
+                buffer = 3
                 if division != "I":
                     continue
             print(f"Starting with {tier} {division}.")
-            pages = 1
-            failed_pages = []
-            data = []
-            empty = False
-            while not empty or failed_pages:
-                tasks = []
-                try:
-                    credentials = pika.PlainCredentials('guest', 'guest')
-                    parameters = pika.ConnectionParameters(
-                        'rabbitmq', 5672, '/', credentials)
-                    connection = pika.BlockingConnection(parameters)
-                    channel = connection.channel()
-                    # Outgoing
-                    channel.exchange_declare(  # Exchange that outputs
+            try:
+                credentials = pika.PlainCredentials('guest', 'guest')
+                parameters = pika.ConnectionParameters(
+                    'rabbitmq', 5672, '/', credentials)
+                connection = pika.BlockingConnection(parameters)
+                channel = connection.channel()
+                # Outgoing
+                channel.exchange_declare(  # Exchange that outputs
+                    exchange=f'LEAGUE_OUT_{server}',
+                    exchange_type='direct',
+                    durable=True
+                )
+                # Persistent Queues that need to exist
+                queue = channel.queue_declare(
+                    queue=f'SUMMONER_ID_IN_{server}',
+                    durable=True)
+                channel.queue_bind(
+                    exchange=f'LEAGUE_OUT_{server}',
+                    queue=queue.method.queue,
+                    routing_key=f'SUMMONER_V1')
+                sleep = 1
+
+
+                received_summoner = asyncio.run(
+                    update(tier, division, buffer))
+
+
+                while received_summoner:
+                    summoner = received_summoner.pop()
+                    channel.basic_publish(
                         exchange=f'LEAGUE_OUT_{server}',
-                        exchange_type='direct',
-                        durable=True
-                    )
-                    # Persistent Queues that need to exist
-                    queue = channel.queue_declare(
-                        queue=f'SUMMONER_ID_IN_{server}',
-                        durable=True)
-                    channel.queue_bind(
-                        exchange=f'LEAGUE_OUT_{server}',
-                        queue=queue.method.queue,
-                        routing_key=f'SUMMONER_V1')
-                    sleep = 1
+                        routing_key='SUMMONER_V1',
+                        body=json.dumps(summoner),
+                        properties=pika.BasicProperties(
+                            delivery_mode=2))
 
-                    while failed_pages and len(tasks) < size:
-                        page = failed_pages.pop()
-                        tasks.append(page)
-                    while not empty and len(tasks) < size:
-                        tasks.append(pages)
-                        pages += 1
-                    print(f"Requesting {tasks}")
-                    success, failed = asyncio.run(
-                        update(tier, division, tasks))
-                    data += success
-                    failed_pages += failed
+            except EmptyPageException as e:
+                # add results, if no failed remaining exit
+                empty = True
+                data += e.success
+                failed_pages += e.failed
 
-                    while data:
-                        summoner = data.pop()
-                        channel.basic_publish(
-                            exchange=f'LEAGUE_OUT_{server}',
-                            routing_key='SUMMONER_V1',
-                            body=json.dumps(summoner),
-                            properties=pika.BasicProperties(
-                                delivery_mode=2))
-
-                except EmptyPageException as e:
-                    # add results, if no failed remaining exit
-                    empty = True
-                    data += e.success
-                    failed_pages += e.failed
-
-                except RuntimeError:
-                    # Raised when rabbitmq cant connect
-                    print("Failed to reach rabbitmq")
-                    time.sleep(1)
+            except RuntimeError:
+                # Raised when rabbitmq cant connect
+                print("Failed to reach rabbitmq")
+                time.sleep(1)
 
 
 def main():

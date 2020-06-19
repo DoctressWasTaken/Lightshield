@@ -74,5 +74,5 @@ class MethodLimiter:
             raise HTTPException
         await self.limits[method].update(
                 response.headers['Date'],
-                response.headers['X-App-Rate-Limit-Count'].split(","))
+                response.headers['X-Method-Rate-Limit-Count'].split(","))
         return response
