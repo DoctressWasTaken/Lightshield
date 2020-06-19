@@ -76,6 +76,8 @@ class Worker:
             async with aiohttp.ClientSession() as session:
                 calls_executed = []
                 while ids:
+                    if datetime.now() < self.retry_after:
+                       await asyncio.sleep((self.retry_after - datetime.now()).total_seconds())
                     id = ids.pop()
                     calls_executed.append(asyncio.create_task(
                         self.fetch(session=session,
