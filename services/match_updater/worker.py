@@ -1,20 +1,37 @@
 import aio_pika
 import asyncio
 import os
+
+import aiohttp
 import aioredis
 import websockets
 from aio_pika import Message
 import json
-
+import logging
 
 class Master:
 
-    def __init__(self):
+    def __init__(self, buffer):
         self.server = server = os.environ['SERVER']
         self.rabbit = None
         self.rabbit_exchange = None
         self.rabbit_queue = None
         self.redis = None
+
+        self.url_template = f"http://{server}.api.riotgames.com/lol/match/v4/matches/%s"
+
+        self.max_buffer = buffer
+        self.failed_tasks = []
+        self.retry_after = None
+        self.buffered_matches = {}
+
+        self.logging = logging.getLogger("worker")
+        self.logging.setLevel(logging.INFO)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        ch.setFormatter(
+            logging.Formatter(f'%(asctime)s [WORKER] %(message)s'))
+        self.logging.addHandler(ch)
 
     ## Rabbitmq
     async def connect_rabbit(self):
@@ -78,100 +95,68 @@ class Master:
         await self.connect_redis()
         await self.redis.sadd('matches', str(matchId))
 
-    async def prepare_tasks(self, count):
-        """Process a message."""
-        tasks = []
-        ids = []
-        try:
-            while not os.environ['STATUS'] == 'STOP' and len(tasks) < count:
-                msg = await self.retrieve_task()
-                if not msg:
-                    break
-                matchId = int(msg.body.decode('utf-8'))
-                if await self.check_exists(matchId):
-                    await msg.ack()
-                    continue
-                if matchId in ids:
-                    await msg.ack()
-                    continue
-                ids.append(matchId)
-                tasks.append(msg)
-            return tasks
-        except Exception as err:
-            print(err)
 
-    async def process_successful(self, successfull_sets):
-        """Process and send out the successfull requests."""
-        for entry in successfull_sets:
-            msg = entry[0]
-            result = entry[1]
-            matchId = int(msg.body.decode('utf-8'))
-            await self.add_element(matchId)
-            await self.push_task(result)
-            await msg.ack()
+    async def fetch(self, session, url, msg, matchId):
+        print(f"Fetching {url}")
+        async with session.get(url, proxy="http://proxy:8000") as response:
+            try:
+                resp = await response.json(content_type=None)
+            except:
+                pass
+            if response.status in [429, 430]:
+                if "Retry-After" in response.headers:
+                    self.retry_after = int(response.headers['Retry-After'])
+            elif response.status == 404:
+                msg.reject(requeue=False)
+            if response.status != 200:
+                msg.reject(requeue=True)
+            else:
+                await self.add_element(matchId=matchId)
+                await self.push_task(resp)
+                await msg.ack()
+            del self.buffered_matches[matchId]
 
-    async def process_404(self, not_found_sets):
-        """Process the 404 Responses."""
-        for entry in not_found_sets:
-            msg = entry[0]
-            result = entry[1]
-            matchId = int(msg.body.decode('utf-8'))
-            await self.add_element(matchId)
-            await msg.ack()
+
+    async def next_task(self):
+        while True:
+            msg = await self.retrieve_task()
+            if not msg:
+                print("No messages found. Awaiting.")
+                while not msg:
+                    msg = await self.retrieve_task()
+                    await asyncio.sleep(1)
+            matchId = msg.body.decode('utf-8')
+            if matchId in self.buffered_matches:
+                self.logging.info(f"Match {matchId} is already registered as an active task.")
+                try:
+                    await msg.ack()
+                except:
+                    print(f"Failed to ack {matchId}.")
+                continue
+            if await self.check_exists(matchId=matchId):
+                await msg.ack()
+                continue
+            self.buffered_matches[matchId] = True
+            return matchId, msg
 
     async def run(self):
         """Run method. Handles the creation and deletion of worker tasks."""
-        print("Startup")
-        while not os.environ['STATUS'] == 'STOP':
-            tasks = await self.prepare_tasks(400)
-            if not tasks:
-                print("No tasks found.")
-                await asyncio.sleep(1)
-                continue
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            while not os.environ['STATUS'] == 'STOP':
+                if self.retry_after:  # Wait for retry_after timeout
+                    await asyncio.sleep(self.retry_after)
+                    self.retry_after = 0
 
-            call_tasks = []
-            for id, msg in enumerate(tasks):
-                call_tasks.append([id, int(msg.body.decode('utf-8'))])
-            message = {
-                "endpoint": "match",
-                "url": "/match/v4/matches/%s",
-                "tasks": call_tasks
-            }
-            data_sets = []
-            not_found = []
-            print("Making calls. Total:", len(call_tasks))
-            async with websockets.connect("ws://proxy:6789", max_size=None) as websocket:
-                remaining = len(call_tasks)
-                await websocket.send("Match_Updater")
-                await websocket.send(json.dumps(message))
-                while remaining > 0:
-                    msg = await websocket.recv()
-                    data = json.loads(msg)
-                    if data['status'] == "rejected":
-                        for entry in data['tasks']:
-                            remaining -= 1
-                            await tasks[entry['id']].reject(requeue=True)
-                    elif data['status'] == 'done':
-                        for entry in data['tasks']:
-                            remaining -= 1
-                            if entry['status'] == 200:
-                                if len(entry['result']) == 0:
-                                    empty = True
-                                else:
-                                    data_sets.append([
-                                        tasks[entry['id']],
-                                        entry['result']])
-                            elif entry['status'] == 404:
-                                not_found.append([
-                                        tasks[entry['id']],
-                                        entry['result']])
-                            else:
-                                await tasks[entry['id']].reject(requeue=True)
-                                print(entry['status'])
-                                print(entry['headers'])
-            print("Done with calls. Stats: Successfull:", len(data_sets),
-                  "Total:", len(tasks))
+                if len(self.buffered_matches) >= self.max_buffer:
+                    self.logging.info("Buffer full. Waiting.")
+                    while len(self.buffered_matches) >= self.max_buffer:
+                        await asyncio.sleep(0.5)
+                    self.logging.info("Continue")
 
-            await self.process_404(not_found)
-            await self.process_successful(data_sets)
-            await asyncio.sleep(1)
+                matchId, msg = await self.next_task()
+                tasks.append(asyncio.create_task(self.fetch(
+                    session=session, url=self.url_template % (matchId), msg=msg, matchId=matchId
+                )))
+                await asyncio.sleep(0.03)
+            await asyncio.gather(*tasks)

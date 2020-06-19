@@ -61,9 +61,7 @@ class Worker:
 
     async def next_task(self):
         while True:
-
             msg = await self.pika.get()
-
             if not msg:
                 print("No messages found. Awaiting.")
                 while not msg:
@@ -94,15 +92,16 @@ class Worker:
         async with aiohttp.ClientSession() as session:
             tasks = []
             while True:
+                if self.retry_after:  #  Wait for retry_after timeout
+                    await asyncio.sleep(self.retry_after)
+                    self.retry_after = 0
+
                 if len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
                     print("Buffer full. Waiting.")
                     while len(self.buffered_summoners) >= self.max_buffer:
                         await asyncio.sleep(0.5)
                     print("Continue")
 
-                if self.retry_after:  #  Wait for retry_after timeout
-                    await asyncio.sleep(self.retry_after)
-                    self.retry_after = 0
                 summonerId, msg = await self.next_task()
                 tasks.append(asyncio.create_task(self.fetch(
                     session=session, url=self.url_template % (summonerId), msg=msg, summonerId=summonerId)))

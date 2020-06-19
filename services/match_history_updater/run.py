@@ -7,6 +7,7 @@ import time
 import pika
 import redis
 import websockets
+from datetime import datetime, timedelta
 
 if "SERVER" not in os.environ:
     print("No SERVER env variable provided. exiting")
@@ -14,197 +15,147 @@ if "SERVER" not in os.environ:
 
 server = os.environ['SERVER']
 
-# accountId, beginIndex, endIndex, queue
-base_url = "/match/v4/matchlists/by-account/" \
-           "%s?beginIndex=%s&endIndex=%s&queue=%s"
+import logging
+import aiohttp
+from redis_connector import Redis
+from pika_connector import Pika
 
 
-async def process_data(tasked_user):
-    """Async wrapper for api requests.
+class Worker:
 
-    Bundles requests for multiple player.
-    Each player again requires multiple requests.
-    """
-    try:
-        call_tasks = []
-        user_responses = {}
-        for user in tasked_user:
-            data = user['content']
-            calls_to_make = int(user['games_count']) // 100 + 1
-            user_responses[data['accountId']] = {
-                'content': data,
-                'matches': [],
-                'delivery_tag': user['delivery_tag']
-            }
-            for i in range(calls_to_make):
-                params = [str(len(call_tasks)) + "_" + data['accountId'],
-                          data['accountId'], i * 100,
-                          (i + 1) * 100, 420]
-                call_tasks.append(params)
+    def __init__(self, buffer):
 
-        while len(call_tasks) > 0:
-            message = {
-                'endpoint': 'match',
-                'url': base_url,
-                'tasks': call_tasks
-            }
-            failed = []
-            print("Making calls. Total:", len(call_tasks))
-            async with websockets.connect("ws://proxy:6789") as websocket:
-                remaining = len(call_tasks)
-                print("Sending Name.")
-                await websocket.send("Match_History_Updater")
-                print("Sent name, sending data")
-                await websocket.send(json.dumps(message))
-                print("Sent data, awaiting.")
-                while remaining > 0:
-                    msg = await websocket.recv()
-                    response_content = json.loads(msg)
-                    if response_content['status'] == "rejected":
-                        for task in response_content['tasks']:
-                            remaining -= 1
-                            failed.append(
-                                call_tasks[
-                                    task['id'].split("_", 1)[0]])
+        self.redis = Redis()
+        self.pika = Pika()
+        self.url_template =f"http://{server}.api.riotgames.com/lol/match/v4/matchlists/by-account/" \
+           "%s?beginIndex=%s&endIndex=%s&queue=420"
 
-                    elif response_content['status'] == 'done':
-                        for task in response_content['tasks']:
-                            remaining -= 1
-                            if task['status'] == 200:
-                                for match in task['result']['matches']:
-                                    if match['platformId'] == server \
-                                            and match['queue'] == 420:
-                                        user_responses[task['id']\
-                                            .split("_", 1)[1]]['matches']\
-                                            .append(
-                                            match['gameId']
-                                        )
-                            else:
-                                print(task['status'])
-                                print(task['headers'])
-                                print(task['result'])
+        self.max_buffer = buffer
+        self.failed_tasks = []
+        self.retry_after = None
+        self.buffered_summoners = {}
 
-            print(f"{len(failed)} tasks failed.")
-
-            call_tasks = failed
-        response = []
-        for key in user_responses:
-            response.append(user_responses[key])
-        return response
-    except Exception as err:
-        print("Exception", err)
+        self.logging = logging.getLogger("worker")
+        self.logging.setLevel(logging.INFO)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        ch.setFormatter(
+            logging.Formatter(f'%(asctime)s [WORKER] %(message)s'))
+        self.logging.addHandler(ch)
 
 
-def main():
-    """Update user match lists.
+    async def fetch(self, session, url, startingId):
+        print(f"Fetching {url}")
+        async with session.get(url, proxy="http://proxy:8000") as response:
+            try:
+                resp = await response.json(content_type=None)
+            except:
+                pass
+            if response.status in [429, 430]:
+                if "Retry-After" in response.headers:
+                    self.retry_after = datetime.now() + timedelta(
+                        seconds=int(response.headers['Retry-After']))
 
-    Wrapper function that starts the cycle.
-    Pulls data from the DB in syncronous setup,
-    calls requests in async method and uses the returned values to update.
-    """
-    # Pull data package
-    while True:
-        try:
-            connection = pika.BlockingConnection(
-                pika.ConnectionParameters('rabbitmq'))
-            channel = connection.channel()
-            channel.basic_qos(prefetch_count=1)
-            # Incoming
-            queue = channel.queue_declare(
-                queue=f'MATCH_HISTORY_IN_{server}',
-                durable=True)
+            if response.status != 200:
+                return {"status": "failed", "id": startingId}
+            else:
+                return {"status": "success",
+                        "id": startingId,
+                        "matches": [match['gameId'] for match in resp['matches'] if match['queue'] == 420 and match['platformId'] == server]}
 
-            # Outgoing
-            channel.exchange_declare(
-                exchange=f'MATCH_HISTORY_OUT_{server}',
-                exchange_type='direct',
-                durable=True
-            )
-            match_in = channel.queue_declare(
-                queue=f'MATCH_IN_{server}',
-                durable=True)
-            channel.queue_bind(
-                exchange=f'MATCH_HISTORY_OUT_{server}',
-                queue=match_in.method.queue,
-                routing_key='MATCH'
-            )
 
-            r = redis.StrictRedis(host='redis', port=6379, db=0,
-                                  charset="utf-8", decode_responses=True)
+    async def process_history(self, msg, summonerId, matches):
+        """Manage a single summoners full history calls."""
 
-            while True:
-                total_calls = 0  # expected total calls to be made
-                tasks = []
-                skips = 0
-                print("Starting cycle")
-                while total_calls < 25:
-                    message = channel.basic_get(
-                        queue=f"MATCH_HISTORY_IN_{server}")
+        matches_to_call = matches + 3
+        calls = int(matches_to_call / 100) + 1
+        ids = [start_id * 100 for start_id in range(calls)]
+        content = json.loads(msg.body.decode('utf-8'))
+        matches = []
+        while ids:
+            async with aiohttp.ClientSession() as session:
+                calls_executed = []
+                while ids:
+                    id = ids.pop()
+                    calls_executed.append(asyncio.create_task(
+                        self.fetch(session=session,
+                                   url=self.url_template % (content['accountId'], id, id + 100),
+                                   startingId=id)
+                    ))
+                    await asyncio.sleep(0.1)
+                responses = await asyncio.gather(*calls_executed)
+            for response in responses:
+                if response['status'] == "failed":
+                    ids.append(response['id'])
+                else:
+                    matches += response['matches']
 
-                    if all(x is None for x in message):
-                        break
+        matches = list(set(matches))
+        await self.redis.hset(summonerId,
+             mapping={
+                 "summonerName": content['summonerName'],
+                 "wins": content['wins'],
+                 "losses": content['losses'],
+                 "tier": content['tier'],
+                 "rank": content['rank'],
+                 "leaguePoints": content['leaguePoints']
+             })
+        for match_id in matches:
+            await self.pika.push(match_id)
+        del self.buffered_summoners[summonerId]
+        msg.ack()
 
-                    # Sort out too small
-                    content = json.loads(message[2])
-                    summonerId = content['summonerId']
+    async def next_task(self):
+        while True:
+            msg = await self.pika.get()
+            if not msg:
+                self.logging.info("No messages found. Awaiting.")
+                while not msg:
+                    msg = await self.pika.get()
+                    await asyncio.sleep(1)
+                self.logging.info("Continuing.")
+            content = json.loads(msg.body.decode('utf-8'))
+            summonerId = content['summonerId']
 
-                    prev = r.hgetall(f'user:{summonerId}')
-                    games = content['wins'] + content['losses']
-                    if prev:
-                        games -= (int(prev['wins']) + int(prev['losses']))
-                        if 0 < games < 10:
-                            skips += 1
+            if summonerId in self.buffered_summoners:  # Skip any further tasks for already queued
+                self.logging.info(f"Summoner {summonerId} is already registered as an active task.")
+                try:
+                    await msg.ack()
+                except:
+                    self.logging.info(f"Failed to ack {summonerId}.")
+                continue
 
-                    if games >= 10:
-                        total_calls += games // 100 + 1
-                        task = {
-                            'delivery_tag': message[0].delivery_tag,
-                            'content': content,
-                            'games_count': games
-                        }
-                        tasks.append(task)
+            prev = await self.redis.hgetall(summonerId)
+            matches = content['wins'] + content['losses']
 
-                if len(tasks) == 0:
-                    print("Found no tasks, waiting.")
-                    time.sleep(5)
-                    continue
+            if prev:
+                matches -= (int(prev['wins']) + int(prev['losses']))
 
-                print(f"Skipping {skips}.")
-                print(f"Pulling data for {len(tasks)} user.")
-                results = asyncio.run(
-                    process_data(tasks))
+            if matches < 10:  # Skip if less than 10 new matches
+                msg.ack()
+                continue
+            self.buffered_summoners[summonerId] = True
+            return summonerId, matches, msg
 
-                for result in results:
-                    delivery_tag = result["delivery_tag"]
-                    content = result["content"]
-                    matches = result["matches"]
-                    # Update/Create Redis entry
+    async def main(self):
+        tasks = []
+        while True:
+            if len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
+                self.logging.info("Buffer full. Waiting.")
+                while len(self.buffered_summoners) >= self.max_buffer:
+                    await asyncio.sleep(0.5)
+                self.logging.info("Continue")
 
-                    r.hset(f"user:{content['summonerId']}",
-                           mapping={
-                               "summonerName": content['summonerName'],
-                               "wins": content['wins'],
-                               "losses": content['losses'],
-                               "tier": content['tier'],
-                               "rank": content['rank'],
-                               "leaguePoints": content['leaguePoints']
-                           })
-                    # Add Matches to outgoing Queue
-                    for match_id in matches:
-                        channel.basic_publish(
-                            exchange=f'MATCH_HISTORY_OUT_{server}',
-                            routing_key=f'MATCH',
-                            body=str(match_id))
-                    # Add User to outgoing Queue
-                    # With all its changes
-                    channel.basic_ack(
-                        delivery_tag=delivery_tag)
+            summonerId, matches, msg = await self.next_task()
+            tasks.append(asyncio.create_task(self.process_history(
+                msg=msg, summonerId=summonerId, matches=matches)))
+            await asyncio.sleep(0.03)
+        await asyncio.gather(*tasks)
 
-        except RuntimeError:
-            # Raised when rabbitmq cant connect
-            print("Failed to reach rabbitmq")
-            time.sleep(1)
-
+    async def run(self):
+        await self.pika.init()
+        await self.main()
 
 if __name__ == "__main__":
-    main()
+    worker = Worker(buffer=5)
+    asyncio.run(worker.run())
