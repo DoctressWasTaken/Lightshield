@@ -5,7 +5,7 @@ import os
 import aiohttp
 import aioredis
 import websockets
-from aio_pika import Message
+from aio_pika import Message, DeliveryMode
 import json
 import logging
 
@@ -38,7 +38,7 @@ class Master:
         """Create a connection to rabbitmq."""
         time = 0.5
         while not self.rabbit or self.rabbit.is_closed:
-            self.rabbit = await aio_pika.connect(
+            self.rabbit = await aio_pika.connect_robust(
                 'amqp://guest:guest@rabbitmq/')
             channel = await self.rabbit.channel()
             await channel.set_qos(prefetch_count=1)
@@ -71,7 +71,8 @@ class Master:
         """Add a task to the outgoing exchange."""
         await self.connect_rabbit()
         await self.rabbit_exchange.publish(
-            Message(bytes(json.dumps(data), 'utf-8')), 'MATCH')
+            Message(bytes(json.dumps(data), 'utf-8'),
+                    delivery_mode=DeliveryMode.PERSISTENT), 'MATCH')
 
     ## Redis
     async def connect_redis(self):
