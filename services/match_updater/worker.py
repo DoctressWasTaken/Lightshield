@@ -64,7 +64,7 @@ class Master:
             try:
                 return await self.rabbit_queue.get(timeout=1, fail=False)
             except Exception as err:
-                print(err)
+                self.logging.error(err)
                 await asyncio.sleep(0.5)
 
     async def push_task(self, data):
@@ -84,7 +84,7 @@ class Master:
             await asyncio.sleep(time)
             time = min(time + 0.5, 5)
             if time == 5:
-                print("Connection to redis could not be established.")
+                self.logging.error("Connection to redis could not be established.")
 
     async def check_exists(self, matchId):
         """Check if a redis entry for this id exists."""
@@ -98,7 +98,7 @@ class Master:
 
 
     async def fetch(self, session, url, msg, matchId):
-        print(f"Fetching {url}")
+        self.logging.debug(f"Fetching {url}")
         async with session.get(url, proxy="http://proxy:8000") as response:
             try:
                 resp = await response.json(content_type=None)
@@ -122,7 +122,7 @@ class Master:
         while True:
             msg = await self.retrieve_task()
             if not msg:
-                print("No messages found. Awaiting.")
+                self.logging.info("No messages found. Awaiting.")
                 while not msg:
                     msg = await self.retrieve_task()
                     await asyncio.sleep(1)
@@ -132,7 +132,7 @@ class Master:
                 try:
                     await msg.ack()
                 except:
-                    print(f"Failed to ack {matchId}.")
+                    self.logging.info(f"Failed to ack {matchId}.")
                 continue
             if await self.check_exists(matchId=matchId):
                 await msg.ack()

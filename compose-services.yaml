@@ -4,7 +4,7 @@ services:
   proxy:
     build:
       dockerfile: Dockerfile
-      context: services/proxy_3
+      context: services/proxy
     environment:
       - SERVER=${SERVER}
     env_file:

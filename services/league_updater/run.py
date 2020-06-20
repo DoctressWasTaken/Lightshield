@@ -50,6 +50,14 @@ class Worker:
         self.logging.addHandler(ch)
 
     async def main(self):
+        for i in range(self.max_worker):
+            log = logging.getLogger("Worker_" + str(i))
+            log.setLevel(logging.INFO)
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.INFO)
+            ch.setFormatter(
+                logging.Formatter(f'%(asctime)s [Worker {i}] %(message)s'))
+            log.addHandler(ch)
         await self.rankmanager.init()
         for rank in range(await self.rankmanager.get_total()):
             tier, division = await self.rankmanager.get_next()
@@ -114,12 +122,6 @@ class Worker:
     async def worker(self, id, tier, division):
         """Call and process page data. Multiple are started and work until pages return empty."""
         log = logging.getLogger("Worker_" + str(id))
-        log.setLevel(logging.INFO)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(
-            logging.Formatter(f'%(asctime)s [Worker {id}] %(message)s'))
-        log.addHandler(ch)
         log.info("Initiated.")
 
         failed = None

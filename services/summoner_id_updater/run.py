@@ -35,7 +35,7 @@ class Worker:
         self.logging.addHandler(ch)
 
     async def fetch(self, session, url, msg, summonerId):
-        print(f"Fetching {url}")
+        self.logging.debug(f"Fetching {url}")
         async with session.get(url, proxy="http://proxy:8000") as response:
             try:
                 resp = await response.json(content_type=None)
@@ -63,7 +63,7 @@ class Worker:
         while True:
             msg = await self.pika.get()
             if not msg:
-                print("No messages found. Awaiting.")
+                self.logging.info("No messages found. Awaiting.")
                 while not msg:
                     msg = await self.pika.get()
                     await asyncio.sleep(1)
@@ -75,7 +75,7 @@ class Worker:
                 try:
                     await msg.ack()
                 except:
-                    print(f"Failed to ack {summonerId}.")
+                    self.logging.info(f"Failed to ack {summonerId}.")
                 continue
             redis_entry = await self.redis.hgetall(summonerId)
 
@@ -97,10 +97,10 @@ class Worker:
                     self.retry_after = 0
 
                 if len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
-                    print("Buffer full. Waiting.")
+                    self.logging.info("Buffer full. Waiting.")
                     while len(self.buffered_summoners) >= self.max_buffer:
                         await asyncio.sleep(0.5)
-                    print("Continue")
+                    self.logging.info("Continue")
 
                 summonerId, msg = await self.next_task()
                 tasks.append(asyncio.create_task(self.fetch(

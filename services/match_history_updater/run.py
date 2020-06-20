@@ -45,7 +45,7 @@ class Worker:
 
 
     async def fetch(self, session, url, startingId):
-        print(f"Fetching {url}")
+        self.logging.debug(f"Fetching {url}.")
         async with session.get(url, proxy="http://proxy:8000") as response:
             try:
                 resp = await response.json(content_type=None)
