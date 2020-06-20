@@ -32,6 +32,8 @@ services:
       - proxy:proxy
     external_links:
       - riotapi_rabbitmq:rabbitmq
+    depends_on:
+      - redis_summoner_id
 
   redis_summoner_id:
     build:
@@ -50,6 +52,8 @@ services:
       - proxy:proxy
     external_links:
       - riotapi_rabbitmq:rabbitmq
+    depends_on:
+      - redis_match_history
 
   redis_match_history:
     build:
@@ -67,6 +71,8 @@ services:
       - proxy:proxy
     external_links:
       - riotapi_rabbitmq:rabbitmq
+    depends_on:
+      - redis_match
 
   redis_match:
     build:

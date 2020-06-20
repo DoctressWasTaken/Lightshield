@@ -11,3 +11,6 @@ brd:
 manager-run:
 	docker-compose -f docker-compose-dev.yaml -p riotapi build --parallel
 	docker-compose -f docker-compose-dev.yaml -p riotapi up -t 180 manager
+
+persistent:
+    docker-compose -f compose-persistent -p riot_api_persistent up -d
