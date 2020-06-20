@@ -82,16 +82,34 @@ class Worker:
                 durable=True)
             await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
 
-            self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
+        self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
+        loop = asyncio.get_event_loop()
 
-            async with channel.transaction():
-                for entry in self.page_entries:
-                    await rabbit_exchange_out.publish(
-                        message=Message(
-                            bytes(json.dumps(entry), 'utf-8'),
-                            delivery_mode=DeliveryMode.PERSISTENT),
-                        routing_key='SUMMONER_V1')
-            self.logging.info(f"Done pushing tasks.")
+        async def get_connection():
+            return await aio_pika.connect_robust("amqp://guest:guest@localhost/")
+
+        connection_pool = Pool(get_connection, max_size=2, loop=loop)
+
+        async def get_channel() -> aio_pika.Channel:
+            async with connection_pool.acquire() as connection:
+                return await connection.channel()
+
+        channel_pool = Pool(get_channel, max_size=10, loop=loop)
+
+        async def publish(entry):
+            async with channel_pool.acquire() as channel:  # type: aio_pika.Channel
+                rabbit_exchange_out = await channel.declare_exchange(
+                    name=f'LEAGUE_OUT_{server}',
+                    type='direct',
+                    durable=True)
+                await rabbit_exchange_out.publish(
+                    message=Message(
+                        bytes(json.dumps(entry), 'utf-8'),
+                        delivery_mode=DeliveryMode.PERSISTENT),
+                    routing_key='SUMMONER_V1')
+
+        await asyncio.wait([publish(entry) for entry in self.page_entries])
+        self.logging.info(f"Done pushing tasks.")
 
     async def worker(self, id, tier, division):
         """Call and process page data. Multiple are started and work until pages return empty."""
