@@ -7,7 +7,6 @@ import os
 import datetime, time
 from datetime import datetime, timedelta
 import pika
-import websockets
 import aiohttp
 import aio_pika
 from aio_pika import Message
@@ -22,14 +21,6 @@ class EmptyPageException(Exception):
         """Accept response data and failed pages."""
         self.success = success
         self.failed = failed
-
-
-logging.basicConfig(
-    format='%(asctime)s %(message)s',
-    datefmt='%m/%d/%Y %I:%M:%S %p',
-    level=logging.INFO)
-
-logging.getLogger("pika").setLevel(logging.WARNING)
 
 if 'SERVER' not in os.environ:
     print("No server provided, exiting.")
@@ -49,9 +40,18 @@ class Worker:
         self.empty = False
         self.next_page = 1
         self.page_entries = []
+        
+        self.logging = logging.getLogger("Core")
+        self.logging.setLevel(logging.INFO)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        ch.setFormatter(
+            logging.Formatter(f'%(asctime)s [CORE] %(message)s'))
+        self.logging.addHandler(ch)
 
     async def main(self):
-        for rank in range(self.rankmanager.get_total()):
+        await self.rankmanager.init()
+        for rank in range(await self.rankmanager.get_total()):
             tier, division = await self.rankmanager.get_next()
 
             self.empty = False
@@ -81,13 +81,14 @@ class Worker:
             name=f'SUMMONER_ID_IN_{server}',
             durable=True)
         await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
-        self.page_entries = list(set(self.page_entries))
+        self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
         for entry in self.page_entries:
             await rabbit_exchange_out.publish(
                 message=Message(
                     bytes(json.dumps(entry), 'utf-8'),
                     delivery_mode=DeliveryMode.PERSISTENT),
                 routing_key='SUMMONER_V1')
+        self.logging.info(f"Done pushing tasks.")
 
     async def worker(self, id, tier, division):
         """Call and process page data. Multiple are started and work until pages return empty."""
@@ -118,7 +119,7 @@ class Worker:
                     try:
                         resp = await response.json(content_type=None)
                     except:
-                        print(await response.text())
+                        pass
                     if response.status in [429, 430]:
                         if "Retry-After" in response.headers:
                             delay = int(response.headers['Retry-After'])

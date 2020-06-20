@@ -2,6 +2,7 @@
 import json
 import logging
 from datetime import datetime
+import asyncio
 
 tiers = [
     "IRON",
@@ -24,7 +25,6 @@ divisions = [
 class RankManager:
 
     def __init__(self):
-        """Open or create the ranking_cooldown tracking sheet."""
         self.logging = logging.getLogger("RankManager")
         self.logging.setLevel(logging.INFO)
         ch = logging.StreamHandler()
@@ -33,21 +33,22 @@ class RankManager:
             logging.Formatter(f'%(asctime)s [RankManager] %(message)s'))
         self.logging.addHandler(ch)
 
+    async def init(self):
+        """Open or create the ranking_cooldown tracking sheet."""
         try:
             self.ranks = json.loads(open("ranking_cooldown.json", "r+").read())
             self.logging.info("Loaded data file.")
         except FileNotFoundError:
             self.logging.info("File not found. Recreating.")
             now = datetime.timestamp(datetime.now())
-            self.ranks = {}
+            self.ranks = []
             for tier in tiers:
                 if tier in ['MASTER', 'GRANDMASTER', 'CHALLENGER']:
-                    self.ranks[(tier, 'I')] = now
+                    self.ranks.append([tier, 'I', now])
                     continue
                 for division in divisions:
-                    self.ranks[(tier, divisions)] = now
-            self.save_to_file()
-
+                    self.ranks.append([tier, division, now])
+        await self.save_to_file()
 
     async def get_total(self):
         """Return the number of entries in the file.
@@ -65,10 +66,10 @@ class RankManager:
         """Return the next tier/division combination to be called."""
         oldest_timestamp = None
         oldest_key = None
-        for key in self.ranks:
-            if not oldest_timestamp or self.ranks[key] < oldest_timestamp:
-                oldest_key = key
-                oldest_timestamp = self.ranks[key]
+        for entry in self.ranks:
+            if not oldest_timestamp or entry[2] < oldest_timestamp:
+                oldest_key = entry[0:2]
+                oldest_timestamp = entry[2]
         self.logging.info(f"Commencing on {oldest_key}.")
         return oldest_key
 
@@ -76,5 +77,8 @@ class RankManager:
         """Update the stats on a rank that is done pulling."""
         self.logging.info(f"Done with {key}.")
         now = datetime.timestamp(datetime.now())
-        self.ranks[key] = now
-        await self.save_to_file()
+        for index, entry in enumerate(self.ranks):
+            if entry[0] == key[0] and entry[1] == key[1]:
+                self.ranks[index][2] = now
+                await self.save_to_file()
+                return
