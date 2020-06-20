@@ -9,6 +9,6 @@ RUN chmod 500 wait-for-it.sh
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 # Main Application
-COPY run.py .
+COPY *.py ./
 
 CMD ["python", "-u", "run.py"]
