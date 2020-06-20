@@ -9,6 +9,7 @@ services:
       - SERVER=${SERVER}
     env_file:
       - secrets.env
+    restart: always
 
   league_updater:
     build:
@@ -20,6 +21,9 @@ services:
       - riotapi_rabbitmq:rabbitmq
     links:
       - proxy:proxy
+    depends_on:
+      - riotapi_rabbitmq
+    restart: always
 
   summoner_id_updater:
     build:
@@ -34,12 +38,14 @@ services:
       - riotapi_rabbitmq:rabbitmq
     depends_on:
       - redis_summoner_id
+      - riotapi_rabbitmq
+    restart: always
 
   redis_summoner_id:
     build:
       context: databases/redis
       dockerfile: Dockerfile
-
+    restart: always
 
   match_history_updater:
     build:
@@ -54,11 +60,14 @@ services:
       - riotapi_rabbitmq:rabbitmq
     depends_on:
       - redis_match_history
+      - riotapi_rabbitmq
+    restart: always
 
   redis_match_history:
     build:
       context: databases/redis
       dockerfile: Dockerfile
+    restart: always
 
   match_updater:
     build:
@@ -73,11 +82,14 @@ services:
       - riotapi_rabbitmq:rabbitmq
     depends_on:
       - redis_match
+      - riotapi_rabbitmq
+    restart: always
 
   redis_match:
     build:
       context: databases/redis
       dockerfile: Dockerfile
+    restart: always
 
   db_worker:
     build:
@@ -86,8 +98,12 @@ services:
     environment:
       - SERVER=${SERVER}
     external_links:
-      - postgres:postres
+      - riotapi_postgres:postres
       - riotapi_rabbitmq:rabbitmq
+    depends_on:
+      - riotapi_rabbitmq
+      - riotapi_postgres
+    restart: always
 
 volumes:
   redis_summoner:
