@@ -26,7 +26,7 @@ async def main():
     calls requests in async method and uses the returned values to update.
     """
     # Pull data package
-    m = Master(buffer=50)
+    m = Master(buffer=30)
     await m.run()
 
 

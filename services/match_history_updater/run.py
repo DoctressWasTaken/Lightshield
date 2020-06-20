@@ -53,8 +53,9 @@ class Worker:
                 pass
             if response.status in [429, 430]:
                 if "Retry-After" in response.headers:
+                    delay = int(response.headers['Retry-After'])
                     self.retry_after = datetime.now() + timedelta(
-                        seconds=int(response.headers['Retry-After']))
+                        seconds=delay)
 
             if response.status != 200:
                 return {"status": "failed", "id": startingId}
@@ -66,7 +67,6 @@ class Worker:
 
     async def process_history(self, msg, summonerId, matches):
         """Manage a single summoners full history calls."""
-
         matches_to_call = matches + 3
         calls = int(matches_to_call / 100) + 1
         ids = [start_id * 100 for start_id in range(calls)]
@@ -76,8 +76,9 @@ class Worker:
             async with aiohttp.ClientSession() as session:
                 calls_executed = []
                 while ids:
-                    if datetime.now() < self.retry_after:
-                       await asyncio.sleep((self.retry_after - datetime.now()).total_seconds())
+                    if self.retry_after and datetime.now() < self.retry_after:
+                        delay = (self.retry_after - datetime.now()).total_seconds()
+                        await asyncio.sleep(delay)
                     id = ids.pop()
                     calls_executed.append(asyncio.create_task(
                         self.fetch(session=session,
