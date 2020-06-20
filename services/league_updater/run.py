@@ -68,33 +68,33 @@ class Worker:
     async def push_data(self):
         """Send out gathered data via rabbitmq tasks."""
 
-        with await aio_pika.connect_robust('amqp://guest:guest@rabbitmq/') as rabbit:
-            # Outgoing
-            channel = await rabbit.channel()
-            await channel.set_qos(prefetch_count=1)
+        rabbit = await aio_pika.connect_robust('amqp://guest:guest@rabbitmq/')
+        # Outgoing
+        channel = await rabbit.channel()
+        await channel.set_qos(prefetch_count=1)
 
-            rabbit_exchange_out = await channel.declare_exchange(
-                name=f'LEAGUE_OUT_{server}',
-                type='direct',
-                durable=True)
-            summoner_in = await channel.declare_queue(
-                name=f'SUMMONER_ID_IN_{server}',
-                durable=True)
-            await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
+        rabbit_exchange_out = await channel.declare_exchange(
+            name=f'LEAGUE_OUT_{server}',
+            type='direct',
+            durable=True)
+        summoner_in = await channel.declare_queue(
+            name=f'SUMMONER_ID_IN_{server}',
+            durable=True)
+        await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
 
         self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
         loop = asyncio.get_event_loop()
 
         async def get_connection():
-            return await aio_pika.connect_robust("amqp://guest:guest@localhost/")
+            return await aio_pika.connect_robust("amqp://guest:guest@rabbitmq/")
 
-        connection_pool = Pool(get_connection, max_size=2, loop=loop)
+        connection_pool = Pool(get_connection, max_size=10, loop=loop)
 
         async def get_channel() -> aio_pika.Channel:
             async with connection_pool.acquire() as connection:
                 return await connection.channel()
 
-        channel_pool = Pool(get_channel, max_size=10, loop=loop)
+        channel_pool = Pool(get_channel, max_size=25, loop=loop)
 
         async def publish(entry):
             async with channel_pool.acquire() as channel:  # type: aio_pika.Channel
