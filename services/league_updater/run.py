@@ -40,10 +40,11 @@ server = os.environ['SERVER']
 
 class Worker:
 
-    def __init__(self):
+    def __init__(self, parallel_worker):
         self.rankmanager = RankManager()
         self.url = f"http://{server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         self.retry_after = datetime.now()
+        self.max_worker = parallel_worker
 
         self.empty = False
         self.next_page = 1
@@ -58,7 +59,7 @@ class Worker:
             self.page_entries = []
 
             await asyncio.gather(*[
-                asyncio.create_task(self.worker(id=i, tier=tier, division=division)) for i in range(5)])
+                asyncio.create_task(self.worker(id=i, tier=tier, division=division)) for i in range(self.max_worker)])
 
             await self.push_data()
 
@@ -101,6 +102,11 @@ class Worker:
 
         failed = None
         while not self.empty or failed:
+            if self.retry_after > datetime.now():
+                delay = (self.retry_after - datetime.now()).total_seconds()
+                if delay > 10:
+                    log.info(f"Sleeping for {delay}.")
+                await asyncio.sleep(delay)
             async with aiohttp.ClientSession() as session:
                 if not failed:
                     page = self.next_page
@@ -133,7 +139,7 @@ async def main():
 
     The loop is limited to run once every 6 hours max.
     """
-    worker = Worker()
+    worker = Worker(parallel_worker=5)
     while True:
         await asyncio.gather(
             worker.main(),
