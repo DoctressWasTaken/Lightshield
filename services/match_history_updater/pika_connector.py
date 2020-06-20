@@ -3,7 +3,8 @@ import aio_pika
 import logging
 import os
 import json
-from aio_pika import Message
+from aio_pika import Message, DeliveryMode
+
 
 class Pika:
 
@@ -43,7 +44,7 @@ class Pika:
     async def connect(self):
         time = 0.5
         while not self.rabbit or self.rabbit.is_closed:
-            self.rabbit = await aio_pika.connect(
+            self.rabbit = await aio_pika.connect_robust(
                 f'amqp://guest:guest@{self.host}/')
             await asyncio.sleep(time)
             time = min(time + 0.5, 5)
@@ -57,4 +58,5 @@ class Pika:
     async def push(self, data):
         await self.connect()
         return await self.rabbit_exchange.publish(
-            Message(bytes(str(data), 'utf-8')), 'MATCH')
+            Message(bytes(str(data), 'utf-8'),
+                    delivery_mode=DeliveryMode.PERSISTENT), 'MATCH')
