@@ -11,7 +11,7 @@ import aiohttp
 import aio_pika
 from aio_pika import Message
 from aio_pika import DeliveryMode
-
+from aio_pika.pool import Pool
 from rank_manager import RankManager
 
 class EmptyPageException(Exception):
@@ -68,27 +68,30 @@ class Worker:
     async def push_data(self):
         """Send out gathered data via rabbitmq tasks."""
 
-        rabbit = await aio_pika.connect_robust('amqp://guest:guest@rabbitmq/')
-        # Outgoing
-        channel = await rabbit.channel()
-        await channel.set_qos(prefetch_count=1)
+        with await aio_pika.connect_robust('amqp://guest:guest@rabbitmq/') as rabbit:
+            # Outgoing
+            channel = await rabbit.channel()
+            await channel.set_qos(prefetch_count=1)
 
-        rabbit_exchange_out = await channel.declare_exchange(
-            name=f'LEAGUE_OUT_{server}',
-            type='direct',
-            durable=True)
-        summoner_in = await channel.declare_queue(
-            name=f'SUMMONER_ID_IN_{server}',
-            durable=True)
-        await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
-        self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
-        for entry in self.page_entries:
-            await rabbit_exchange_out.publish(
-                message=Message(
-                    bytes(json.dumps(entry), 'utf-8'),
-                    delivery_mode=DeliveryMode.PERSISTENT),
-                routing_key='SUMMONER_V1')
-        self.logging.info(f"Done pushing tasks.")
+            rabbit_exchange_out = await channel.declare_exchange(
+                name=f'LEAGUE_OUT_{server}',
+                type='direct',
+                durable=True)
+            summoner_in = await channel.declare_queue(
+                name=f'SUMMONER_ID_IN_{server}',
+                durable=True)
+            await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
+
+            self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
+
+            async with channel.transaction():
+                for entry in self.page_entries:
+                    await rabbit_exchange_out.publish(
+                        message=Message(
+                            bytes(json.dumps(entry), 'utf-8'),
+                            delivery_mode=DeliveryMode.PERSISTENT),
+                        routing_key='SUMMONER_V1')
+            self.logging.info(f"Done pushing tasks.")
 
     async def worker(self, id, tier, division):
         """Call and process page data. Multiple are started and work until pages return empty."""
