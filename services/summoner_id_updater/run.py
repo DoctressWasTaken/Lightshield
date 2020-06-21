@@ -4,6 +4,7 @@ import websockets
 import logging
 import json
 import aiohttp
+from datetime import datetime, timedelta
 
 if "SERVER" not in os.environ:
     print("No server provided, shutting down")
@@ -23,7 +24,7 @@ class Worker:
 
         self.max_buffer = buffer
         self.failed_tasks = []
-        self.retry_after = 0
+        self.retry_after = datetime.now()
         self.buffered_summoners = {}
 
         self.logging = logging.getLogger("worker")
@@ -34,30 +35,6 @@ class Worker:
             logging.Formatter(f'%(asctime)s [WORKER] %(message)s'))
         self.logging.addHandler(ch)
 
-    async def fetch(self, session, url, msg, summonerId):
-        self.logging.debug(f"Fetching {url}")
-        async with session.get(url, proxy="http://proxy:8000") as response:
-            try:
-                resp = await response.json(content_type=None)
-            except:
-                pass
-            if response.status in [429, 430]:
-                if "Retry-After" in response.headers:
-                    self.retry_after = int(response.headers['Retry-After'])
-            elif response.status == 404:
-                msg.reject(requeue=False)
-            if response.status != 200:
-                msg.reject(requeue=True)
-            else:
-                await self.redis.hset(
-                    summonerId=summonerId,
-                    mapping={'puuid': resp['puuid'],
-                             'accountId': resp['accountId']})
-                await msg.ack()
-                package = {**json.loads(msg.body.decode('utf-8')),
-                           **resp}
-                await self.pika.push(package)
-            del self.buffered_summoners[summonerId]
 
     async def next_task(self):
         while True:
@@ -87,32 +64,46 @@ class Worker:
             self.buffered_summoners[summonerId] = True
             return summonerId, msg
 
+    async def worker(self):
+        while True:
+            if self.retry_after > datetime.now():
+                delay = (datetime.now() - self.retry_after).total_seconds()
+                await asyncio.sleep(delay)
+            summonerId, msg = await self.next_task()
+            url = self.url_template % (summonerId)
+            self.logging.debug(f"Fetching {url}")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, proxy="http://proxy:8000") as response:
+                    try:
+                        resp = await response.json(content_type=None)
+                    except:
+                        pass
+            if response.status in [429, 430]:
+                if "Retry-After" in response.headers:
+                    delay = int(response.headers['Retry-After'])
+                    self.retry_after = datetime.now() + timedelta(seconds=delay)
+            elif response.status == 404:
+                msg.reject(requeue=False)
+            if response.status != 200:
+                msg.reject(requeue=True)
+            else:
+                await self.redis.hset(
+                    summonerId=summonerId,
+                    mapping={'puuid': resp['puuid'],
+                             'accountId': resp['accountId']})
+                await msg.ack()
+                package = {**json.loads(msg.body.decode('utf-8')),
+                           **resp}
+                await self.pika.push(package)
+            del self.buffered_summoners[summonerId]
+
 
     async def main(self):
-        async with aiohttp.ClientSession() as session:
-            tasks = []
-            while True:
-                if self.retry_after:  #  Wait for retry_after timeout
-                    await asyncio.sleep(self.retry_after)
-                    self.retry_after = 0
-
-                if len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
-                    self.logging.info("Buffer full. Waiting.")
-                    while len(self.buffered_summoners) >= self.max_buffer:
-                        await asyncio.sleep(0.5)
-                    self.logging.info("Continue")
-
-                summonerId, msg = await self.next_task()
-                tasks.append(asyncio.create_task(self.fetch(
-                    session=session, url=self.url_template % (summonerId), msg=msg, summonerId=summonerId)))
-                await asyncio.sleep(0.03)
-
-            await asyncio.gather(*tasks)
+        await asyncio.gather(*[self.worker() for i in range(self.max_buffer)])
 
     async def run(self):
         await self.pika.init()
         await self.main()
-
 
 if __name__ == "__main__":
 
