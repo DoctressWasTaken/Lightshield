@@ -65,7 +65,6 @@ class Worker:
             return summonerId, msg
 
     async def worker(self, session, summonerId, msg):
-        summonerId, msg = await self.next_task()
         url = self.url_template % (summonerId)
         package = None
         self.logging.debug(f"Fetching {url}")
@@ -75,15 +74,14 @@ class Worker:
                 resp = await response.json(content_type=None)
             except:
                 pass
-
         if response.status in [429, 430]:
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
                 self.retry_after = datetime.now() + timedelta(seconds=delay)
         elif response.status == 404:
-            msg.reject(requeue=False)
+            await msg.reject(requeue=False)
         if response.status != 200:
-            msg.reject(requeue=True)
+            await msg.reject(requeue=True)
         else:
             await self.redis.hset(
                 summonerId=summonerId,
@@ -96,25 +94,24 @@ class Worker:
 
         return package
 
-
     async def main(self):
         while True:
             tasks = []
             async with aiohttp.ClientSession() as session:
                 while self.retry_after < datetime.now():
-
                     if len(self.buffered_summoners) >= self.max_buffer:
                         self.logging.info("Buffer reached. Waiting.")
                         while len(self.buffered_summoners) >= self.max_buffer:
                             await asyncio.sleep(0.1)
                         self.logging.info("Continuing.")
-                        summonerId, msg = await self.next_task()
-                        tasks.append(asyncio.create_task(self.worker(
-                            session,
-                            summonerId,
-                            msg
-                        )))
-                    await asyncio.sleep(0.02)
+                    summonerId, msg = await self.next_task()
+                    tasks.append(asyncio.create_task(self.worker(
+                        session,
+                        summonerId,
+                        msg
+                    )))
+                    await asyncio.sleep(0.03)
+                self.logging.info("Flushing jobs.")
                 packs = await asyncio.gather(*tasks)
                 for pack in packs:
                     if pack:
@@ -125,6 +122,5 @@ class Worker:
         await self.main()
 
 if __name__ == "__main__":
-
     worker = Worker(buffer=30)
     asyncio.run(worker.run())

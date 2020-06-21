@@ -51,7 +51,7 @@ class Pika:
     async def connect(self):
         time = 0.5
         while not self.rabbit or self.rabbit.is_closed:
-            self.rabbit = await aio_pika.connect_robust(
+            self.rabbit = await aio_pika.connect(
                 url=f'amqp://guest:guest@{self.host}/')
             await asyncio.sleep(time)
             time = min(time + 0.5, 5)
@@ -60,7 +60,10 @@ class Pika:
 
     async def get(self):
         await self.connect()
-        return await self.rabbit_queue.get(timeout=1, fail=False)
+        try:
+            return await self.rabbit_queue.get(timeout=1, fail=False)
+        except:
+            return None
 
     async def push(self, data):
         await self.connect()

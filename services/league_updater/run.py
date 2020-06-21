@@ -167,7 +167,7 @@ async def main():
     while True:
         await asyncio.gather(
             worker.main(),
-            asyncio.sleep(3600 * 3)  # 3 Hour sleep period
+            asyncio.sleep(3600 * 9)  # 3 Hour sleep period
         )
 
 
