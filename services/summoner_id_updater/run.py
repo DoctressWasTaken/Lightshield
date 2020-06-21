@@ -64,42 +64,61 @@ class Worker:
             self.buffered_summoners[summonerId] = True
             return summonerId, msg
 
-    async def worker(self):
-        while True:
-            if self.retry_after > datetime.now():
-                delay = (datetime.now() - self.retry_after).total_seconds()
-                await asyncio.sleep(delay)
-            summonerId, msg = await self.next_task()
-            url = self.url_template % (summonerId)
-            self.logging.debug(f"Fetching {url}")
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, proxy="http://proxy:8000") as response:
-                    try:
-                        resp = await response.json(content_type=None)
-                    except:
-                        pass
-            if response.status in [429, 430]:
-                if "Retry-After" in response.headers:
-                    delay = int(response.headers['Retry-After'])
-                    self.retry_after = datetime.now() + timedelta(seconds=delay)
-            elif response.status == 404:
-                msg.reject(requeue=False)
-            if response.status != 200:
-                msg.reject(requeue=True)
-            else:
-                await self.redis.hset(
-                    summonerId=summonerId,
-                    mapping={'puuid': resp['puuid'],
-                             'accountId': resp['accountId']})
-                await msg.ack()
-                package = {**json.loads(msg.body.decode('utf-8')),
-                           **resp}
-                await self.pika.push(package)
-            del self.buffered_summoners[summonerId]
+    async def worker(self, session, summonerId, msg):
+        summonerId, msg = await self.next_task()
+        url = self.url_template % (summonerId)
+        package = None
+        self.logging.debug(f"Fetching {url}")
+
+        async with session.get(url, proxy="http://proxy:8000") as response:
+            try:
+                resp = await response.json(content_type=None)
+            except:
+                pass
+
+        if response.status in [429, 430]:
+            if "Retry-After" in response.headers:
+                delay = int(response.headers['Retry-After'])
+                self.retry_after = datetime.now() + timedelta(seconds=delay)
+        elif response.status == 404:
+            msg.reject(requeue=False)
+        if response.status != 200:
+            msg.reject(requeue=True)
+        else:
+            await self.redis.hset(
+                summonerId=summonerId,
+                mapping={'puuid': resp['puuid'],
+                         'accountId': resp['accountId']})
+            await msg.ack()
+            package = {**json.loads(msg.body.decode('utf-8')),
+                       **resp}
+        del self.buffered_summoners[summonerId]
+
+        return package
 
 
     async def main(self):
-        await asyncio.gather(*[self.worker() for i in range(self.max_buffer)])
+        while True:
+            tasks = []
+            async with aiohttp.ClientSession() as session:
+                while self.retry_after < datetime.now():
+
+                    if len(self.buffered_summoners) >= self.max_buffer:
+                        self.logging.info("Buffer reached. Waiting.")
+                        while len(self.buffered_summoners) >= self.max_buffer:
+                            await asyncio.sleep(0.1)
+                        self.logging.info("Continuing.")
+                        summonerId, msg = await self.next_task()
+                        tasks.append(asyncio.create_task(self.worker(
+                            session,
+                            summonerId,
+                            msg
+                        )))
+                    await asyncio.sleep(0.02)
+                packs = await asyncio.gather(*tasks)
+                for pack in packs:
+                    if pack:
+                        await self.pika.push(pack)
 
     async def run(self):
         await self.pika.init()
