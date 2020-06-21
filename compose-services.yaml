@@ -22,7 +22,7 @@ services:
     links:
       - proxy:proxy
     depends_on:
-      - riotapi_rabbitmq
+      - rabbitmq
     restart: always
 
   summoner_id_updater:
@@ -38,7 +38,7 @@ services:
       - riotapi_rabbitmq:rabbitmq
     depends_on:
       - redis_summoner_id
-      - riotapi_rabbitmq
+      - rabbitmq
     restart: always
 
   redis_summoner_id:
@@ -60,7 +60,7 @@ services:
       - riotapi_rabbitmq:rabbitmq
     depends_on:
       - redis_match_history
-      - riotapi_rabbitmq
+      - rabbitmq
     restart: always
 
   redis_match_history:
@@ -82,7 +82,7 @@ services:
       - riotapi_rabbitmq:rabbitmq
     depends_on:
       - redis_match
-      - riotapi_rabbitmq
+      - rabbitmq
     restart: always
 
   redis_match:
@@ -101,8 +101,8 @@ services:
       - riotapi_postgres:postres
       - riotapi_rabbitmq:rabbitmq
     depends_on:
-      - riotapi_rabbitmq
-      - riotapi_postgres
+      - rabbitmq
+      - postgres
     restart: always
 
 volumes:
