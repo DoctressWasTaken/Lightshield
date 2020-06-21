@@ -6,8 +6,8 @@ services:
     build:
       context: rabbitmq
       dockerfile: Dockerfile
-    mem_limit: 2g
-    cpus: 2
+    mem_limit: 4g
+    cpus: 4
     hostname: rabbitmq
     volumes:
       - rabbitmq:/var/lib/rabbitmq

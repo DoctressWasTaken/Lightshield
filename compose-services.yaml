@@ -10,6 +10,8 @@ services:
     env_file:
       - secrets.env
     restart: always
+    volumes:
+        - ./logs/:/project/logs/
 
   league_updater:
     build:
