@@ -71,8 +71,7 @@ class Master:
         """Add a task to the outgoing exchange."""
         await self.connect_rabbit()
         await self.rabbit_exchange.publish(
-            Message(bytes(json.dumps(data), 'utf-8'),
-                    delivery_mode=DeliveryMode.PERSISTENT), 'MATCH')
+            Message(bytes(json.dumps(data), 'utf-8')), 'MATCH')
 
     ## Redis
     async def connect_redis(self):

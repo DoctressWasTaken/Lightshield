@@ -112,8 +112,7 @@ class Worker:
                     durable=True)
                 await rabbit_exchange_out.publish(
                     message=Message(
-                        bytes(json.dumps(entry), 'utf-8'),
-                        delivery_mode=DeliveryMode.PERSISTENT),
+                        bytes(json.dumps(entry), 'utf-8')),
                     routing_key='SUMMONER_V1')
 
         await asyncio.wait([publish(entry) for entry in self.page_entries])

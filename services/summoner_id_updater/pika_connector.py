@@ -68,4 +68,4 @@ class Pika:
     async def push(self, data):
         await self.connect()
         return await self.rabbit_exchange.publish(
-            Message(bytes(json.dumps(data), 'utf-8'), delivery_mode=DeliveryMode.PERSISTENT), 'SUMMONER_V2')
+            Message(bytes(json.dumps(data), 'utf-8')), 'SUMMONER_V2')
