@@ -1,8 +1,6 @@
 import asyncio
 from aiohttp.web import middleware
 import os
-import threading
-import time
 from datetime import datetime
 
 class Headers:
@@ -35,18 +33,11 @@ class Logging:
             raise Exception("No Server provided.")
         self.server = os.environ["SERVER"]
         self.count = {}
-        self.worker = threading.Thread(target=self.worker)
-        self.worker.run()
-        self.stopped = False
+        self.worker_active = None
 
-    def down(self):
-        """Set thread to stop at next cycle."""
-        self.stop = True
-        self.worker.join()
-
-    def worker(self):
+    async def worker(self):
         """Save data to file."""
-        while not self.stopped:
+        while True:
             to_write = []
             current_second = datetime.now().timestamp() // 1000
             for target in self.count:
@@ -57,10 +48,13 @@ class Logging:
             with open(f"logs/{self.server}_proxy.log", 'a+') as logfile:
                 for entry in to_write:
                     logfile.write("-".join(entry))
+            await asyncio.sleep(3)
 
     @middleware
     async def middleware(self, request, handler):
         """Read url. Add to log."""
+        if not self.worker_active:
+            self.worker_active = asyncio.create_task(self.worker())
         url = str(request.url).split("/lol/")[1]
         target = "-".join(url.split("/")[:3])
         current_second = datetime.now().timestamp() // 1000

@@ -91,7 +91,6 @@ class Worker:
             package = {**json.loads(msg.body.decode('utf-8')),
                        **resp}
         del self.buffered_summoners[summonerId]
-
         return package
 
     async def main(self):
