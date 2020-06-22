@@ -115,6 +115,8 @@ class Worker:
                 for pack in packs:
                     if pack:
                         await self.pika.push(pack)
+                delay = self.retry_after - datetime.now()
+                await asyncio.sleep(delay)
 
     async def run(self):
         await self.pika.init()
