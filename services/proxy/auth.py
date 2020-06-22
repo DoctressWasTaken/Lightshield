@@ -34,6 +34,7 @@ class Logging:
         self.server = os.environ["SERVER"]
         self.count = {}
         self.worker_active = None
+        self.required_header = []
 
     async def worker(self):
         """Save data to file."""
