@@ -8,6 +8,8 @@ import websockets
 from aio_pika import Message, DeliveryMode
 import json
 import logging
+from datetime import datetime, timedelta
+
 
 class Master:
 
@@ -22,7 +24,7 @@ class Master:
 
         self.max_buffer = buffer
         self.failed_tasks = []
-        self.retry_after = None
+        self.retry_after = datetime.now()
         self.buffered_matches = {}
 
         self.logging = logging.getLogger("worker")
@@ -71,7 +73,9 @@ class Master:
         """Add a task to the outgoing exchange."""
         await self.connect_rabbit()
         await self.rabbit_exchange.publish(
-            Message(bytes(json.dumps(data), 'utf-8')), 'MATCH')
+            Message(bytes(json.dumps(data), 'utf-8'),
+                    delivery_mode=DeliveryMode.PERSISTENT),
+            'MATCH')
 
     ## Redis
     async def connect_redis(self):
@@ -105,7 +109,8 @@ class Master:
                 pass
             if response.status in [429, 430]:
                 if "Retry-After" in response.headers:
-                    self.retry_after = int(response.headers['Retry-After'])
+                    delay = int(response.headers['Retry-After'])
+                    self.retry_after = datetime.now() + timedelta(seconds=delay)
             elif response.status == 404:
                 msg.reject(requeue=False)
             if response.status != 200:
@@ -141,22 +146,24 @@ class Master:
 
     async def run(self):
         """Run method. Handles the creation and deletion of worker tasks."""
-        async with aiohttp.ClientSession() as session:
+        while not os.environ['STATUS'] == 'STOP':
             tasks = []
-            while not os.environ['STATUS'] == 'STOP':
-                if self.retry_after:  # Wait for retry_after timeout
-                    await asyncio.sleep(self.retry_after)
-                    self.retry_after = 0
+            async with aiohttp.ClientSession() as session:
+                while self.retry_after < datetime.now():
 
-                if len(self.buffered_matches) >= self.max_buffer:
-                    self.logging.info("Buffer full. Waiting.")
-                    while len(self.buffered_matches) >= self.max_buffer:
-                        await asyncio.sleep(0.5)
-                    self.logging.info("Continue")
+                    if len(self.buffered_matches) >= self.max_buffer:
+                        self.logging.info("Buffer full. Waiting.")
+                        while len(self.buffered_matches) >= self.max_buffer:
+                            await asyncio.sleep(0.1)
+                        self.logging.info("Continue")
 
-                matchId, msg = await self.next_task()
-                tasks.append(asyncio.create_task(self.fetch(
-                    session=session, url=self.url_template % (matchId), msg=msg, matchId=matchId
-                )))
-                await asyncio.sleep(0.03)
-            await asyncio.gather(*tasks)
+                    matchId, msg = await self.next_task()
+                    tasks.append(asyncio.create_task(self.fetch(
+                        session=session, url=self.url_template % (matchId), msg=msg, matchId=matchId
+                    )))
+                    await asyncio.sleep(0.03)
+                self.logging.info("Flushing jobs.")
+                await asyncio.gather(*tasks)
+            delay = (self.retry_after - datetime.now()).total_seconds()
+            await asyncio.sleep(delay)
+
