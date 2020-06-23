@@ -11,4 +11,4 @@ RUN pip install -r requirements.txt
 
 COPY *.py ./
 
-CMD ["./startup.sh"]
+CMD . ./startup.sh
