@@ -54,7 +54,7 @@ class LimitHandler:
         if count <= 5 and date > self.bucket_start:
 
             if date < self.bucket_reset_ready:
-                if self.bucket_verifier < count:
+                if not self.bucket_verifier or self.bucket_verifier < count:
                     print(f"Corrected bucket by {(date - self.bucket_start).total_seconds()}.")
                     self.bucket_start = date
                     self.bucket_end = self.bucket_start + timedelta(seconds=self.span)  # No extra time cause verified

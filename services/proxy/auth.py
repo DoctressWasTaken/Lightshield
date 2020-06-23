@@ -43,13 +43,16 @@ class Logging:
             while True:
                 to_write = []
                 current_second = datetime.now().timestamp() // 1000
+                to_del = []
                 for target in self.count:
                     for second in self.count[target]:
                         if second < current_second:
                             to_write.append([second, self.count[target][second]])
-                            del self.count[target][second]
+                            to_del.append([target, second])
                     for entry in to_write:
                         logfile.write("-".join(entry))
+                for entry in to_del:
+                    del self.count[entry[0]][[entry[1]]]
                 await asyncio.sleep(3)
 
     @middleware
