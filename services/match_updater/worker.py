@@ -153,10 +153,8 @@ class Master:
                 while self.retry_after < datetime.now():
 
                     if len(self.buffered_matches) >= self.max_buffer:
-                        self.logging.info("Buffer full. Waiting.")
                         while len(self.buffered_matches) >= self.max_buffer:
                             await asyncio.sleep(0.1)
-                        self.logging.info("Continue")
 
                     matchId, msg = await self.next_task()
                     tasks.append(asyncio.create_task(self.fetch(
