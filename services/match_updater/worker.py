@@ -111,10 +111,11 @@ class Master:
                 if "Retry-After" in response.headers:
                     delay = int(response.headers['Retry-After'])
                     self.retry_after = datetime.now() + timedelta(seconds=delay)
+                await msg.reject(requeue=True)
             elif response.status == 404:
-                msg.reject(requeue=False)
-            if response.status != 200:
-                msg.reject(requeue=True)
+                await msg.reject(requeue=False)
+            elif response.status != 200:
+                await msg.reject(requeue=True)
             else:
                 await self.add_element(matchId=matchId)
                 await self.push_task(resp)
