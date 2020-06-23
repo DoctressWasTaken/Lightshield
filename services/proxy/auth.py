@@ -47,10 +47,10 @@ class Logging:
                 for target in self.count:
                     for second in self.count[target]:
                         if second < current_second:
-                            to_write.append([second, self.count[target][second]])
+                            to_write.append([str(int(second)), str(self.count[target][second])])
                             to_del.append([target, second])
                     for entry in to_write:
-                        logfile.write("-".join(entry))
+                        logfile.write("-".join(entry) + "\n")
                 for entry in to_del:
                     del self.count[entry[0]][[entry[1]]]
                 await asyncio.sleep(3)

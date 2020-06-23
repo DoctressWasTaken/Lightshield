@@ -126,7 +126,7 @@ class Worker:
         failed = None
         while not self.empty or failed:
             if self.retry_after > datetime.now():
-                delay = max((self.retry_after - datetime.now()).total_seconds(), 0.5)
+                delay = (self.retry_after - datetime.now()).total_seconds()
                 if delay > 10:
                     log.info(f"Sleeping for {delay}.")
                 await asyncio.sleep(delay)
@@ -144,7 +144,7 @@ class Worker:
                         pass
                     if response.status in [429, 430]:
                         if "Retry-After" in response.headers:
-                            delay = int(response.headers['Retry-After'])
+                            delay = max(int(response.headers['Retry-After']), 1)
                             self.retry_after = datetime.now() + timedelta(seconds=delay)
                     if response.status != 200:
                         failed = page
