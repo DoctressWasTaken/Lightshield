@@ -16,15 +16,21 @@ class LimitHandler:
         self.span = int(span)  # Duration of the bucket
         self.max = max - 1  # Max Calls per bucket (Reduced by 1 for safety measures)
         self.count = 0  # Current Calls in this bucket
-        self.bucket = None  # Cutoff after which no new requests are accepted
+        self.bucket_start = None  # Cutoff after which no new requests are accepted
+        self.bucket_end = None
+        self.bucket_reset_ready = None
+        self.bucket_verifier = None
 
         print(f"Initiated {self.max}:{self.span}.")
 
     @property
     def add(self):
         # (Re)set bucket if applicable
-        if not self.bucket or self.bucket + timedelta(seconds = self.span) < datetime.now(timezone.utc):
-            self.bucket = datetime.now(timezone.utc)
+        if not self.bucket_start or self.bucket_end < datetime.now(timezone.utc):
+            self.bucket_start = datetime.now(timezone.utc)
+            self.bucket_end = self.bucket_start + timedelta(seconds=self.span + 0.5)  # EXTRA 0.5 seconds when initiated
+            self.bucket_reset_ready = self.bucket_start + timedelta(seconds=self.span * 0.8)
+
             self.count = 0
 
         if self.count < self.max:
@@ -34,23 +40,35 @@ class LimitHandler:
 
     def when_reset(self):
         """Return seconds until reset."""
-        end = self.bucket + timedelta(seconds=self.span)
-
-        return int((end - datetime.now(timezone.utc)).total_seconds()) + 1
+        return int((self.bucket_end - datetime.now(timezone.utc)).total_seconds())
 
     async def update(self, date, limits):
         count = [int(limit.split(":")[0]) for limit in limits if limit.endswith(str(self.span))][0]
-        if count == 1:
-            naive = datetime.strptime(
-                date,
-                '%a, %d %b %Y %H:%M:%S GMT')
-            local = pytz.timezone('GMT')
-            local_dt = local.localize(naive, is_dst=None)
-            date = local_dt.astimezone(pytz.utc)
-            if date > self.bucket:
-                print(f"Corrected bucket by {date - self.bucket}.")
-                self.bucket = date
+        naive = datetime.strptime(
+            date,
+            '%a, %d %b %Y %H:%M:%S GMT')
+        local = pytz.timezone('GMT')
+        local_dt = local.localize(naive, is_dst=None)
+        date = local_dt.astimezone(pytz.utc)
 
-        if count > self.count:
-            self.count = count
-            return
+        if count <= 5 and date > self.bucket_start:
+
+            if date < self.bucket_reset_ready:
+                if self.bucket_verifier < count:
+                    print(f"Corrected bucket by {(date - self.bucket_start).total_seconds()}.")
+                    self.bucket_start = date
+                    self.bucket_end = self.bucket_start + timedelta(seconds=self.span)  # No extra time cause verified
+                    self.bucket_reset_ready = self.bucket_start + timedelta(seconds=self.span * 0.8)
+                    self.bucket_verifier = count
+            else:
+                print(f"Initiated new bucket at {date}.")
+                self.bucket_start = date
+                self.bucket_end = self.bucket_start + timedelta(
+                    seconds=self.span)  # No extra time cause verified
+                self.bucket_reset_ready = self.bucket_start + timedelta(seconds=self.span * 0.8)
+                self.bucket_verifier = count
+                self.count = count
+
+        elif count > 5 and date > self.bucket_start:
+            if count > self.count:
+                self.count = count

@@ -38,18 +38,19 @@ class Logging:
 
     async def worker(self):
         """Save data to file."""
-        while True:
-            to_write = []
-            current_second = datetime.now().timestamp() // 1000
-            for target in self.count:
-                for second in self.count[target]:
-                    if second < current_second:
-                        to_write.append([second, self.count[target][second]])
-                        del self.count[target][second]
-            with open(f"logs/{self.server}_proxy.log", 'a+') as logfile:
-                for entry in to_write:
-                    logfile.write("-".join(entry))
-            await asyncio.sleep(3)
+        print("Worker initiated.")
+        with open(f"logs/{self.server}_proxy.log", 'a+') as logfile:
+            while True:
+                to_write = []
+                current_second = datetime.now().timestamp() // 1000
+                for target in self.count:
+                    for second in self.count[target]:
+                        if second < current_second:
+                            to_write.append([second, self.count[target][second]])
+                            del self.count[target][second]
+                    for entry in to_write:
+                        logfile.write("-".join(entry))
+                await asyncio.sleep(3)
 
     @middleware
     async def middleware(self, request, handler):
@@ -61,7 +62,6 @@ class Logging:
         current_second = datetime.now().timestamp() // 1000
         if target not in self.count:
             self.count[target] = {}
-
         if current_second not in self.count[target]:
             self.count[target][current_second] = 1
         else:
