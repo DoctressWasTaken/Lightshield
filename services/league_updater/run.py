@@ -126,7 +126,7 @@ class Worker:
         failed = None
         while not self.empty or failed:
             if self.retry_after > datetime.now():
-                delay = (self.retry_after - datetime.now()).total_seconds()
+                delay = max((self.retry_after - datetime.now()).total_seconds(), 0.5)
                 if delay > 10:
                     log.info(f"Sleeping for {delay}.")
                 await asyncio.sleep(delay)
