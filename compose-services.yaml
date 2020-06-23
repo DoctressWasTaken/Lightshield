@@ -27,8 +27,6 @@ services:
       - riotapi_rabbitmq:rabbitmq
     links:
       - proxy:proxy
-    depends_on:
-      - rabbitmq
     restart: always
 
   summoner_id_updater:
@@ -46,7 +44,6 @@ services:
       - riotapi_rabbitmq:rabbitmq
     depends_on:
       - redis_summoner_id
-      - rabbitmq
     restart: always
 
   redis_summoner_id:
@@ -54,6 +51,8 @@ services:
       context: databases/redis
       dockerfile: Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME}_redis_summoner_id
+    volumes:
+        - redis_summoner_id:/data/
     restart: always
 
   match_history_updater:
@@ -72,7 +71,6 @@ services:
       - riotapi_rabbitmq:rabbitmq
     depends_on:
       - redis_match_history
-      - rabbitmq
     restart: always
 
   redis_match_history:
@@ -80,6 +78,8 @@ services:
       context: databases/redis
       dockerfile: Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME}_redis_match_history
+    volumes:
+        - redis_match_history:/data/
     restart: always
 
   match_updater:
@@ -97,7 +97,6 @@ services:
       - riotapi_rabbitmq:rabbitmq
     depends_on:
       - redis_match
-      - rabbitmq
     restart: always
 
   redis_match:
@@ -105,6 +104,8 @@ services:
       context: databases/redis
       dockerfile: Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME}_redis_match
+    volumes:
+        - redis_match:/data/
     restart: always
 
   db_worker:
@@ -120,14 +121,11 @@ services:
     external_links:
       - riotapi_postgres:postres
       - riotapi_rabbitmq:rabbitmq
-    depends_on:
-      - rabbitmq
-      - postgres
     restart: always
 
 volumes:
-  redis_summoner:
-    name: ${SERVER}_redis_summoner
+  redis_summoner_id:
+    name: ${SERVER}_redis_summoner_id
   redis_match_history:
     name: ${SERVER}_redis_match_history
   redis_match:

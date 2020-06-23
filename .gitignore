@@ -9,3 +9,4 @@ db.sqlite3
 */.tox/
 */*.egg-info/
 /temp/
+logs/
