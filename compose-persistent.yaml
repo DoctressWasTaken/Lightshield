@@ -2,7 +2,7 @@ version: '2.3'
 services:
 
   rabbitmq:
-    container_name: riotapi_rabbitmq
+    container_name: ${COMPOSE_PROJECT_NAME}_rabbitmq
     build:
       context: rabbitmq
       dockerfile: Dockerfile
@@ -16,7 +16,7 @@ services:
   postgres:
     cpus: 1
     mem_limit: 1g
-    container_name: riotapi_postgres
+    container_name: ${COMPOSE_PROJECT_NAME}_postgres
     build:
       dockerfile: Dockerfile
       context: databases/postgres/

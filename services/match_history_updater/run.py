@@ -23,7 +23,7 @@ from pika_connector import Pika
 
 class Worker:
 
-    def __init__(self, buffer):
+    def __init__(self, buffer, required_matches):
 
         self.redis = Redis()
         self.pika = Pika()
@@ -33,6 +33,7 @@ class Worker:
         self.max_buffer = buffer
         self.failed_tasks = []
         self.retry_after = None
+        self.required_matches = required_matches
         self.buffered_summoners = {}
 
         self.logging = logging.getLogger("worker")
@@ -134,7 +135,7 @@ class Worker:
             if prev:
                 matches -= (int(prev['wins']) + int(prev['losses']))
 
-            if matches < 10:  # Skip if less than 10 new matches
+            if matches < self.required_matches:  # Skip if less than required new matches
                 msg.ack()
                 continue
             self.buffered_summoners[summonerId] = True
@@ -160,5 +161,7 @@ class Worker:
         await self.main()
 
 if __name__ == "__main__":
-    worker = Worker(buffer=5)
+    buffer = int(os.environ['MATCH_HISTORY_BUFFER'])
+    required_matches = int(os.environ['MATCHES_TO_UPDATE'])
+    worker = Worker(buffer=buffer, required_matches=required_matches)
     asyncio.run(worker.run())

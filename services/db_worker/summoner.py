@@ -91,8 +91,9 @@ class UpdateSummoner(WorkerClass):
             lines.append(line)
         log.info(f"Inserting {len(lines)} lines.")
         with psycopg2.connect(
-                host='postgres',
-                user='db_worker',
+                host=self.postgres_host,
+                user=self.postgres_user,
+                port=self.postgres_port,
                 dbname=f'data_{self.server.lower()}') as connection:
             cur = connection.cursor()
             cur.execute(f"""

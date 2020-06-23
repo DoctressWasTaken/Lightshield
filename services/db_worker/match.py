@@ -16,6 +16,7 @@ log.addHandler(ch)
 
 class InsertMatch(WorkerClass):
 
+
     def get_tasks(self, channel):
         """Get tasks from rabbitmq."""
         tasks = []
@@ -66,8 +67,9 @@ class InsertMatch(WorkerClass):
             )
             lines.append(line)
         with psycopg2.connect(
-                host='postgres',
-                user='db_worker',
+                host=self.postgres_host,
+                user=self.postgres_user,
+                port=self.postgres_port,
                 dbname=f'data_{self.server.lower()}') as connection:
             cur = connection.cursor()
             cur.execute(f"""

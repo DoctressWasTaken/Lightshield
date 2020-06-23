@@ -162,11 +162,13 @@ async def main():
 
     The loop is limited to run once every 6 hours max.
     """
-    worker = Worker(parallel_worker=5)
+    parallel_workers = int(os.environ['LEAGUE_BUFFER'])
+    update_interval = int(os.environ['UPDATE_INTERVAL'])
+    worker = Worker(parallel_worker=parallel_workers)
     while True:
         await asyncio.gather(
             worker.main(),
-            asyncio.sleep(3600 * 9)  # 3 Hour sleep period
+            asyncio.sleep(3600 * update_interval)  # 3 Hour sleep period
         )
 
 

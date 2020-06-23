@@ -25,10 +25,20 @@ def main():
     calls requests in async method and uses the returned values to update.
     """
     # Pull data package
-    summoner_updater = UpdateSummoner(server=server)
+    summoner_updater = UpdateSummoner(
+        server=server,
+        postgres_host=os.environ['POSTGRES_HOST'],
+        postgres_port=int(os.environ['POSTGRES_PORT']),
+        postgres_user=os.environ['POSTGRES_USER'])
+
     summoner_updater.start()
 
-    match_inserter = InsertMatch(server=server)
+    match_inserter = InsertMatch(
+        server=server,
+        postgres_host=os.environ['POSTGRES_HOST'],
+        postgres_port=int(os.environ['POSTGRES_PORT']),
+        postgres_user=os.environ['POSTGRES_USER'])
+
     match_inserter.start()
     try:
         while True:
