@@ -162,7 +162,7 @@ async def main():
 
     The loop is limited to run once every 6 hours max.
     """
-    parallel_workers = int(os.environ['LEAGUE_BUFFER'])
+    parallel_workers = int(os.environ['BUFFER'])
     update_interval = int(os.environ['UPDATE_INTERVAL'])
     worker = Worker(parallel_worker=parallel_workers)
     while True:

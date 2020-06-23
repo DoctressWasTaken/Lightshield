@@ -161,7 +161,7 @@ class Worker:
         await self.main()
 
 if __name__ == "__main__":
-    buffer = int(os.environ['MATCH_HISTORY_BUFFER'])
+    buffer = int(os.environ['BUFFER'])
     required_matches = int(os.environ['MATCHES_TO_UPDATE'])
     worker = Worker(buffer=buffer, required_matches=required_matches)
     asyncio.run(worker.run())

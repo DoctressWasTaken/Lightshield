@@ -21,6 +21,8 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_${SERVER}_league_updater
     environment:
       - SERVER=${SERVER}
+      - UPDATE_INTERVAL=${UPDATE_INTERVAL}
+      - BUFFER=${LEAGUE_BUFFER}
     external_links:
       - riotapi_rabbitmq:rabbitmq
     links:
@@ -36,6 +38,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_${SERVER}_summoner_id_updater
     environment:
       - SERVER=${SERVER}
+      - BUFFER=${SUMMONER_ID_BUFFER}
     links:
       - redis_summoner_id:redis
       - proxy:proxy
@@ -60,6 +63,8 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_${SERVER}_match_history_updater
     environment:
       - SERVER=${SERVER}
+      - BUFFER=${MATCH_HISTORY_BUFFER}
+      - MATCHES_TO_UPDATE=${MATCHES_TO_UPDATE}
     links:
       - redis_match_history:redis
       - proxy:proxy
@@ -84,6 +89,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_${SERVER}_match_updater
     environment:
       - SERVER=${SERVER}
+      - BUFFER=${MATCH_BUFFER}
     links:
       - redis_match:redis
       - proxy:proxy
@@ -108,6 +114,9 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_${SERVER}_db_worker
     environment:
       - SERVER=${SERVER}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
     external_links:
       - riotapi_postgres:postres
       - riotapi_rabbitmq:rabbitmq

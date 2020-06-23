@@ -123,6 +123,6 @@ class Worker:
         await self.main()
 
 if __name__ == "__main__":
-    buffer = int(os.environ['SUMMONER_ID_BUFFER'])
+    buffer = int(os.environ['BUFFER'])
     worker = Worker(buffer=buffer)
     asyncio.run(worker.run())
