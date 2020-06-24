@@ -2,15 +2,11 @@
 import asyncio
 import json
 import logging
-import threading
 import os
-import datetime, time
 from datetime import datetime, timedelta
-import pika
 import aiohttp
 import aio_pika
 from aio_pika import Message
-from aio_pika import DeliveryMode
 from aio_pika.pool import Pool
 from rank_manager import RankManager
 
@@ -49,30 +45,6 @@ class Worker:
             logging.Formatter(f'%(asctime)s [CORE] %(message)s'))
         self.logging.addHandler(ch)
 
-    async def main(self):
-        for i in range(self.max_worker):
-            log = logging.getLogger("Worker_" + str(i))
-            log.setLevel(logging.INFO)
-            ch = logging.StreamHandler()
-            ch.setLevel(logging.INFO)
-            ch.setFormatter(
-                logging.Formatter(f'%(asctime)s [Worker {i}] %(message)s'))
-            log.addHandler(ch)
-        await self.rankmanager.init()
-        for rank in range(await self.rankmanager.get_total()):
-            tier, division = await self.rankmanager.get_next()
-
-            self.empty = False
-            self.next_page = 1
-            self.page_entries = []
-
-            await asyncio.gather(*[
-                asyncio.create_task(self.worker(id=i, tier=tier, division=division)) for i in range(self.max_worker)])
-
-            await self.push_data()
-
-            await self.rankmanager.update(key=(tier, division))
-
     async def push_data(self):
         """Send out gathered data via rabbitmq tasks."""
 
@@ -94,17 +66,19 @@ class Worker:
         loop = asyncio.get_event_loop()
 
         async def get_connection():
+            """Create connection"""
             return await aio_pika.connect_robust("amqp://guest:guest@rabbitmq/")
-
-        connection_pool = Pool(get_connection, max_size=10, loop=loop)
+        connection_pool = Pool(get_connection, max_size=3, loop=loop)
 
         async def get_channel() -> aio_pika.Channel:
+            """Create channel."""
             async with connection_pool.acquire() as connection:
                 return await connection.channel()
 
-        channel_pool = Pool(get_channel, max_size=25, loop=loop)
+        channel_pool = Pool(get_channel, max_size=15, loop=loop)
 
         async def publish(entry):
+            """Publish to channel."""
             async with channel_pool.acquire() as channel:  # type: aio_pika.Channel
                 rabbit_exchange_out = await channel.declare_exchange(
                     name=f'LEAGUE_OUT_{server}',
@@ -118,17 +92,16 @@ class Worker:
         await asyncio.wait([publish(entry) for entry in self.page_entries])
         self.logging.info(f"Done pushing tasks.")
 
-    async def worker(self, id, tier, division):
-        """Call and process page data. Multiple are started and work until pages return empty."""
-        log = logging.getLogger("Worker_" + str(id))
-        log.info("Initiated.")
+    async def worker(self, tier, division):
+        """Create and execute calls until one of the multiple worker returns an empty page.
 
+        Pages that failed their call are retried.
+        Worker don't exit until their failed page is resolved.
+        """
         failed = None
         while not self.empty or failed:
             if self.retry_after > datetime.now():
                 delay = (self.retry_after - datetime.now()).total_seconds()
-                if delay > 10:
-                    log.info(f"Sleeping for {delay}.")
                 await asyncio.sleep(delay)
             async with aiohttp.ClientSession() as session:
                 if not failed:
@@ -137,7 +110,9 @@ class Worker:
                 else:
                     page = failed
                     failed = None
-                async with session.get(url=self.url % (tier, division, page), proxy="http://proxy:8000") as response:
+                async with session.get(
+                        url=self.url % (tier, division, page),
+                        proxy="http://proxy:8000") as response:
                     try:
                         resp = await response.json(content_type=None)
                     except:
@@ -150,11 +125,23 @@ class Worker:
                         failed = page
                     else:
                         if len(resp) == 0:
-                            log.info(f"Empty page {page} found.")
+                            self.logging.info(f"Empty page {page} found.")
                             self.empty = True
                         else:
                             self.page_entries += resp
-        log.info("Exited.")
+
+    async def main(self):
+        """Manage ranks to call and worker start/stops."""
+        await self.rankmanager.init()
+        for rank in range(await self.rankmanager.get_total()):
+            tier, division = await self.rankmanager.get_next()
+            self.empty = False
+            self.next_page = 1
+            self.page_entries = []
+            await asyncio.gather(*[asyncio.create_task(
+                self.worker(tier=tier, division=division)) for i in range(self.max_worker)])
+            await self.push_data()
+            await self.rankmanager.update(key=(tier, division))
 
 
 async def main():
@@ -171,7 +158,5 @@ async def main():
             asyncio.sleep(3600 * update_interval)  # 3 Hour sleep period
         )
 
-
 if __name__ == "__main__":
-
     asyncio.run(main())

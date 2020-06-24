@@ -1,3 +1,2 @@
-pika
 aiohttp
 aio_pika
