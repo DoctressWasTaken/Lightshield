@@ -8,7 +8,6 @@
      * [Proxy](#proxy)
      * [League Updater](#league-updater)
 
-
 This tool provides a fully automated system to permanently mirror the official Riot APIs content
  with your local system. It uses a number of Microservices to pull currently ranked players as well
  as all matches on the server into a local database and keeps it updated.
