@@ -22,6 +22,7 @@ class Pika:
         self.rabbit = None
 
     async def init(self):
+        """Initiate channel and exchanges."""
         await self.connect()
 
         channel = await self.rabbit.channel()
@@ -49,6 +50,10 @@ class Pika:
         await db_in.bind(self.rabbit_exchange, 'SUMMONER_V2')
 
     async def connect(self):
+        """Connect to rabbitmq.
+
+        :raises:: ConnectionError if connection can't be established.
+        """
         time = 0.5
         while not self.rabbit or self.rabbit.is_closed:
             self.rabbit = await aio_pika.connect_robust(
@@ -56,9 +61,13 @@ class Pika:
             await asyncio.sleep(time)
             time = min(time + 0.5, 5)
             if time == 5:
-                print("Connection to rabbitmq could not be established.")
+                raise ConnectionError("Connection to rabbitmq could not be established.")
 
     async def get(self):
+        """Get message from rabbitmq.
+
+        Returns either the message element or None on timeout.
+        """
         try:
             return await self.rabbit_queue.get(timeout=0.5)
         except Exception as err:
@@ -66,5 +75,9 @@ class Pika:
             return None
 
     async def push(self, data):
+        """Push data through exchange.
+
+        The data is used by both db_worker and match_history_updater.
+        """
         return await self.rabbit_exchange.publish(
             Message(bytes(json.dumps(data), 'utf-8')), 'SUMMONER_V2')

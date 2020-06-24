@@ -1,6 +1,5 @@
 import asyncio
 import os
-import websockets
 import logging
 import json
 import aiohttp
@@ -70,7 +69,6 @@ class Worker:
         url = self.url_template % (summonerId)
         package = None
         self.logging.debug(f"Fetching {url}")
-
         try:
             async with session.get(url, proxy="http://proxy:8000") as response:
                 try:
