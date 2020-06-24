@@ -59,7 +59,10 @@ class Worker:
             if redis_entry:  # Skip call for already existing. Still adds a message output
                 package = {**content, **redis_entry}
                 await self.pika.push(package)
-                await msg.ack()
+                try:
+                    await msg.ack()
+                except:
+                    self.logging.info(f"Failed to ack {summonerId}.")
                 continue
             self.buffered_summoners[summonerId] = True
             return summonerId, msg
@@ -78,6 +81,7 @@ class Worker:
         except:
             await msg.reject(requeue=True)
             return package
+
         if response.status in [429, 430]:
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
