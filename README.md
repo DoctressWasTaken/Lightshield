@@ -18,7 +18,7 @@ This is an ideal setup for someone interested only in frontend or data analysis 
 deal with setting up routines and regular calls to the api nor caching of results.
 
 LS is optimized to not repeat calls unless necessary. All data is made available in a final postgres
-database using [tolkis] format. 
+database using only a single table style for both match and summoner details. 
 
 A number of changes can be made towards performance and speed at which the system updates.
 
