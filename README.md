@@ -26,7 +26,13 @@ LS runs on docker-compose meaning that outside of the container system no data i
 
 ##Setup
 
-### Centralized Elements
+### I. API Key
+Create a `secrets.env` file and add your API key. 
+```.env
+API_KEY=RGAPI-xxx
+```
+
+### II. Centralized Elements
 Core of the system are the RabbitMQ messaging system to provide fail-proof communication between 
 services as well as the postgreSQL database holding the final output.
 Those services are contained in the `compose-persistent.yaml` file. Build and start both via:
@@ -47,7 +53,7 @@ Postgres Database containing the finalized data on players and matches.
 
 <hr>
 
-### Server Specific Elements
+### III. Server Specific Elements
 All communication is done via the same instance of rabbitMQ and postgreSQL. The services themselves
 are however split by server, meaning that for each server you want to pull data from (eg. NA, EU, KR)
 an extra chain of container has to be started.
