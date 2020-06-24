@@ -2,8 +2,7 @@ import asyncio
 import aio_pika
 import logging
 import os
-import json
-from aio_pika import Message, DeliveryMode
+from aio_pika import Message
 
 
 class Pika:
@@ -49,13 +48,11 @@ class Pika:
             await asyncio.sleep(time)
             time = min(time + 0.5, 5)
             if time == 5:
-                print("Connection to rabbitmq could not be established.")
+                raise ConnectionError("Connection to rabbitmq could not be established.")
 
     async def get(self):
-        await self.connect()
         return await self.rabbit_queue.get(timeout=1, fail=False)
 
     async def push(self, data):
-        await self.connect()
         return await self.rabbit_exchange.publish(
             Message(bytes(str(data), 'utf-8')), 'MATCH')

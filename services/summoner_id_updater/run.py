@@ -5,13 +5,14 @@ import json
 import aiohttp
 from datetime import datetime, timedelta
 
+from redis_connector import Redis
+from pika_connector import Pika
+
 if "SERVER" not in os.environ:
     print("No server provided, shutting down")
     exit()
 server = os.environ['SERVER']
 
-from redis_connector import Redis
-from pika_connector import Pika
 
 class Worker:
 
@@ -113,7 +114,6 @@ class Worker:
                         msg
                     )))
                     await asyncio.sleep(0.03)
-                self.logging.info("Flushing jobs.")
                 packs = await asyncio.gather(*tasks)
                 for pack in packs:
                     if pack:

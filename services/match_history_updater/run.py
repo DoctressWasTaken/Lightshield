@@ -3,11 +3,12 @@
 import asyncio
 import json
 import os
-import time
-import pika
-import redis
-import websockets
+import logging
+import aiohttp
 from datetime import datetime, timedelta
+
+from redis_connector import Redis
+from pika_connector import Pika
 
 if "SERVER" not in os.environ:
     print("No SERVER env variable provided. exiting")
@@ -15,16 +16,10 @@ if "SERVER" not in os.environ:
 
 server = os.environ['SERVER']
 
-import logging
-import aiohttp
-from redis_connector import Redis
-from pika_connector import Pika
-
 
 class Worker:
 
     def __init__(self, buffer, required_matches):
-
         self.redis = Redis()
         self.pika = Pika()
         self.url_template =f"http://{server}.api.riotgames.com/lol/match/v4/matchlists/by-account/" \
