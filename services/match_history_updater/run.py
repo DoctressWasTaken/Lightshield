@@ -136,8 +136,11 @@ class Worker:
                 matches -= (int(prev['wins']) + int(prev['losses']))
 
             if matches < self.required_matches:  # Skip if less than required new matches
-                msg.ack()
-                continue
+                try:
+                    await msg.ack()
+                except:
+                    self.logging.info(f"Failed to ack {summonerId}.")
+
             self.buffered_summoners[summonerId] = True
             return summonerId, matches, msg
 
@@ -145,10 +148,8 @@ class Worker:
         tasks = []
         while True:
             if len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
-                self.logging.info("Buffer full. Waiting.")
                 while len(self.buffered_summoners) >= self.max_buffer:
                     await asyncio.sleep(0.5)
-                self.logging.info("Continue")
 
             summonerId, matches, msg = await self.next_task()
             tasks.append(asyncio.create_task(self.process_history(
