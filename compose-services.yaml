@@ -51,7 +51,7 @@ services:
     restart: always
 
   redis_summoner_id:
-    mem_limit: 500m
+    mem_limit: 120m
     cpus: 0.25
     build:
       context: databases/redis
@@ -82,7 +82,7 @@ services:
     restart: always
 
   redis_match_history:
-    mem_limit: 500m
+    mem_limit: 80m
     cpus: 0.25
     build:
       context: databases/redis
@@ -112,7 +112,7 @@ services:
     restart: always
 
   redis_match:
-    mem_limit: 500m
+    mem_limit: 80m
     cpus: 0.25
     build:
       context: databases/redis
@@ -123,7 +123,7 @@ services:
     restart: always
 
   db_worker:
-    mem_limit: 500m
+    mem_limit: 80m
     cpus: 0.25
     build:
       dockerfile: Dockerfile

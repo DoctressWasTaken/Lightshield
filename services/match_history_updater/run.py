@@ -99,8 +99,12 @@ class Worker:
                  "rank": content['rank'],
                  "leaguePoints": content['leaguePoints']
              })
-        for match_id in matches:
-            await self.pika.push(match_id)
+        while matches:
+            id = matches.pop()
+            try:
+                await self.pika.push(id)
+            except:
+                matches.append(id)
         del self.buffered_summoners[summonerId]
         msg.ack()
 

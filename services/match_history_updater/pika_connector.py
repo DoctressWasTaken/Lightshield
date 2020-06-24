@@ -51,7 +51,11 @@ class Pika:
                 raise ConnectionError("Connection to rabbitmq could not be established.")
 
     async def get(self):
-        return await self.rabbit_queue.get(timeout=1, fail=False)
+        try:
+            return await self.rabbit_queue.get(timeout=1)
+        except Exception as err:
+            print(err)
+            return None
 
     async def push(self, data):
         return await self.rabbit_exchange.publish(
