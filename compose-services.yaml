@@ -24,7 +24,7 @@ services:
       - UPDATE_INTERVAL=${UPDATE_INTERVAL}
       - BUFFER=${LEAGUE_BUFFER}
     external_links:
-      - riotapi_rabbitmq:rabbitmq
+      - lightshield_rabbitmq:rabbitmq
     links:
       - proxy:proxy
     restart: always
@@ -41,7 +41,7 @@ services:
       - redis_summoner_id:redis
       - proxy:proxy
     external_links:
-      - riotapi_rabbitmq:rabbitmq
+      - lightshield_rabbitmq:rabbitmq
     depends_on:
       - redis_summoner_id
     restart: always
@@ -68,7 +68,7 @@ services:
       - redis_match_history:redis
       - proxy:proxy
     external_links:
-      - riotapi_rabbitmq:rabbitmq
+      - lightshield_rabbitmq:rabbitmq
     depends_on:
       - redis_match_history
     restart: always
@@ -94,7 +94,7 @@ services:
       - redis_match:redis
       - proxy:proxy
     external_links:
-      - riotapi_rabbitmq:rabbitmq
+      - lightshield_rabbitmq:rabbitmq
     depends_on:
       - redis_match
     restart: always
@@ -119,8 +119,8 @@ services:
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_USER=${POSTGRES_USER}
     external_links:
-      - riotapi_postgres:postres
-      - riotapi_rabbitmq:rabbitmq
+      - lightshield_postgres:postres
+      - lightshield_rabbitmq:rabbitmq
     restart: always
 
 volumes:
