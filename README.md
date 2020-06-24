@@ -1,3 +1,5 @@
+###Just wan't to mention that while it does work mostly it still has a bunch of bugs and changes (see Issues) that will break the current data on update.
+
 # Lightshield (LS)
 
 
