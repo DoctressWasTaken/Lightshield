@@ -52,7 +52,7 @@ class Logging:
                     for entry in to_write:
                         logfile.write("-".join(entry) + "\n")
                 for entry in to_del:
-                    del self.count[entry[0]][[entry[1]]]
+                    del self.count[entry[0]][entry[1]]
                 await asyncio.sleep(3)
 
     @middleware
