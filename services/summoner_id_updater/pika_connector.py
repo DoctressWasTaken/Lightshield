@@ -51,7 +51,7 @@ class Pika:
     async def connect(self):
         time = 0.5
         while not self.rabbit or self.rabbit.is_closed:
-            self.rabbit = await aio_pika.connect(
+            self.rabbit = await aio_pika.connect_robust(
                 url=f'amqp://guest:guest@{self.host}/')
             await asyncio.sleep(time)
             time = min(time + 0.5, 5)
@@ -59,13 +59,12 @@ class Pika:
                 print("Connection to rabbitmq could not be established.")
 
     async def get(self):
-        await self.connect()
         try:
-            return await self.rabbit_queue.get(timeout=1, fail=False)
-        except:
+            return await self.rabbit_queue.get(timeout=0.5)
+        except Exception as err:
+            print(err)
             return None
 
     async def push(self, data):
-        await self.connect()
         return await self.rabbit_exchange.publish(
             Message(bytes(json.dumps(data), 'utf-8')), 'SUMMONER_V2')

@@ -35,7 +35,6 @@ class Worker:
             logging.Formatter(f'%(asctime)s [WORKER] %(message)s'))
         self.logging.addHandler(ch)
 
-
     async def next_task(self):
         while True:
             msg = await self.pika.get()
