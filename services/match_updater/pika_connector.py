@@ -2,7 +2,6 @@ import asyncio
 import aio_pika
 import logging
 import os
-import json
 from aio_pika import Message
 
 class Pika:
@@ -22,7 +21,6 @@ class Pika:
 
     async def init(self):
         await self.connect()
-
         channel = await self.rabbit.channel()
         await channel.set_qos(prefetch_count=1)
         # Incoming
@@ -43,18 +41,19 @@ class Pika:
     async def connect(self):
         time = 0.5
         while not self.rabbit or self.rabbit.is_closed:
-            self.rabbit = await aio_pika.connect(
+            self.rabbit = await aio_pika.connect_robust(
                 f'amqp://guest:guest@{self.host}/')
             await asyncio.sleep(time)
             time = min(time + 0.5, 5)
             if time == 5:
-                print("Connection to rabbitmq could not be established.")
+                raise ConnectionError("Connection to rabbitmq could not be established.")
 
     async def get(self):
-        await self.connect()
-        return await self.rabbit_queue.get(timeout=1, fail=False)
-
+        try:
+            return await self.rabbit_queue.get(timeout=0.5)
+        except Exception as err:
+            print(err)
+            return None
     async def push(self, data):
-        await self.connect()
         return await self.rabbit_exchange.publish(
             Message(bytes(str(data), 'utf-8')), 'MATCH')

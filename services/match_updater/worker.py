@@ -1,10 +1,8 @@
 import aio_pika
 import asyncio
 import os
-
 import aiohttp
 import aioredis
-import websockets
 from aio_pika import Message, DeliveryMode
 import json
 import logging
@@ -64,10 +62,10 @@ class Master:
         await self.connect_rabbit()
         while True:
             try:
-                return await self.rabbit_queue.get(timeout=1, fail=False)
+                return await self.rabbit_queue.get(timeout=1)
             except Exception as err:
                 self.logging.error(err)
-                await asyncio.sleep(0.5)
+                return None
 
     async def push_task(self, data):
         """Add a task to the outgoing exchange."""
@@ -98,7 +96,6 @@ class Master:
         """Add a new matchId to redis."""
         await self.connect_redis()
         await self.redis.sadd('matches', str(matchId))
-
 
     async def fetch(self, session, url, msg, matchId):
         self.logging.debug(f"Fetching {url}")
@@ -161,7 +158,6 @@ class Master:
                         session=session, url=self.url_template % (matchId), msg=msg, matchId=matchId
                     )))
                     await asyncio.sleep(0.03)
-                self.logging.info("Flushing jobs.")
                 await asyncio.gather(*tasks)
             delay = (self.retry_after - datetime.now()).total_seconds()
             await asyncio.sleep(delay)

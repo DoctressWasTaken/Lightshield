@@ -30,8 +30,6 @@ async def main():
     m = Master(buffer=buffer)
     await m.run()
 
-
-
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, end_handler)
 
