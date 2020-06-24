@@ -2,7 +2,7 @@ pipeline {
     agent any
     environment {
         github = credentials('4145361a-82d9-4899-8224-6e9071be7c45')
-        url = 'github.com/LightshieldDotDev/RiotApi'
+        url = 'github.com/LightshieldDotDev/Lightshield'
     }
     stages {
         stage('Fetch git') {
