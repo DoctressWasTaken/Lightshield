@@ -131,6 +131,7 @@ class Master:
 
     async def run(self):
         """Run method. Handles the creation and deletion of worker tasks."""
+        await self.connect_rabbit()
         while not os.environ['STATUS'] == 'STOP':
             tasks = []
             async with aiohttp.ClientSession() as session:
