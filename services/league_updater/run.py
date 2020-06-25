@@ -151,10 +151,9 @@ async def main():
     """
     parallel_workers = int(os.environ['BUFFER'])
     update_interval = int(os.environ['UPDATE_INTERVAL'])
-    worker = Worker(parallel_worker=parallel_workers)
     while True:
         await asyncio.gather(
-            worker.main(),
+            Worker(parallel_worker=parallel_workers).main(),
             asyncio.sleep(3600 * update_interval)  # 3 Hour sleep period
         )
 
