@@ -104,7 +104,10 @@ class Worker:
             except:
                 matches.append(id)
         del self.buffered_summoners[summonerId]
-        msg.ack()
+        try:
+            msg.ack()
+        except:
+            pass
 
     async def next_task(self):
         while True:
