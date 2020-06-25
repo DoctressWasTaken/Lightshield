@@ -59,17 +59,10 @@ class Master:
 
     async def retrieve_task(self):
         """Return a task from rabbitmq or empty if none are available."""
-        await self.connect_rabbit()
-        while True:
-            try:
-                return await self.rabbit_queue.get(timeout=1)
-            except Exception as err:
-                self.logging.error(err)
-                return None
+        return await self.rabbit_queue.get(fail=False)
 
     async def push_task(self, data):
         """Add a task to the outgoing exchange."""
-        await self.connect_rabbit()
         await self.rabbit_exchange.publish(
             Message(bytes(json.dumps(data), 'utf-8'),
                     delivery_mode=DeliveryMode.PERSISTENT),
@@ -119,14 +112,10 @@ class Master:
                 await msg.ack()
             del self.buffered_matches[matchId]
 
-
     async def next_task(self):
         while True:
-            msg = await self.retrieve_task()
-            if not msg:
-                while not msg:
-                    msg = await self.retrieve_task()
-                    await asyncio.sleep(1)
+            while not (msg := await self.retrieve_task()):
+                await asyncio.sleep(1)
             matchId = msg.body.decode('utf-8')
             if matchId in self.buffered_matches:
                 try:
