@@ -30,6 +30,7 @@ class SummonerIDUpdater(Worker):
         db_in = await channel.declare_queue(
             f'DB_SUMMONER_IN_{self.server}',
             durable=True)
+
         await db_in.bind(outgoing, 'SUMMONER_V2')
 
         await self.pika.init(incoming=incoming, outgoing=outgoing, tag='SUMMONER_V2')
@@ -66,7 +67,7 @@ class SummonerIDUpdater(Worker):
 
 if __name__ == "__main__":
     buffer = int(os.environ['BUFFER'])
-    worker = Worker(
+    worker = SummonerIDUpdater(
         buffer=buffer,
         url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/summoner/v4/summoners/%s",
         identifier="summonerId")
