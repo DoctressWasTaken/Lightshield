@@ -21,6 +21,8 @@ class Pika:
         self.logging.addHandler(ch)
         self.rabbit = None
 
+        self.fails = 0  # To count failed requests in a row
+
     async def init(self):
         """Initiate channel and exchanges."""
         await self.connect()
@@ -68,7 +70,15 @@ class Pika:
 
         Returns either the message element or None on timeout.
         """
-        return await self.rabbit_queue.get(fail=False)
+        try:
+            msg = await asyncio.wait(self.rabbit_queue.get(fail=False), timeout=2)
+            self.fails = 0
+            return msg
+        except asyncio.TimeoutError:
+            self.fails += 1
+            if self.fails > 5:
+                self.logging.info(f"{self.fails} fails in a row. Failed get.")
+            return None
 
     async def push(self, data):
         """Push data through exchange.
