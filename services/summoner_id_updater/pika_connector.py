@@ -20,17 +20,36 @@ class Pika:
             logging.Formatter(f'%(asctime)s [RABBITMQ] %(message)s'))
         self.logging.addHandler(ch)
         self.rabbit = None
-        self.incoming = None
-        self.outgoing = None
-        self.tag = None  # Outgoing exchange tag
 
         self.fails = 0  # To count failed requests in a row
 
-    async def init(self, incoming, outgoing, tag):
-        """Initiate in and outputs."""
-        self.incoming = incoming
-        self.outgoing = outgoing
-        self.tag = tag
+    async def init(self):
+        """Initiate channel and exchanges."""
+        await self.connect()
+
+        channel = await self.rabbit.channel()
+        await channel.set_qos(prefetch_count=1)
+        # Incoming
+        self.rabbit_queue = await channel.declare_queue(
+            'SUMMONER_ID_IN_' + self.server, durable=True)
+        # Outgoing
+        self.rabbit_exchange = await channel.declare_exchange(
+            f'SUMMONER_ID_OUT_{self.server}', type='direct',
+            durable=True)
+
+        # Output to the Match_History_Updater
+        match_history_in = await channel.declare_queue(
+            f'MATCH_HISTORY_IN_{self.server}',
+            durable=True
+        )
+        await match_history_in.bind(self.rabbit_exchange, 'SUMMONER_V2')
+
+        # Output to the DB
+        db_in = await channel.declare_queue(
+            f'DB_SUMMONER_IN_{self.server}',
+            durable=True)
+
+        await db_in.bind(self.rabbit_exchange, 'SUMMONER_V2')
 
     async def connect(self):
         """Connect to rabbitmq.
@@ -45,36 +64,6 @@ class Pika:
             time = min(time + 0.5, 5)
             if time == 5:
                 raise ConnectionError("Connection to rabbitmq could not be established.")
-        return self.rabbit
-
-    async def ack(self, msg):
-        """Acknowledge a message."""
-        for i in range(5):
-            try:
-                await asyncio.wait_for(msg.ack(), timeout=2)
-                return
-            except asyncio.TimeoutError:
-                pass
-            except Exception as err:
-                self.logging.info(f"Got exception {err.__class__.__name__}.")
-                return
-        raise Exception("Failed to acknowledge message.")
-
-    async def reject(self, msg, requeue):
-        """Reject a message.
-
-        Additional param for requeing.
-        """
-        for i in range(5):
-            try:
-                await asyncio.wait_for(msg.reject(requeue=requeue), timeout=2)
-                return
-            except asyncio.TimeoutError:
-                pass
-            except Exception as err:
-                self.logging.info(f"Got exception {err.__class__.__name__}.")
-                return
-        raise Exception("Failed to requeue message.")
 
     async def get(self):
         """Get message from rabbitmq.
@@ -82,7 +71,7 @@ class Pika:
         Returns either the message element or None on timeout.
         """
         try:
-            msg = await asyncio.wait_for(self.incoming.get(fail=False), timeout=2)
+            msg = await asyncio.wait_for(self.rabbit_queue.get(fail=False), timeout=2)
             self.fails = 0
             return msg
         except asyncio.TimeoutError:
@@ -96,5 +85,5 @@ class Pika:
 
         The data is used by both db_worker and match_history_updater.
         """
-        return await self.outgoing.publish(
-            Message(bytes(json.dumps(data), 'utf-8')), self.tag)
+        return await self.rabbit_exchange.publish(
+            Message(bytes(json.dumps(data), 'utf-8')), 'SUMMONER_V2')

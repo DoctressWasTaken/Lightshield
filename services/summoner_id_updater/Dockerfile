@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.7
 
 WORKDIR /project
 RUN python -m pip install --upgrade pip
