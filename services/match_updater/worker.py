@@ -124,13 +124,11 @@ class Master:
         while True:
             msg = await self.retrieve_task()
             if not msg:
-                self.logging.info("No messages found. Awaiting.")
                 while not msg:
                     msg = await self.retrieve_task()
                     await asyncio.sleep(1)
             matchId = msg.body.decode('utf-8')
             if matchId in self.buffered_matches:
-                self.logging.info(f"Match {matchId} is already registered as an active task.")
                 try:
                     await msg.ack()
                 except:
@@ -147,7 +145,7 @@ class Master:
         while not os.environ['STATUS'] == 'STOP':
             tasks = []
             async with aiohttp.ClientSession() as session:
-                while self.retry_after < datetime.now():
+                while self.retry_after < datetime.now() and len(tasks) < 5000:
 
                     if len(self.buffered_matches) >= self.max_buffer:
                         while len(self.buffered_matches) >= self.max_buffer:
@@ -158,7 +156,9 @@ class Master:
                         session=session, url=self.url_template % (matchId), msg=msg, matchId=matchId
                     )))
                     await asyncio.sleep(0.03)
-                await asyncio.gather(*tasks)
+                if len(tasks) > 0:
+                    self.logging.info(f"Flushing {len(tasks)} tasks.")
+                    await asyncio.gather(*tasks)
             delay = (self.retry_after - datetime.now()).total_seconds()
             await asyncio.sleep(delay)
 
