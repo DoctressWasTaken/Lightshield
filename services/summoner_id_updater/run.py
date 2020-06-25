@@ -47,7 +47,7 @@ class Worker:
             content = json.loads(msg.body.decode('utf-8'))
             summonerId = content['summonerId']
             if summonerId in self.buffered_summoners:  # Skip any further tasks for already queued
-                self.logging.info(f"Summoner id {summonerId} is already registered as an active task.")
+                #self.logging.info(f"Summoner id {summonerId} is already registered as an active task.")
                 try:
                     await msg.ack()
                 except:
@@ -111,10 +111,12 @@ class Worker:
                         msg
                     )))
                     await asyncio.sleep(0.03)
-                packs = await asyncio.gather(*tasks)
-                for pack in packs:
-                    if pack:
-                        await self.pika.push(pack)
+                if len(tasks) > 0:
+                    self.logging.info(f"Flushing {len(tasks)} tasks.")
+                    packs = await asyncio.gather(*tasks)
+                    for pack in packs:
+                        if pack:
+                            await self.pika.push(pack)
                 delay = (self.retry_after - datetime.now()).total_seconds()
                 if delay > 0:
                     await asyncio.sleep(delay)
