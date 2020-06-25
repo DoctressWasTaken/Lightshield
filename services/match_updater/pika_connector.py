@@ -4,6 +4,7 @@ import logging
 import os
 from aio_pika import Message
 
+
 class Pika:
 
     def __init__(self, host='rabbitmq'):
@@ -49,11 +50,8 @@ class Pika:
                 raise ConnectionError("Connection to rabbitmq could not be established.")
 
     async def get(self):
-        try:
-            return await self.rabbit_queue.get(timeout=0.5)
-        except Exception as err:
-            print(err)
-            return None
+        return await self.rabbit_queue.get(fail=False)
+
     async def push(self, data):
         return await self.rabbit_exchange.publish(
             Message(bytes(str(data), 'utf-8')), 'MATCH')
