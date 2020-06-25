@@ -113,7 +113,11 @@ class Master:
             del self.buffered_matches[matchId]
 
     async def next_task(self):
+        tries = 0
         while True:
+            tries += 1
+            if tries > 500:
+                self.logging.info(f"More than {tries} tries.")
             while not (msg := await self.retrieve_task()):
                 await asyncio.sleep(1)
             matchId = msg.body.decode('utf-8')
@@ -131,15 +135,19 @@ class Master:
 
     async def run(self):
         """Run method. Handles the creation and deletion of worker tasks."""
+        stuck_on_buffer = 0
         await self.connect_rabbit()
         while not os.environ['STATUS'] == 'STOP':
             tasks = []
             async with aiohttp.ClientSession() as session:
                 while self.retry_after < datetime.now() and len(tasks) < 5000:
 
-                    if len(self.buffered_matches) >= self.max_buffer:
-                        while len(self.buffered_matches) >= self.max_buffer:
-                            await asyncio.sleep(0.1)
+                    while len(self.buffered_matches) >= self.max_buffer:
+                        stuck_on_buffer += 1
+                        if stuck_on_buffer > 500:
+                            self.logging.info(f"Stuck on buffer for {stuck_on_buffer // 10}s.")
+                        await asyncio.sleep(0.1)
+                    stuck_on_buffer = 0
 
                     matchId, msg = await self.next_task()
                     tasks.append(asyncio.create_task(self.fetch(
@@ -150,5 +158,7 @@ class Master:
                     self.logging.info(f"Flushing {len(tasks)} tasks.")
                     await asyncio.gather(*tasks)
             delay = (self.retry_after - datetime.now()).total_seconds()
+            if delay > 5:
+                self.logging.info(f"Waiting for {delay}.")
             await asyncio.sleep(delay)
 
