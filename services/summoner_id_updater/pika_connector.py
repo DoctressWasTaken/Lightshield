@@ -71,7 +71,7 @@ class Pika:
         Returns either the message element or None on timeout.
         """
         try:
-            msg = await asyncio.wait(self.rabbit_queue.get(fail=False), timeout=2)
+            msg = await asyncio.wait_for(self.rabbit_queue.get(fail=False), timeout=2)
             self.fails = 0
             return msg
         except asyncio.TimeoutError:
