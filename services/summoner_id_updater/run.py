@@ -36,72 +36,65 @@ class Worker:
         self.logging.addHandler(ch)
 
     async def next_task(self):
-        try:
-            while True:
-                msg = await self.pika.get()
-                if not msg:
-                    self.logging.info("No messages found. Awaiting.")
-                    while not msg:
-                        msg = await self.pika.get()
-                        await asyncio.sleep(1)
+        while True:
+            msg = await self.pika.get()
+            if not msg:
+                self.logging.info("No messages found. Awaiting.")
+                while not msg:
+                    msg = await self.pika.get()
+                    await asyncio.sleep(1)
 
-                content = json.loads(msg.body.decode('utf-8'))
-                summonerId = content['summonerId']
-                if summonerId in self.buffered_summoners:  # Skip any further tasks for already queued
-                    self.logging.info(f"Summoner id {summonerId} is already registered as an active task.")
-                    try:
-                        await msg.ack()
-                    except:
-                        self.logging.info(f"Failed to ack {summonerId}.")
-                    continue
-                redis_entry = await self.redis.hgetall(summonerId)
+            content = json.loads(msg.body.decode('utf-8'))
+            summonerId = content['summonerId']
+            if summonerId in self.buffered_summoners:  # Skip any further tasks for already queued
+                self.logging.info(f"Summoner id {summonerId} is already registered as an active task.")
+                try:
+                    await msg.ack()
+                except:
+                    self.logging.info(f"Failed to ack {summonerId}.")
+                continue
+            redis_entry = await self.redis.hgetall(summonerId)
 
-                if redis_entry:  # Skip call for already existing. Still adds a message output
-                    package = {**content, **redis_entry}
-                    await self.pika.push(package)
-                    try:
-                        await msg.ack()
-                    except:
-                        self.logging.info(f"Failed to ack {summonerId}.")
-                    continue
-                self.buffered_summoners[summonerId] = True
-                return summonerId, msg
-        except Exception as err:
-            print("Exception happened in next_task", err)
-            return None
+            if redis_entry:  # Skip call for already existing. Still adds a message output
+                package = {**content, **redis_entry}
+                await self.pika.push(package)
+                try:
+                    await msg.ack()
+                except:
+                    self.logging.info(f"Failed to ack {summonerId}.")
+                continue
+            self.buffered_summoners[summonerId] = True
+            return summonerId, msg
+
 
     async def worker(self, session, summonerId, msg):
-        try:
-            url = self.url_template % (summonerId)
-            package = None
-            self.logging.debug(f"Fetching {url}")
-            async with session.get(url, proxy="http://proxy:8000") as response:
-                try:
-                    resp = await response.json(content_type=None)
-                except:
-                    pass
+        url = self.url_template % (summonerId)
+        package = None
+        self.logging.debug(f"Fetching {url}")
+        async with session.get(url, proxy="http://proxy:8000") as response:
+            try:
+                resp = await response.json(content_type=None)
+            except:
+                pass
 
-            if response.status in [429, 430]:
-                if "Retry-After" in response.headers:
-                    delay = int(response.headers['Retry-After'])
-                    self.retry_after = datetime.now() + timedelta(seconds=delay)
-            elif response.status == 404:
-                await msg.reject(requeue=False)
-            if response.status != 200:
-                await msg.reject(requeue=True)
-            else:
-                await self.redis.hset(
-                    summonerId=summonerId,
-                    mapping={'puuid': resp['puuid'],
-                             'accountId': resp['accountId']})
-                await msg.ack()
-                package = {**json.loads(msg.body.decode('utf-8')),
-                           **resp}
-            del self.buffered_summoners[summonerId]
-            return package
-        except Exception as err:
-            print("Exception happened in worker", err)
-        return None
+        if response.status in [429, 430]:
+            if "Retry-After" in response.headers:
+                delay = int(response.headers['Retry-After'])
+                self.retry_after = datetime.now() + timedelta(seconds=delay)
+        elif response.status == 404:
+            await msg.reject(requeue=False)
+        if response.status != 200:
+            await msg.reject(requeue=True)
+        else:
+            await self.redis.hset(
+                summonerId=summonerId,
+                mapping={'puuid': resp['puuid'],
+                         'accountId': resp['accountId']})
+            await msg.ack()
+            package = {**json.loads(msg.body.decode('utf-8')),
+                       **resp}
+        del self.buffered_summoners[summonerId]
+        return package
 
     async def main(self):
         while True:

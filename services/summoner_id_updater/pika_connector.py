@@ -54,36 +54,26 @@ class Pika:
 
         :raises:: ConnectionError if connection can't be established.
         """
-        try:
-            time = 0.5
-            while not self.rabbit or self.rabbit.is_closed:
-                self.rabbit = await aio_pika.connect_robust(
-                    url=f'amqp://guest:guest@{self.host}/')
-                await asyncio.sleep(time)
-                time = min(time + 0.5, 5)
-                if time == 5:
-                    raise ConnectionError("Connection to rabbitmq could not be established.")
-        except Exception as err:
-            print("Exception in connect", err)
+        time = 0.5
+        while not self.rabbit or self.rabbit.is_closed:
+            self.rabbit = await aio_pika.connect_robust(
+                url=f'amqp://guest:guest@{self.host}/')
+            await asyncio.sleep(time)
+            time = min(time + 0.5, 5)
+            if time == 5:
+                raise ConnectionError("Connection to rabbitmq could not be established.")
 
     async def get(self):
         """Get message from rabbitmq.
 
         Returns either the message element or None on timeout.
         """
-        try:
-            return await self.rabbit_queue.get(timeout=0.5)
-        except Exception as err:
-            print("Exception in get", err)
-            return None
+        return await self.rabbit_queue.get(fail=False)
 
     async def push(self, data):
         """Push data through exchange.
 
         The data is used by both db_worker and match_history_updater.
         """
-        try:
-            return await self.rabbit_exchange.publish(
-                Message(bytes(json.dumps(data), 'utf-8')), 'SUMMONER_V2')
-        except Exception as err:
-            print("Exception in push", err)
+        return await self.rabbit_exchange.publish(
+            Message(bytes(json.dumps(data), 'utf-8')), 'SUMMONER_V2')
