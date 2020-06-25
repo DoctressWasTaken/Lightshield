@@ -39,7 +39,6 @@ class Worker:
             logging.Formatter(f'%(asctime)s [WORKER] %(message)s'))
         self.logging.addHandler(ch)
 
-
     async def fetch(self, session, url, startingId):
         self.logging.debug(f"Fetching {url}.")
         async with session.get(url, proxy="http://proxy:8000") as response:
@@ -59,7 +58,6 @@ class Worker:
                 return {"status": "success",
                         "id": startingId,
                         "matches": [match['gameId'] for match in resp['matches'] if match['queue'] == 420 and match['platformId'] == server]}
-
 
     async def process_history(self, msg, summonerId, matches):
         """Manage a single summoners full history calls."""
@@ -110,13 +108,8 @@ class Worker:
 
     async def next_task(self):
         while True:
-            msg = await self.pika.get()
-            if not msg:
-                self.logging.info("No messages found. Awaiting.")
-                while not msg:
-                    msg = await self.pika.get()
-                    await asyncio.sleep(1)
-                self.logging.info("Continuing.")
+            while not (msg := await self.pika.get()):
+                await asyncio.sleep(1)
             content = json.loads(msg.body.decode('utf-8'))
             summonerId = content['summonerId']
 
@@ -127,10 +120,8 @@ class Worker:
                 except:
                     self.logging.info(f"Failed to ack {summonerId}.")
                 continue
-
             prev = await self.redis.hgetall(summonerId)
             matches = content['wins'] + content['losses']
-
             if prev:
                 matches -= (int(prev['wins']) + int(prev['losses']))
 
@@ -144,17 +135,18 @@ class Worker:
             return summonerId, matches, msg
 
     async def main(self):
-        tasks = []
         while True:
-            if len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
-                while len(self.buffered_summoners) >= self.max_buffer:
-                    await asyncio.sleep(0.5)
+            tasks = []
+            while len(tasks) < 500:
+                if len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
+                    while len(self.buffered_summoners) >= self.max_buffer:
+                        await asyncio.sleep(0.1)
+                summonerId, matches, msg = await self.next_task()
+                tasks.append(asyncio.create_task(self.process_history(
+                    msg=msg, summonerId=summonerId, matches=matches)))
+                await asyncio.sleep(0.03)
 
-            summonerId, matches, msg = await self.next_task()
-            tasks.append(asyncio.create_task(self.process_history(
-                msg=msg, summonerId=summonerId, matches=matches)))
-            await asyncio.sleep(0.03)
-        await asyncio.gather(*tasks)
+            await asyncio.gather(*tasks)
 
     async def run(self):
         await self.pika.init()
