@@ -46,7 +46,6 @@ class SummonerIDUpdater(Worker):
 
     async def worker(self, session, identifier, msg):
         url = self.url_template % (identifier)
-        package = None
         self.logging.debug(f"Fetching {url}")
         try:
             response = await self.fetch(session, url)
@@ -63,7 +62,7 @@ class SummonerIDUpdater(Worker):
         except Non200Exception:
             await self.pika.reject(msg, requeue=True)
         finally:
-            del self.buffered_summoners[identifier]
+            del self.buffered_elements[identifier]
 
 if __name__ == "__main__":
     buffer = int(os.environ['BUFFER'])

@@ -51,30 +51,28 @@ class Worker:
         # Initiate Channel and Exchanges
         await self.initiate_pika(connection=rabbit)
         # Start runner
-        await self.runner()
+        while True:
+            await self.runner()
 
     async def runner(self):
         """Manage starting new worker tasks."""
-        while True:
-            tasks = []
-            async with aiohttp.ClientSession() as session:
-
-                while self.retry_after < datetime.now() and len(tasks) < 5000:
-                    while len(self.buffered_elements) >= self.max_buffer:
-                        await asyncio.sleep(0.1)
-
-                    identifier, msg = await self.next_task()
-                    tasks.append(asyncio.create_task(self.worker(
-                        session,
-                        identifier,
-                        msg
-                    )))
-                    await asyncio.sleep(1 / self.max_buffer)
-                if len(tasks) > 0:
-                    self.logging.info(f"Flushing {len(tasks)} tasks.")
-                    await asyncio.gather(*tasks)
-            if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
-                await asyncio.sleep(delay)
+        tasks = []
+        async with aiohttp.ClientSession() as session:
+            while self.retry_after < datetime.now() and len(tasks) < 5000:
+                while len(self.buffered_elements) >= self.max_buffer:
+                    await asyncio.sleep(0.1)
+                identifier, msg = await self.next_task()
+                tasks.append(asyncio.create_task(self.worker(
+                    session,
+                    identifier,
+                    msg
+                )))
+                #await asyncio.sleep(0.01)
+            if len(tasks) > 0:
+                self.logging.info(f"Flushing {len(tasks)} tasks.")
+                await asyncio.gather(*tasks)
+        if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
+            await asyncio.sleep(delay)
 
     async def next_task(self):
         while True:
@@ -91,7 +89,6 @@ class Worker:
                 self.buffered_elements[identifier] = True
                 return identifier, msg
             continue
-
 
     async def fetch(self, session, url):
         async with session.get(url, proxy="http://proxy:8000") as response:

@@ -32,11 +32,11 @@ class Redis:
             if time == 5:
                 self.logging.info("Connection to redis could not be established")
 
-    async def hgetall(self, summonerId):
+    async def hgetall(self, key):
         await self.connect()
-        return await self.redis.hgetall(f"user:{summonerId}")
+        return await self.redis.hgetall(key)
 
-    async def hset(self, summonerId, mapping):
+    async def hset(self, key, mapping):
         await self.connect()
-        await self.redis.hmset_dict(f"user:{summonerId}", mapping)
+        await self.redis.hmset_dict(key, mapping)
         return
