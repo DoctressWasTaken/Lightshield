@@ -1,4 +1,1 @@
-aioredis
-aio_pika
 uvloop
-aiohttp

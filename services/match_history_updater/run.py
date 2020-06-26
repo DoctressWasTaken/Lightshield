@@ -3,9 +3,7 @@
 import asyncio
 import json
 import os
-import logging
-import aiohttp
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from worker import (
     Worker,
@@ -14,9 +12,6 @@ from worker import (
     Non200Exception,
     NoMessageException
 )
-
-from redis_connector import Redis
-from pika_connector import Pika
 
 if "SERVER" not in os.environ:
     print("No SERVER env variable provided. exiting")
@@ -30,7 +25,6 @@ class MatchHistoryUpdater(Worker):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
-
 
     async def initiate_pika(self, connection):
 

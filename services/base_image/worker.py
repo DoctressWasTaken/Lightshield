@@ -93,8 +93,11 @@ class Worker:
                     raise NoMessageException()
                 await asyncio.sleep(0.5)
 
-            content = json.loads(msg.body.decode('utf-8'))
-            identifier = content[self.identifier]
+            if self.identifier:
+                content = json.loads(msg.body.decode('utf-8'))
+                identifier = content[self.identifier]
+            else:
+                identifier = msg.body.decode('utf-8')
             if identifier in self.buffered_elements:  # Skip any further tasks for already queued
                 await self.pika.ack(msg)
                 continue

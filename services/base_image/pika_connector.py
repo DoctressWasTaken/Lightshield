@@ -91,19 +91,22 @@ class Pika:
                 self.logging.info(f"{self.fails} fails in a row. Failed get.")
             return None
 
-    async def push(self, data):
+    async def push(self, data, persistent=False):
         """Push data through exchange.
 
         The data is used by both db_worker and match_history_updater.
         """
         if type(data) in [dict, list]:
-            return await self.outgoing.publish(
-                Message(bytes(json.dumps(data), 'utf-8')), self.tag)
+           data = json.dumps(data)
         elif type(data) in [float, int]:
-            return await self.outgoing.publish(
-                Message(bytes(str(data), 'utf-8')), self.tag)
-        elif type(data) == str:
-            return await self.outgoing.publish(
-                Message(bytes(data, 'utf-8')), self.tag)
+            data = str(data)
         else:
             raise Exception(f"Pushing data of type {type(data)} not supported.")
+        if persistent:
+            return await self.outgoing.publish(
+                Message(
+                    message=bytes(data, 'utf-8'),
+                    delivery_mode=DeliveryMode.PERSISTENT), self.tag)
+
+        return await self.outgoing.publish(
+            Message(bytes(data, 'utf-8')), self.tag)
