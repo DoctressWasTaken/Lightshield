@@ -5,127 +5,70 @@ import json
 import aiohttp
 from datetime import datetime, timedelta
 
-from redis_connector import Redis
-from pika_connector import Pika
-
-if "SERVER" not in os.environ:
-    print("No server provided, shutting down")
-    exit()
-server = os.environ['SERVER']
+from worker import Worker, RatelimitException, NotFoundException, Non200Exception
 
 
-class Worker:
+class SummonerIDUpdater(Worker):
 
-    def __init__(self, buffer):
+    async def initiate_pika(self, connection):
+        channel = await connection.channel()
+        await channel.set_qos(prefetch_count=1)
+        # Incoming
+        incoming = await channel.declare_queue(
+            'SUMMONER_ID_IN_' + self.server, durable=True)
+        # Outgoing
+        outgoing = await channel.declare_exchange(
+            f'SUMMONER_ID_OUT_{self.server}', type='direct',
+            durable=True)
+        # Output to the Match_History_Updater
+        match_history_in = await channel.declare_queue(
+            f'MATCH_HISTORY_IN_{self.server}',
+            durable=True
+        )
+        await match_history_in.bind(outgoing, 'SUMMONER_V2')
+        # Output to the DB
+        db_in = await channel.declare_queue(
+            f'DB_SUMMONER_IN_{self.server}',
+            durable=True)
 
-        self.redis = Redis()
-        self.pika = Pika()
-        self.url_template = f"http://{server}.api.riotgames.com/lol/summoner/v4/summoners/%s"
+        await db_in.bind(outgoing, 'SUMMONER_V2')
 
-        self.max_buffer = buffer
-        self.failed_tasks = []
-        self.retry_after = datetime.now()
-        self.buffered_summoners = {}
+        await self.pika.init(incoming=incoming, outgoing=outgoing, tag='SUMMONER_V2')
 
-        self.logging = logging.getLogger("worker")
-        self.logging.setLevel(logging.INFO)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(
-            logging.Formatter(f'%(asctime)s [WORKER] %(message)s'))
-        self.logging.addHandler(ch)
+    async def is_valid(self, identifier, content, msg):
 
-    async def next_task(self):
-        while True:
-            msg = await self.pika.get()
-            if not msg:
-                self.logging.info("No messages found. Awaiting.")
-                while not msg:
-                    msg = await self.pika.get()
-                    await asyncio.sleep(1)
+        if redis_entry := await self.redis.hgetall(f"user:{identifier}"):
+            package = {**content, **redis_entry}
+            await self.pika.push(package)
+            await self.pika.ack(msg)
+            return False
+        return True
 
-            content = json.loads(msg.body.decode('utf-8'))
-            summonerId = content['summonerId']
-            if summonerId in self.buffered_summoners:  # Skip any further tasks for already queued
-                #self.logging.info(f"Summoner id {summonerId} is already registered as an active task.")
-                try:
-                    await msg.ack()
-                except:
-                    self.logging.info(f"Failed to ack {summonerId}.")
-                continue
-            redis_entry = await self.redis.hgetall(summonerId)
-
-            if redis_entry:  # Skip call for already existing. Still adds a message output
-                package = {**content, **redis_entry}
-                await self.pika.push(package)
-                try:
-                    await msg.ack()
-                except:
-                    self.logging.info(f"Failed to ack {summonerId}.")
-                continue
-            self.buffered_summoners[summonerId] = True
-            return summonerId, msg
-
-
-    async def worker(self, session, summonerId, msg):
-        url = self.url_template % (summonerId)
+    async def worker(self, session, identifier, msg):
+        url = self.url_template % (identifier)
         package = None
         self.logging.debug(f"Fetching {url}")
-        async with session.get(url, proxy="http://proxy:8000") as response:
-            try:
-                resp = await response.json(content_type=None)
-            except:
-                pass
-
-        if response.status in [429, 430]:
-            if "Retry-After" in response.headers:
-                delay = int(response.headers['Retry-After'])
-                self.retry_after = datetime.now() + timedelta(seconds=delay)
-        elif response.status == 404:
-            await msg.reject(requeue=False)
-        if response.status != 200:
-            await msg.reject(requeue=True)
-        else:
+        try:
+            response = await self.fetch(session, url)
             await self.redis.hset(
-                summonerId=summonerId,
-                mapping={'puuid': resp['puuid'],
-                         'accountId': resp['accountId']})
-            await msg.ack()
-            package = {**json.loads(msg.body.decode('utf-8')),
-                       **resp}
-        del self.buffered_summoners[summonerId]
-        return package
-
-    async def main(self):
-        while True:
-            tasks = []
-            async with aiohttp.ClientSession() as session:
-                while self.retry_after < datetime.now() and len(tasks) < 5000:
-                    if len(self.buffered_summoners) >= self.max_buffer:
-                        while len(self.buffered_summoners) >= self.max_buffer:
-                            await asyncio.sleep(0.1)
-                    summonerId, msg = await self.next_task()
-                    tasks.append(asyncio.create_task(self.worker(
-                        session,
-                        summonerId,
-                        msg
-                    )))
-                    await asyncio.sleep(0.03)
-                if len(tasks) > 0:
-                    self.logging.info(f"Flushing {len(tasks)} tasks.")
-                    packs = await asyncio.gather(*tasks)
-                    for pack in packs:
-                        if pack:
-                            await self.pika.push(pack)
-                delay = (self.retry_after - datetime.now()).total_seconds()
-                if delay > 0:
-                    await asyncio.sleep(delay)
-
-    async def run(self):
-        await self.pika.init()
-        await self.main()
+                key=f"user:{identifier}",
+                mapping={'puuid': response['puuid'],
+                         'accountId': response['accountId']})
+            await self.pika.push({**json.loads(msg.body.decode('utf-8')), **response})
+            await self.pika.ack(msg)
+        except RatelimitException:
+            pass
+        except NotFoundException:
+            await self.pika.reject(msg, requeue=False)
+        except Non200Exception:
+            await self.pika.reject(msg, requeue=True)
+        finally:
+            del self.buffered_summoners[identifier]
 
 if __name__ == "__main__":
     buffer = int(os.environ['BUFFER'])
-    worker = Worker(buffer=buffer)
-    asyncio.run(worker.run())
+    worker = SummonerIDUpdater(
+        buffer=buffer,
+        url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/summoner/v4/summoners/%s",
+        identifier="summonerId")
+    asyncio.run(worker.main())
