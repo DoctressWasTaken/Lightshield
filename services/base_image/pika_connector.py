@@ -56,7 +56,7 @@ class Pika:
             except asyncio.TimeoutError:
                 pass
             except Exception as err:
-                self.logging.info(f"Got exception {err.__class__.__name__}.")
+                self.logging.info(f"Got exception {err.__class__.__name__}: {repr(err)}")
                 return
         raise Exception("Failed to acknowledge message.")
 
