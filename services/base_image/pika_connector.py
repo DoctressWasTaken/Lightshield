@@ -56,7 +56,7 @@ class Pika:
             except asyncio.TimeoutError:
                 pass
             except Exception as err:
-                self.logging.info(f"[Ack] Got exception {err.__class__.__name__}: {repr(err)}")
+                self.logging.debug(f"[Ack] Got exception {err.__class__.__name__}: {repr(err)}")
                 return
         raise Exception("Failed to acknowledge message.")
 
@@ -72,7 +72,7 @@ class Pika:
             except asyncio.TimeoutError:
                 pass
             except Exception as err:
-                self.logging.info(f"[Reject:{requeue}] Got exception {err.__class__.__name__}: {repr(err)}")
+                self.logging.debug(f"[Reject:{requeue}] Got exception {err.__class__.__name__}: {repr(err)}")
                 return
         raise Exception("Failed to requeue message.")
 
