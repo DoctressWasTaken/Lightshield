@@ -12,7 +12,7 @@ class SummonerIDUpdater(Worker):
 
     async def initiate_pika(self, connection):
         channel = await connection.channel()
-        await channel.set_qos(prefetch_count=1)
+        await channel.set_qos(prefetch_count=100)
         # Incoming
         incoming = await channel.declare_queue(
             'SUMMONER_ID_IN_' + self.server, durable=True)

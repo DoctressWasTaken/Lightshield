@@ -2,7 +2,7 @@
 import asyncio
 import aioredis
 import logging
-
+from aioredis.errors import ReplyError
 
 class Redis:
 
@@ -25,8 +25,12 @@ class Redis:
     async def connect(self):
         time = 0.5
         while not self.redis or self.redis.closed:
-            self.redis = await aioredis.create_redis_pool(
-                (self.host, self.port), db=0, encoding='utf-8')
+            try:
+                self.redis = await aioredis.create_redis_pool(
+                    (self.host, self.port), db=0, encoding='utf-8')
+            except ReplyError:
+                await asyncio.sleep(5)
+                continue
             await asyncio.sleep(time)
             time = min(time + 0.5, 5)
             if time == 5:
@@ -41,11 +45,11 @@ class Redis:
         await self.redis.hmset_dict(key, mapping)
         return
 
-    async def sismember(self, set, key):
+    async def sismember(self, _set, key):
         await self.connect()
-        await self.redis.sismember(set, key=str(key))
+        await self.redis.sismember(_set, str(key))
 
 
-    async def sadd(self, set, key):
+    async def sadd(self, _set, key):
         await self.connect()
-        await self.sadd(set, key=str(key))
+        await self.redis.sadd(_set, str(key))

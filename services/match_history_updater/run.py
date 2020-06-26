@@ -79,7 +79,6 @@ class MatchHistoryUpdater(Worker):
 
     async def worker(self, session, identifier, msg, matches):
         """Manage a single summoners full history calls."""
-        self.logging.info("Worker")
         matches_to_call = matches + 3
         calls = int(matches_to_call / 100) + 1
         ids = [start_id * 100 for start_id in range(calls)]
@@ -110,7 +109,7 @@ class MatchHistoryUpdater(Worker):
             while matches:
                 id = matches.pop()
                 await self.pika.push(id)
-                await self.pika.ack(msg)
+            await self.pika.ack(msg)
         except NotFoundException:  # Triggers only if a call returns 404. Forces a full reject.
             await self.pika.reject(msg, requeue=False)
         finally:

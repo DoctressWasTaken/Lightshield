@@ -65,6 +65,7 @@ class Worker:
             while self.retry_after < datetime.now() and len(tasks) < 5000:
                 while len(self.buffered_elements) >= self.max_buffer:
                     await asyncio.sleep(0.1)
+
                 try:
                     identifier, msg, additional_args = await self.next_task()
                 except NoMessageException:

@@ -56,7 +56,7 @@ class Pika:
             except asyncio.TimeoutError:
                 pass
             except Exception as err:
-                self.logging.debug(f"[Ack] Got exception {err.__class__.__name__}: {repr(err)}")
+                self.logging.info(f"[Ack] Got exception {err.__class__.__name__}: {repr(err)}")
                 return
         raise Exception("Failed to acknowledge message.")
 
@@ -72,7 +72,7 @@ class Pika:
             except asyncio.TimeoutError:
                 pass
             except Exception as err:
-                self.logging.debug(f"[Reject:{requeue}] Got exception {err.__class__.__name__}: {repr(err)}")
+                self.logging.info(f"[Reject:{requeue}] Got exception {err.__class__.__name__}: {repr(err)}")
                 return
         raise Exception("Failed to requeue message.")
 
@@ -102,11 +102,21 @@ class Pika:
             data = str(data)
         else:
             raise Exception(f"Pushing data of type {type(data)} not supported.")
-        if persistent:
-            return await self.outgoing.publish(
-                Message(
-                    body=bytes(data, 'utf-8'),
-                    delivery_mode=DeliveryMode.PERSISTENT), self.tag)
 
-        return await self.outgoing.publish(
-            Message(bytes(data, 'utf-8')), self.tag)
+        if persistent:
+            message = Message(
+                    body=bytes(data, 'utf-8'),
+                    delivery_mode=DeliveryMode.PERSISTENT)
+        else:
+            message = Message(bytes(data, 'utf-8'))
+
+        for i in range(5):
+            try:
+                return await asyncio.wait_for(self.outgoing.publish(message, self.tag, timeout=10), timeout=5)
+            except asyncio.TimeoutError:
+                pass
+            except Exception as err:
+                self.logging.info(f"[Send:{persistent}] Got exception {err.__class__.__name__}: {repr(err)}")
+                return
+        raise Exception("Failed to send message.")
+

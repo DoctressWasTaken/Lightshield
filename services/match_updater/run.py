@@ -45,18 +45,19 @@ class MatchUpdater(Worker):
 
     async def is_valid(self, identifier, content, msg):
 
-        if prev := await self.redis.sismember(set='matches', key=identifier):
+        if prev := await self.redis.sismember(_set='matches', key=identifier):
             await self.pika.ack(msg)
             return False
         return {"foo": "bar"}
 
     async def worker(self, session, identifier, msg, **kwargs):
+
         url = self.url_template % (identifier)
         self.logging.debug(f"Fetching {url}")
         try:
             response = await self.fetch(session, url)
             await self.redis.sadd(
-                set='matches',
+                _set='matches',
                 key=identifier)
             await self.pika.push(response)
             await self.pika.ack(msg)
