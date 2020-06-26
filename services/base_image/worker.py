@@ -97,7 +97,8 @@ class Worker:
                 content = json.loads(msg.body.decode('utf-8'))
                 identifier = content[self.identifier]
             else:
-                identifier = msg.body.decode('utf-8')
+                content = identifier = msg.body.decode('utf-8')
+
             if identifier in self.buffered_elements:  # Skip any further tasks for already queued
                 await self.pika.ack(msg)
                 continue
