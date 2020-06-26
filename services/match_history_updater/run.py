@@ -66,7 +66,7 @@ class MatchHistoryUpdater(Worker):
         if matches < self.required_matches:  # Skip if less than required new matches
             await self.pika.ack(msg)
             # TODO: Despite not having enough matches this should be considered to pass on to the db
-            return False
+            return {"matches": matches}
         return True
 
     async def handler(self, session, url):
