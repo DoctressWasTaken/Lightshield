@@ -32,7 +32,7 @@ class MatchHistoryUpdater(Worker):
         self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
 
 
-    def initiate_pika(self, connection):
+    async def initiate_pika(self, connection):
 
         channel = await connection.channel()
         await channel.set_qos(prefetch_count=1)
