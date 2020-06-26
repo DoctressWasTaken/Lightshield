@@ -40,3 +40,11 @@ class Redis:
         await self.connect()
         await self.redis.hmset_dict(key, mapping)
         return
+
+    async def sismember(self, set, key):
+        await self.connect()
+        await self.redis.sismember(set=set, key=str(key))
+
+    async def sadd(self, set, key):
+        await self.connect()
+        await self.sadd(set=set, key=str(key))

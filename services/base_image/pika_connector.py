@@ -105,7 +105,7 @@ class Pika:
         if persistent:
             return await self.outgoing.publish(
                 Message(
-                    message=bytes(data, 'utf-8'),
+                    body=bytes(data, 'utf-8'),
                     delivery_mode=DeliveryMode.PERSISTENT), self.tag)
 
         return await self.outgoing.publish(
