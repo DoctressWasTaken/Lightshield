@@ -22,6 +22,9 @@ class Non200Exception(Exception):
     """On Non-200 Response thats not 429, 430 or 404."""
     pass
 
+class NoMessageException(Exception):
+    """Timeout exception if no message is found."""
+    pass
 
 class Worker:
 
@@ -57,11 +60,15 @@ class Worker:
     async def runner(self):
         """Manage starting new worker tasks."""
         tasks = []
+        start = datetime.now()
         async with aiohttp.ClientSession() as session:
             while self.retry_after < datetime.now() and len(tasks) < 5000:
                 while len(self.buffered_elements) >= self.max_buffer:
                     await asyncio.sleep(0.1)
-                identifier, msg = await self.next_task()
+                try:
+                    identifier, msg = await self.next_task()
+                except NoMessageException:
+                    break
                 tasks.append(asyncio.create_task(self.worker(
                     session,
                     identifier,
@@ -69,14 +76,20 @@ class Worker:
                 )))
                 #await asyncio.sleep(0.01)
             if len(tasks) > 0:
-                self.logging.info(f"Flushing {len(tasks)} tasks.")
                 await asyncio.gather(*tasks)
+            else:
+                await asyncio.sleep(5)
+        end = datetime.now()
+        self.logging.info(f"Flushed {len(tasks)} tasks. {round(len(tasks) / (end - start).total_seconds(), 2)} task/s.")
         if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
             await asyncio.sleep(delay)
 
     async def next_task(self):
+        timeout = 0
         while True:
             while not (msg := await self.pika.get()):
+                if (timeout := timeout + 1) > 20:
+                    raise NoMessageException()
                 await asyncio.sleep(0.5)
 
             content = json.loads(msg.body.decode('utf-8'))
