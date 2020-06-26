@@ -96,5 +96,14 @@ class Pika:
 
         The data is used by both db_worker and match_history_updater.
         """
-        return await self.outgoing.publish(
-            Message(bytes(json.dumps(data), 'utf-8')), self.tag)
+        if type(data) in [dict, list]:
+            return await self.outgoing.publish(
+                Message(bytes(json.dumps(data), 'utf-8')), self.tag)
+        elif type(data) in [float, int]:
+            return await self.outgoing.publish(
+                Message(bytes(str(data), 'utf-8')), self.tag)
+        elif type(data) == str:
+            return await self.outgoing.publish(
+                Message(bytes(data, 'utf-8')), self.tag)
+        else:
+            raise Exception(f"Pushing data of type {type(data)} not supported.")

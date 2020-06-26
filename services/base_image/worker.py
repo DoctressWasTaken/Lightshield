@@ -28,7 +28,7 @@ class NoMessageException(Exception):
 
 class Worker:
 
-    def __init__(self, buffer, url, identifier):
+    def __init__(self, buffer, url, identifier, *args, **kwargs):
         """Initiate logging as well as pika and redis connector."""
         self.logging = logging.getLogger("Worker")
         self.logging.setLevel(logging.INFO)
@@ -66,13 +66,14 @@ class Worker:
                 while len(self.buffered_elements) >= self.max_buffer:
                     await asyncio.sleep(0.1)
                 try:
-                    identifier, msg = await self.next_task()
+                    identifier, msg, additional_args = await self.next_task()
                 except NoMessageException:
                     break
                 tasks.append(asyncio.create_task(self.worker(
-                    session,
-                    identifier,
-                    msg
+                    session=session,
+                    identifier=identifier,
+                    msg=msg,
+                    **additional_args
                 )))
                 #await asyncio.sleep(0.01)
             if len(tasks) > 0:
@@ -98,9 +99,9 @@ class Worker:
                 await self.pika.ack(msg)
                 continue
 
-            if await self.is_valid(identifier, content, msg):
+            if additional_args := await self.is_valid(identifier, content, msg):
                 self.buffered_elements[identifier] = True
-                return identifier, msg
+                return identifier, msg, additional_args
             continue
 
     async def fetch(self, session, url):
@@ -134,7 +135,7 @@ class Worker:
         """
         pass
 
-    async def worker(self, session, identifier, msg):
+    async def worker(self, session, identifier, msg, **kwargs):
         """Abstract placeholder.
 
         Contains calculation """

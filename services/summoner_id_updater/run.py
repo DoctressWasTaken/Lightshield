@@ -42,9 +42,9 @@ class SummonerIDUpdater(Worker):
             await self.pika.push(package)
             await self.pika.ack(msg)
             return False
-        return True
+        return {"foo": "bar"}
 
-    async def worker(self, session, identifier, msg):
+    async def worker(self, session, identifier, msg, **kwargs):
         url = self.url_template % (identifier)
         self.logging.debug(f"Fetching {url}")
         try:
@@ -63,6 +63,7 @@ class SummonerIDUpdater(Worker):
             await self.pika.reject(msg, requeue=True)
         finally:
             del self.buffered_elements[identifier]
+
 
 if __name__ == "__main__":
     buffer = int(os.environ['BUFFER'])

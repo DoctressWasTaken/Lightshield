@@ -7,6 +7,14 @@ import logging
 import aiohttp
 from datetime import datetime, timedelta
 
+from worker import (
+    Worker,
+    RatelimitException,
+    NotFoundException,
+    Non200Exception,
+    NoMessageException
+)
+
 from redis_connector import Redis
 from pika_connector import Pika
 
@@ -17,146 +25,110 @@ if "SERVER" not in os.environ:
 server = os.environ['SERVER']
 
 
-class Worker:
+class MatchHistoryUpdater(Worker):
 
-    def __init__(self, buffer, required_matches):
-        self.redis = Redis()
-        self.pika = Pika()
-        self.url_template =f"http://{server}.api.riotgames.com/lol/match/v4/matchlists/by-account/" \
-           "%s?beginIndex=%s&endIndex=%s&queue=420"
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
 
-        self.max_buffer = buffer
-        self.failed_tasks = []
-        self.retry_after = None
-        self.required_matches = required_matches
-        self.buffered_summoners = {}
 
-        self.logging = logging.getLogger("worker")
-        self.logging.setLevel(logging.INFO)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(
-            logging.Formatter(f'%(asctime)s [WORKER] %(message)s'))
-        self.logging.addHandler(ch)
+    def initiate_pika(self, connection):
 
-    async def fetch(self, session, url, startingId):
-        self.logging.debug(f"Fetching {url}.")
-        async with session.get(url, proxy="http://proxy:8000") as response:
+        channel = await connection.channel()
+        await channel.set_qos(prefetch_count=1)
+        # Incoming
+        incoming = await channel.declare_queue(
+            'MATCH_HISTORY_IN_' + self.server, durable=True)
+        # Outgoing
+        outgoing = await channel.declare_exchange(
+            f'MATCH_HISTORY_OUT_{self.server}', type='direct',
+            durable=True)
+
+        # Output to the Match_Updater
+        match_in = await channel.declare_queue(
+            f'MATCH_IN_{self.server}',
+            durable=True
+        )
+        await match_in.bind(outgoing, 'MATCH')
+
+        await self.pika.init(incoming=incoming, outgoing=outgoing, tag='MATCH')
+
+    async def is_valid(self, identifier, content, msg):
+        """Return true if the msg should be passed on.
+
+        If not valid this method properly handles the msg.
+        """
+        matches = content['wins'] + content['losses']
+
+        if prev := await self.redis.hgetall(f"user:{identifier}"):
+            matches -= (int(prev['wins']) + int(prev['losses']))
+
+        if matches < self.required_matches:  # Skip if less than required new matches
+            await self.pika.ack(msg)
+            # TODO: Despite not having enough matches this should be considered to pass on to the db
+            return False
+        return True
+
+    async def handler(self, session, url):
+        while True:
+            if datetime.now() < self.retry_after:
+                delay = (self.retry_after - datetime.now()).total_seconds()
+                await asyncio.sleep(delay)
             try:
-                resp = await response.json(content_type=None)
-            except:
+                response = await self.fetch(session, url)
+                return [match['gameId'] for match in response['matches'] if
+                    match['queue'] == 420 and match['platformId'] == server]
+            except RatelimitException:
                 pass
-            if response.status in [429, 430]:
-                if "Retry-After" in response.headers:
-                    delay = int(response.headers['Retry-After'])
-                    self.retry_after = datetime.now() + timedelta(
-                        seconds=delay)
+            except Non200Exception:
+                pass
 
-            if response.status != 200:
-                return {"status": "failed", "id": startingId}
-            else:
-                return {"status": "success",
-                        "id": startingId,
-                        "matches": [match['gameId'] for match in resp['matches'] if match['queue'] == 420 and match['platformId'] == server]}
-
-    async def process_history(self, msg, summonerId, matches):
+    async def worker(self, session, identifier, msg, matches):
         """Manage a single summoners full history calls."""
         matches_to_call = matches + 3
         calls = int(matches_to_call / 100) + 1
         ids = [start_id * 100 for start_id in range(calls)]
         content = json.loads(msg.body.decode('utf-8'))
         matches = []
+
         while ids:
-            async with aiohttp.ClientSession() as session:
-                calls_executed = []
-                while ids:
-                    if self.retry_after and datetime.now() < self.retry_after:
-                        delay = (self.retry_after - datetime.now()).total_seconds()
-                        await asyncio.sleep(delay)
-                    id = ids.pop()
-                    calls_executed.append(asyncio.create_task(
-                        self.fetch(session=session,
-                                   url=self.url_template % (content['accountId'], id, id + 100),
-                                   startingId=id)
-                    ))
-                    await asyncio.sleep(0.1)
-                responses = await asyncio.gather(*calls_executed)
-            for response in responses:
-                if response['status'] == "failed":
-                    ids.append(response['id'])
-                else:
-                    matches += response['matches']
-
-        matches = list(set(matches))
-        await self.redis.hset(summonerId,
-             mapping={
-                 "summonerName": content['summonerName'],
-                 "wins": content['wins'],
-                 "losses": content['losses'],
-                 "tier": content['tier'],
-                 "rank": content['rank'],
-                 "leaguePoints": content['leaguePoints']
-             })
-        while matches:
-            id = matches.pop()
+            calls_executed = []
+            while ids:
+                id = ids.pop()
+                calls_executed.append(asyncio.create_task(
+                    self.handler(
+                        session=session,
+                        url=self.url_template % (content['accountId'], id, id + 100))
+                ))
             try:
-                await self.pika.push(id)
-            except:
-                matches.append(id)
-        del self.buffered_summoners[summonerId]
-        try:
-            msg.ack()
-        except:
-            pass
+                responses = await asyncio.gather(*calls_executed)
+                matches = list(set().union(*responses))
+                await self.redis.hset(
+                    key=f"user:{identifier}",
+                    mapping={
+                        "summonerName": content['summonerName'],
+                        "wins": content['wins'],
+                        "losses": content['losses'],
+                        "tier": content['tier'],
+                        "rank": content['rank'],
+                        "leaguePoints": content['leaguePoints']
+                    }
+                )
+                while matches:
+                    id = matches.pop()
+                    await self.pika.push(id)
+                    await self.pika.ack(msg)
+            except NotFoundException:  # Triggers only if a call returns 404. Forces a full reject.
+                await self.pika.reject(msg, requeue=False)
+            finally:
+                del self.buffered_summoners[identifier]
 
-    async def next_task(self):
-        while True:
-            while not (msg := await self.pika.get()):
-                await asyncio.sleep(1)
-            content = json.loads(msg.body.decode('utf-8'))
-            summonerId = content['summonerId']
-
-            if summonerId in self.buffered_summoners:  # Skip any further tasks for already queued
-                self.logging.info(f"Summoner {summonerId} is already registered as an active task.")
-                try:
-                    await msg.ack()
-                except:
-                    self.logging.info(f"Failed to ack {summonerId}.")
-                continue
-            prev = await self.redis.hgetall(summonerId)
-            matches = content['wins'] + content['losses']
-            if prev:
-                matches -= (int(prev['wins']) + int(prev['losses']))
-
-            if matches < self.required_matches:  # Skip if less than required new matches
-                try:
-                    await msg.ack()
-                except:
-                    self.logging.info(f"Failed to ack {summonerId}.")
-
-            self.buffered_summoners[summonerId] = True
-            return summonerId, matches, msg
-
-    async def main(self):
-        while True:
-            tasks = []
-            while len(tasks) < 500:
-                if len(self.buffered_summoners) >= self.max_buffer:  # Only Queue when below buffer limit
-                    while len(self.buffered_summoners) >= self.max_buffer:
-                        await asyncio.sleep(0.1)
-                summonerId, matches, msg = await self.next_task()
-                tasks.append(asyncio.create_task(self.process_history(
-                    msg=msg, summonerId=summonerId, matches=matches)))
-                await asyncio.sleep(0.03)
-
-            await asyncio.gather(*tasks)
-
-    async def run(self):
-        await self.pika.init()
-        await self.main()
 
 if __name__ == "__main__":
     buffer = int(os.environ['BUFFER'])
-    required_matches = int(os.environ['MATCHES_TO_UPDATE'])
-    worker = Worker(buffer=buffer, required_matches=required_matches)
-    asyncio.run(worker.run())
+    worker = MatchHistoryUpdater(
+        buffer=buffer,
+        url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/match/v4/matchlists/by-account/" \
+           "%s?beginIndex=%s&endIndex=%s&queue=420",
+        identifier="summonerId")
+    asyncio.run(worker.main())
