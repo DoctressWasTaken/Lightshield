@@ -49,7 +49,6 @@ class Redis:
         await self.connect()
         await self.redis.sismember(_set, str(key))
 
-
     async def sadd(self, _set, key):
         await self.connect()
         await self.redis.sadd(_set, str(key))

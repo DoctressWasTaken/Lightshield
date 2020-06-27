@@ -50,17 +50,14 @@ class MatchUpdater(Worker):
             return False
         return {"foo": "bar"}
 
-    async def worker(self, session, identifier, msg, **kwargs):
+    async def process(self, session, identifier, msg, **kwargs):
 
         url = self.url_template % (identifier)
         self.logging.debug(f"Fetching {url}")
         try:
             response = await self.fetch(session, url)
-            await self.redis.sadd(
-                _set='matches',
-                key=identifier)
-            await self.pika.push(response)
-            await self.pika.ack(msg)
+            return [identifier, response, msg]
+
         except RatelimitException:
             pass
         except NotFoundException:
@@ -69,6 +66,16 @@ class MatchUpdater(Worker):
             await self.pika.reject(msg, requeue=True)
         finally:
             del self.buffered_elements[identifier]
+
+    async def finalize(self, responses):
+
+        for identifier, response, msg in [entry for entry in responses if entry]:
+            await self.redis.sadd(
+                _set='matches',
+                key=identifier)
+            await self.pika.push(response)
+            await self.pika.ack(msg)
+
 
 
 if __name__ == "__main__":

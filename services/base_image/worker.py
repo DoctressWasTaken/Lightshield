@@ -140,9 +140,15 @@ class Worker:
         """
         pass
 
-    async def worker(self, session, identifier, msg, **kwargs):
+    async def process(self, session, identifier, msg, **kwargs):
         """Abstract placeholder.
 
         Contains calculation """
         pass
 
+    async def finalize(self, data):
+        """Abstract placeholder.
+
+        Called after the tasks have been awaited with the tasks responses as list.
+        """
+        pass
