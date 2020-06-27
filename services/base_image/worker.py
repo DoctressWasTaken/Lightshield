@@ -28,8 +28,10 @@ class NoMessageException(Exception):
 
 class Worker:
 
-    def __init__(self, buffer, url, identifier, *args, **kwargs):
+    def __init__(self, buffer, url, identifier, chunksize=5000, **kwargs):
         """Initiate logging as well as pika and redis connector."""
+
+        self.chunksize = chunksize
         self.logging = logging.getLogger("Worker")
         self.logging.setLevel(logging.INFO)
         ch = logging.StreamHandler()
@@ -62,7 +64,7 @@ class Worker:
         tasks = []
         start = datetime.now()
         async with aiohttp.ClientSession() as session:
-            while self.retry_after < datetime.now() and len(tasks) < 5000:
+            while self.retry_after < datetime.now() and len(tasks) < self.chunksize:
                 while len(self.buffered_elements) >= self.max_buffer:
                     await asyncio.sleep(0.1)
 
@@ -70,17 +72,19 @@ class Worker:
                     identifier, msg, additional_args = await self.next_task()
                 except NoMessageException:
                     break
-                tasks.append(asyncio.create_task(self.worker(
+                tasks.append(asyncio.create_task(self.process(
                     session=session,
                     identifier=identifier,
                     msg=msg,
                     **additional_args
                 )))
-                #await asyncio.sleep(0.01)
-            if len(tasks) > 0:
-                await asyncio.gather(*tasks)
-            else:
-                await asyncio.sleep(5)
+                await asyncio.sleep(0.01)
+            responses = await asyncio.gather(*tasks)
+        if len(tasks) > 0:
+            await self.finalize(responses)
+        else:
+            await asyncio.sleep(5)
+
         end = datetime.now()
         self.logging.info(f"Flushed {len(tasks)} tasks. {round(len(tasks) / (end - start).total_seconds(), 2)} task/s.")
         if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:

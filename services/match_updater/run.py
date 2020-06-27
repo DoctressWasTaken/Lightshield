@@ -56,25 +56,31 @@ class MatchUpdater(Worker):
         self.logging.debug(f"Fetching {url}")
         try:
             response = await self.fetch(session, url)
-            return [identifier, response, msg]
+            return [0, identifier, response, msg]
 
         except RatelimitException:
-            pass
+            return [2, msg]  # 2 requeue
         except NotFoundException:
-            await self.pika.reject(msg, requeue=False)
+            return [1, msg]  # 1 drop
         except Non200Exception:
-            await self.pika.reject(msg, requeue=True)
+            return [2, msg]  # 2 requeue
         finally:
             del self.buffered_elements[identifier]
 
     async def finalize(self, responses):
 
-        for identifier, response, msg in [entry for entry in responses if entry]:
+        for identifier, response, msg in [entry[1:] for entry in responses if entry[0] == 0]:
             await self.redis.sadd(
                 _set='matches',
                 key=identifier)
             await self.pika.push(response)
             await self.pika.ack(msg)
+
+        for msg in [entry[1] for entry in responses if entry[0] == 1]:
+            await self.pika.reject(msg, requeue=False)
+        
+        for msg in [entry[1] for entry in responses if entry[0] == 2]:
+            await self.pika.reject(msg, requeue=False)
 
 
 

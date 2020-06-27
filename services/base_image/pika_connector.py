@@ -113,7 +113,7 @@ class Pika:
 
         for i in range(5):
             try:
-                return self.outgoing.publish(message, self.tag)
+                return await self.outgoing.publish(message, self.tag)
             except asyncio.TimeoutError:
                 pass
             except Exception as err:
