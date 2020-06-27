@@ -43,24 +43,29 @@ class SummonerIDUpdater(Worker):
             return False
         return {"foo": "bar"}
 
-    async def worker(self, session, identifier, msg, **kwargs):
+    async def process(self, session, identifier, msg, **kwargs):
         url = self.url_template % (identifier)
         self.logging.debug(f"Fetching {url}")
         try:
             response = await self.fetch(session, url)
+            return [0, identifier, response, msg]
+        except RatelimitException:
+            return [1]
+        except NotFoundException:
+            return [1]
+        except Non200Exception:
+            return [1]
+        finally:
+            del self.buffered_elements[identifier]
+
+    async def finalize(self, responses):
+
+        for identifier, response, msg in [entry[1:] for entry in responses if entry[0] == 0]:
             await self.redis.hset(
                 key=f"user:{identifier}",
                 mapping={'puuid': response['puuid'],
                          'accountId': response['accountId']})
             await self.pika.push({**json.loads(msg.body.decode('utf-8')), **response})
-        except RatelimitException:
-            pass
-        except NotFoundException:
-            pass
-        except Non200Exception:
-            pass
-        finally:
-            del self.buffered_elements[identifier]
 
 
 if __name__ == "__main__":
@@ -68,5 +73,6 @@ if __name__ == "__main__":
     worker = SummonerIDUpdater(
         buffer=buffer,
         url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/summoner/v4/summoners/%s",
-        identifier="summonerId")
+        identifier="summonerId",
+        message_out=f"MATCH_HISTORY_IN_{os.environ['SERVER']}")
     asyncio.run(worker.main())
