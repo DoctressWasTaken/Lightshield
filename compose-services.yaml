@@ -51,7 +51,7 @@ services:
     restart: always
 
   redis_summoner_id:
-    mem_limit: 120m
+    mem_limit: 160m
     cpus: 0.25
     build:
       context: databases/redis
@@ -82,7 +82,7 @@ services:
     restart: always
 
   redis_match_history:
-    mem_limit: 80m
+    mem_limit: 160m
     cpus: 0.25
     build:
       context: databases/redis
@@ -112,7 +112,7 @@ services:
     restart: always
 
   redis_match:
-    mem_limit: 80m
+    mem_limit: 160m
     cpus: 0.25
     build:
       context: databases/redis

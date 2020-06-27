@@ -26,11 +26,12 @@ class Pika:
 
         self.fails = 0  # To count failed requests in a row
 
-    async def init(self, incoming, outgoing, tag):
+    async def init(self, incoming, outgoing, tag, no_ack=False):
         """Initiate in and outputs."""
         self.incoming = incoming
         self.outgoing = outgoing
         self.tag = tag
+        self.no_ack = no_ack
 
     async def connect(self):
         """Connect to rabbitmq.
@@ -82,7 +83,7 @@ class Pika:
         Returns either the message element or None on timeout.
         """
         try:
-            msg = await asyncio.wait_for(self.incoming.get(fail=False), timeout=2)
+            msg = await asyncio.wait_for(self.incoming.get(no_ack=self.no_ack, fail=False), timeout=4)
             self.fails = 0
             return msg
         except asyncio.TimeoutError:
@@ -112,7 +113,7 @@ class Pika:
 
         for i in range(5):
             try:
-                return await asyncio.wait_for(self.outgoing.publish(message, self.tag, timeout=10), timeout=5)
+                return self.outgoing.publish(message, self.tag)
             except asyncio.TimeoutError:
                 pass
             except Exception as err:

@@ -33,14 +33,13 @@ class SummonerIDUpdater(Worker):
 
         await db_in.bind(outgoing, 'SUMMONER_V2')
 
-        await self.pika.init(incoming=incoming, outgoing=outgoing, tag='SUMMONER_V2')
+        await self.pika.init(incoming=incoming, outgoing=outgoing, tag='SUMMONER_V2', no_ack=True)
 
     async def is_valid(self, identifier, content, msg):
 
         if redis_entry := await self.redis.hgetall(f"user:{identifier}"):
             package = {**content, **redis_entry}
             await self.pika.push(package)
-            await self.pika.ack(msg)
             return False
         return {"foo": "bar"}
 
@@ -54,13 +53,12 @@ class SummonerIDUpdater(Worker):
                 mapping={'puuid': response['puuid'],
                          'accountId': response['accountId']})
             await self.pika.push({**json.loads(msg.body.decode('utf-8')), **response})
-            await self.pika.ack(msg)
         except RatelimitException:
             pass
         except NotFoundException:
-            await self.pika.reject(msg, requeue=False)
+            pass
         except Non200Exception:
-            await self.pika.reject(msg, requeue=True)
+            pass
         finally:
             del self.buffered_elements[identifier]
 

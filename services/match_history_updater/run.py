@@ -29,7 +29,7 @@ class MatchHistoryUpdater(Worker):
     async def initiate_pika(self, connection):
 
         channel = await connection.channel()
-        await channel.set_qos(prefetch_count=1)
+        await channel.set_qos(prefetch_count=50)
         # Incoming
         incoming = await channel.declare_queue(
             'MATCH_HISTORY_IN_' + self.server, durable=True)
@@ -45,7 +45,7 @@ class MatchHistoryUpdater(Worker):
         )
         await match_in.bind(outgoing, 'MATCH')
 
-        await self.pika.init(incoming=incoming, outgoing=outgoing, tag='MATCH')
+        await self.pika.init(incoming=incoming, outgoing=outgoing, tag='MATCH', no_ack=True)
 
     async def is_valid(self, identifier, content, msg):
         """Return true if the msg should be passed on.
@@ -58,7 +58,6 @@ class MatchHistoryUpdater(Worker):
             matches -= (int(prev['wins']) + int(prev['losses']))
 
         if matches < self.required_matches:  # Skip if less than required new matches
-            await self.pika.ack(msg)
             # TODO: Despite not having enough matches this should be considered to pass on to the db
             return False
         return {"matches": matches}
@@ -109,9 +108,8 @@ class MatchHistoryUpdater(Worker):
             while matches:
                 id = matches.pop()
                 await self.pika.push(id)
-            await self.pika.ack(msg)
         except NotFoundException:  # Triggers only if a call returns 404. Forces a full reject.
-            await self.pika.reject(msg, requeue=False)
+            pass
         finally:
             del self.buffered_elements[identifier]
 
