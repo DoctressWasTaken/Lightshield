@@ -130,10 +130,25 @@ class Worker:
                         else:
                             self.page_entries += resp
 
+    async def release_messaging_queue(self):
+        headers = {
+            'content-type': 'application/json'
+            }
+        while True:
+            async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
+                async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
+                    resp = await response.json()
+                    queues = {entry['name']: entry for entry in resp}
+                    if int(queues[f'SUMMONER_ID_IN_{server}']['messages']) < 100000:
+                        return
+                    self.logging.info('Awaiting messages to be reduced.')
+                    await asyncio.sleep(5)
+
     async def main(self):
         """Manage ranks to call and worker start/stops."""
         await self.rankmanager.init()
         for rank in range(await self.rankmanager.get_total()):
+            await self.release_messaging_queue()
             tier, division = await self.rankmanager.get_next()
             self.empty = False
             self.next_page = 1

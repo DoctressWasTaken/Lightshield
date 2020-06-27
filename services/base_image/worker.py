@@ -73,7 +73,7 @@ class Worker:
                 async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
-                    if queues[self.message_out] < 100000:
+                    if int(queues[self.message_out]["messages"]) < 100000:
                         return
                     self.logging.info("Awaiting messages to be reduced.")
                     await asyncio.sleep(5)
@@ -123,9 +123,9 @@ class Worker:
             else:
                 content = identifier = msg.body.decode('utf-8')
 
-            if identifier in self.buffered_elements:  # Skip any further tasks for already queued
-                await self.pika.ack(msg)
-                continue
+            #if identifier in self.buffered_elements:  # Skip any further tasks for already queued
+            #    await self.pika.ack(msg)
+            #    continue
 
             if additional_args := await self.is_valid(identifier, content, msg):
                 self.buffered_elements[identifier] = True

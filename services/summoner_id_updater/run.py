@@ -37,6 +37,9 @@ class SummonerIDUpdater(Worker):
 
     async def is_valid(self, identifier, content, msg):
 
+        if identifier in self.buffered_elements:
+            return False
+
         if redis_entry := await self.redis.hgetall(f"user:{identifier}"):
             package = {**content, **redis_entry}
             await self.pika.push(package)
