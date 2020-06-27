@@ -67,16 +67,18 @@ class MatchHistoryUpdater(Worker):
         return {"matches": matches}
 
     async def handler(self, session, url):
+        rate_flag = False
         while True:
-            if datetime.now() < self.retry_after:
-                delay = (self.retry_after - datetime.now()).total_seconds()
+            if datetime.now() < self.retry_after or rate_flag:
+                rate_flag = False
+                delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
                 await asyncio.sleep(delay)
             try:
                 response = await self.fetch(session, url)
                 return [match['gameId'] for match in response['matches'] if
                     match['queue'] == 420 and match['platformId'] == server]
             except RatelimitException:
-                pass
+                rate_flag = True
             except Non200Exception:
                 pass
 

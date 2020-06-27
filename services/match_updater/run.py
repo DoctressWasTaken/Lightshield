@@ -44,9 +44,6 @@ class MatchUpdater(Worker):
         await self.pika.init(incoming=incoming, outgoing=outgoing, tag='MATCH')
 
     async def is_valid(self, identifier, content, msg):
-        if identifier in self.buffered_elements:
-            await self.pika.ack(msg)
-            return False
 
         if prev := await self.redis.sismember(_set='matches', key=identifier):
             await self.pika.ack(msg)
@@ -86,6 +83,7 @@ class MatchUpdater(Worker):
             await self.pika.reject(msg, requeue=False)
 
 
+
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, end_handler)
     uvloop.install()
@@ -93,6 +91,6 @@ if __name__ == "__main__":
     worker = MatchUpdater(
         buffer=buffer,
         url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/match/v4/matches/%s",
-        identifier=None,
-        chunksize=1000)
+        chunksize=2500,
+        identifier=None)
     asyncio.run(worker.main())

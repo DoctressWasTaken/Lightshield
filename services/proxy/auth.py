@@ -2,6 +2,7 @@ import asyncio
 from aiohttp.web import middleware
 import os
 from datetime import datetime
+import logging
 
 class Headers:
     """Middleware that adds the Riot API Key to the request."""
@@ -35,6 +36,13 @@ class Logging:
         self.count = {}
         self.worker_active = None
         self.required_header = []
+        
+        self.logging = logging.getLogger('Logging')
+        self.logging.setLevel(logging.INFO)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        ch.setFormatter(
+                logging.Formatter(f'%(asctime)s %(message)s'))
 
     async def worker(self):
         """Save data to file."""
@@ -69,4 +77,6 @@ class Logging:
             self.count[target][current_second] = 1
         else:
             self.count[target][current_second] += 1
-        return await handler(request)
+        response = await handler(request)
+        self.logging.info(f"[{response.status}] {url}")
+        return response

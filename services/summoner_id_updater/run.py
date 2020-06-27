@@ -47,6 +47,7 @@ class SummonerIDUpdater(Worker):
         return {"foo": "bar"}
 
     async def process(self, session, identifier, msg, **kwargs):
+
         url = self.url_template % (identifier)
         self.logging.debug(f"Fetching {url}")
         try:

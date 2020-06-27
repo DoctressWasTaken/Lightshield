@@ -73,9 +73,10 @@ class Worker:
                 async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
-                    if int(queues[self.message_out]["messages"]) < 100000:
+                    messages = queues[self.message_out]["messages"]
+                    if int(messages) < 100000:
                         return
-                    self.logging.info("Awaiting messages to be reduced.")
+                    self.logging.info(f"Awaiting messages to be reduced. [{messages}].")
                     await asyncio.sleep(5)
                     
     async def runner(self):
@@ -97,7 +98,7 @@ class Worker:
                     msg=msg,
                     **additional_args
                 )))
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(0.02)
             responses = await asyncio.gather(*tasks)
         if len(tasks) > 0:
             await self.finalize(responses)

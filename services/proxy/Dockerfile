@@ -10,4 +10,6 @@ RUN  pip install -r requirements.txt
 COPY limits.json .
 COPY *.py ./
 
-CMD ["python", "-u", "run.py"]
+
+CMD gunicorn run:start_gunicorn --worker-class aiohttp.worker.GunicornWebWorker --bind 0.0.0.0:8000
+#CMD ["python", "-u", "run.py"]

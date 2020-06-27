@@ -47,8 +47,11 @@ class Proxy:
         self.app = web.Application(middlewares=[cls.middleware for cls in self.middlewares])
         self.app.add_routes([
             web.get('/{tail:.*}', self.request)
-
         ])
+        # logging.basicConfig(level=logging.DEBUG)
+
+    def run_gunicorn(self):
+        return self.app
 
     def run(self, host="0.0.0.0", port=8080):
         """Run Method.
@@ -74,6 +77,10 @@ class Proxy:
                 returned_headers[header] = headers[header]
         return web.Response(text=json.dumps(body), headers=returned_headers, status=response.status)
 
+
+async def start_gunicorn():
+    proxy = Proxy()
+    return proxy.run_gunicorn()
 
 if __name__ == '__main__':
     proxy = Proxy()
