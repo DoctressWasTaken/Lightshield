@@ -44,6 +44,9 @@ class MatchUpdater(Worker):
         await self.pika.init(incoming=incoming, outgoing=outgoing, tag='MATCH')
 
     async def is_valid(self, identifier, content, msg):
+        if identifier in self.buffered_elements:
+            await self.pika.ack(msg)
+            return False
 
         if prev := await self.redis.sismember(_set='matches', key=identifier):
             await self.pika.ack(msg)
@@ -81,7 +84,6 @@ class MatchUpdater(Worker):
         
         for msg in [entry[1] for entry in responses if entry[0] == 2]:
             await self.pika.reject(msg, requeue=False)
-
 
 
 if __name__ == "__main__":

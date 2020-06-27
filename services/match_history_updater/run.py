@@ -52,6 +52,10 @@ class MatchHistoryUpdater(Worker):
 
         If not valid this method properly handles the msg.
         """
+
+        if identifier in self.buffered_elements:
+            return False
+
         matches = content['wins'] + content['losses']
 
         if prev := await self.redis.hgetall(f"user:{identifier}"):
@@ -76,7 +80,7 @@ class MatchHistoryUpdater(Worker):
             except Non200Exception:
                 pass
 
-    async def worker(self, session, identifier, msg, matches):
+    async def process(self, session, identifier, msg, matches):
         """Manage a single summoners full history calls."""
         matches_to_call = matches + 3
         calls = int(matches_to_call / 100) + 1
@@ -94,6 +98,16 @@ class MatchHistoryUpdater(Worker):
         try:
             responses = await asyncio.gather(*calls_executed)
             matches = list(set().union(*responses))
+            return [0, identifier, content, matches]
+        except NotFoundException:  # Triggers only if a call returns 404. Forces a full reject.
+            return [1]
+        finally:
+            del self.buffered_elements[identifier]
+
+    async def finalize(self, responses):
+
+        for identifier, content, matches in [entry[1:] for entry in responses if entry[0] == 0]:
+
             await self.redis.hset(
                 key=f"user:{identifier}",
                 mapping={
@@ -108,10 +122,6 @@ class MatchHistoryUpdater(Worker):
             while matches:
                 id = matches.pop()
                 await self.pika.push(id)
-        except NotFoundException:  # Triggers only if a call returns 404. Forces a full reject.
-            pass
-        finally:
-            del self.buffered_elements[identifier]
 
 
 if __name__ == "__main__":
@@ -120,5 +130,7 @@ if __name__ == "__main__":
         buffer=buffer,
         url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/match/v4/matchlists/by-account/" \
            "%s?beginIndex=%s&endIndex=%s&queue=420",
-        identifier="summonerId")
+        identifier="summonerId",
+        chunksize=100,
+        message_out=f"MATCH_IN_{os.environ['SERVER']}")
     asyncio.run(worker.main())
