@@ -66,14 +66,18 @@ class Worker:
         headers = {
             'content-type': 'application/json'
         }
+        if not self.message_out:
+            return
         while True:
             async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
-                async with session.get('proxy:8000/api/queues/queues', headers=headers) as response:
-                    data = await response.json()
-                    if data[self.message_out] < 10000:
+                async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
+                    resp = await response.json()
+                    queues = {entry['name']: entry for entry in resp}
+                    if queues[self.message_out] < 100000:
                         return
+                    self.logging.info("Awaiting messages to be reduced.")
                     await asyncio.sleep(5)
-
+                    
     async def runner(self):
         """Manage starting new worker tasks."""
         tasks = []

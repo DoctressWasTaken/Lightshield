@@ -3,7 +3,7 @@ services:
 
   rabbitmq:
     container_name: ${COMPOSE_PROJECT_NAME}_rabbitmq
-    image: launcher.gcr.io/google/rabbitmq3
+    image: rabbitmq:3-management
     mem_limit: 4g
     cpus: 4
     hostname: rabbitmq
