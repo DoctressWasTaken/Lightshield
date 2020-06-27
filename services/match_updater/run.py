@@ -91,5 +91,6 @@ if __name__ == "__main__":
     worker = MatchUpdater(
         buffer=buffer,
         url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/match/v4/matches/%s",
-        identifier=None)
+        identifier=None,
+        chunksize=1000)
     asyncio.run(worker.main())

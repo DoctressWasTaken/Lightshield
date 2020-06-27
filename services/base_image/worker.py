@@ -28,10 +28,11 @@ class NoMessageException(Exception):
 
 class Worker:
 
-    def __init__(self, buffer, url, identifier, chunksize=5000, **kwargs):
+    def __init__(self, buffer, url, identifier, chunksize=5000, message_out=None, **kwargs):
         """Initiate logging as well as pika and redis connector."""
 
         self.chunksize = chunksize
+        self.message_out = message_out
         self.logging = logging.getLogger("Worker")
         self.logging.setLevel(logging.INFO)
         ch = logging.StreamHandler()
@@ -57,7 +58,21 @@ class Worker:
         await self.initiate_pika(connection=rabbit)
         # Start runner
         while True:
+            await self.release_messaging_queue()
             await self.runner()
+
+    async def release_messaging_queue(self):
+        """Pause the application until the message queue falls below a certain message limit."""
+        headers = {
+            'content-type': 'application/json'
+        }
+        while True:
+            async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
+                async with session.get('proxy:8000/api/queues/queues', headers=headers) as response:
+                    data = await response.json()
+                    if data[self.message_out] < 10000:
+                        return
+                    await asyncio.sleep(5)
 
     async def runner(self):
         """Manage starting new worker tasks."""
