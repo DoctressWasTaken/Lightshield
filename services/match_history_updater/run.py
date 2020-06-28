@@ -82,7 +82,7 @@ class MatchHistoryUpdater(Worker):
                 return [match['gameId'] for match in response['matches'] if
                         match['queue'] == 420 and
                         match['platformId'] == server and
-                        int(match['timestamp'][:10]) >= self.timelimit]
+                        int(str(match['timestamp'])[:10]) >= self.timelimit]
 
             except RatelimitException:
                 rate_flag = True
