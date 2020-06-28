@@ -83,13 +83,10 @@ class Pika:
         Returns either the message element or None on timeout.
         """
         try:
-            msg = await asyncio.wait_for(self.incoming.get(no_ack=self.no_ack, fail=False), timeout=4)
-            self.fails = 0
+            msg = await self.incoming.get(no_ack=self.no_ack, fail=False)
             return msg
-        except asyncio.TimeoutError:
-            self.fails += 1
-            if self.fails > 5:
-                self.logging.info(f"{self.fails} fails in a row. Failed get.")
+        except Exception as err:
+            self.logging.info(f"[Reject:{requeue}] Got exception {err.__class__.__name__}: {repr(err)}")
             return None
 
     async def push(self, data, persistent=False):
