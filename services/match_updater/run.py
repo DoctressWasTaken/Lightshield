@@ -45,6 +45,10 @@ class MatchUpdater(Worker):
 
     async def is_valid(self, identifier, content, msg):
 
+        if identifier in self.buffered_elements:
+            await self.pika.ack(msg)
+            return False
+
         if prev := await self.redis.sismember(_set='matches', key=identifier):
             await self.pika.ack(msg)
             return False
