@@ -119,6 +119,8 @@ MATCH_HISTORY_BUFFER   Describes the maximum parallel 'user' that are processed.
 MATCHES_TO_UPDATE      Describes the minimum new matches required to trigger the update of a user.
                         10 being default means that on average 1 call per match is made
                         (10 calls, one for each participant).
+                        
+TIME_LIMIT             Oldest timestamp (in seconds) to be pulled.
 ```
 
  #### Match Updater / Redis Database 
