@@ -25,6 +25,10 @@ class MatchHistoryUpdater(Worker):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
+        try:
+            self.timelimit = int(os.environ['TIME_LIMIT'])
+        except:
+            self.timelimit = None
 
     async def initiate_pika(self, connection):
 
@@ -52,15 +56,11 @@ class MatchHistoryUpdater(Worker):
 
         If not valid this method properly handles the msg.
         """
-
         if identifier in self.buffered_elements:
             return False
-
         matches = content['wins'] + content['losses']
-
         if prev := await self.redis.hgetall(f"user:{identifier}"):
             matches -= (int(prev['wins']) + int(prev['losses']))
-
         if matches < self.required_matches:  # Skip if less than required new matches
             # TODO: Despite not having enough matches this should be considered to pass on to the db
             return False
@@ -75,8 +75,15 @@ class MatchHistoryUpdater(Worker):
                 await asyncio.sleep(delay)
             try:
                 response = await self.fetch(session, url)
+                if not self.timelimit:
+                    return [match['gameId'] for match in response['matches'] if
+                            match['queue'] == 420 and
+                            match['platformId'] == server]
                 return [match['gameId'] for match in response['matches'] if
-                    match['queue'] == 420 and match['platformId'] == server]
+                        match['queue'] == 420 and
+                        match['platformId'] == server and
+                        int(match['timestamp'][:10]) >= self.timelimit]
+
             except RatelimitException:
                 rate_flag = True
             except Non200Exception:
