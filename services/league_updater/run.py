@@ -10,6 +10,8 @@ from aio_pika import Message
 from aio_pika.pool import Pool
 from rank_manager import RankManager
 
+from redis_connector import Redis
+
 class EmptyPageException(Exception):
     """Custom Exception called when at least 1 page is empty."""
 
@@ -44,6 +46,23 @@ class Worker:
         ch.setFormatter(
             logging.Formatter(f'%(asctime)s [CORE] %(message)s'))
         self.logging.addHandler(ch)
+        self.redis = Redis()
+
+    async def check_new(self, entry):
+
+        hash_db = self.redis.get(entry['summonerId'])
+        hash_local = str(hash(entry))
+        if hash_db == hash_local:
+            return False
+        else:
+            self.redis.set(entry['summonerId'], hash_local)
+            return True
+
+    async def filter_data(self):
+        """Remove unchanged summoners."""
+
+        self.page_entries = [entry for entry in self.page_entries if self.check_new(entry)]
+
 
     async def push_data(self):
         """Send out gathered data via rabbitmq tasks."""

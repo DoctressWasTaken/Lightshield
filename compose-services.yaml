@@ -29,6 +29,18 @@ services:
       - lightshield_rabbitmq:rabbitmq
     links:
       - proxy:proxy
+      - redis_league:redis
+    restart: always
+
+  redis_league:
+    mem_limit: 160m
+    cpus: 0.25
+    build:
+      context: databases/redis
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_redis_league
+    volumes:
+      - redis_league:/data/
     restart: always
 
   summoner_id_updater:
@@ -141,6 +153,8 @@ services:
     restart: always
 
 volumes:
+  redis_league:
+    name: ${SERVER}_redis_league
   redis_summoner_id:
     name: ${SERVER}_redis_summoner_id
   redis_match_history:
