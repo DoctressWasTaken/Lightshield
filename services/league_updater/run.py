@@ -10,6 +10,8 @@ from aio_pika import Message
 from aio_pika.pool import Pool
 from rank_manager import RankManager
 
+from redis_connector import Redis
+
 class EmptyPageException(Exception):
     """Custom Exception called when at least 1 page is empty."""
 
@@ -44,6 +46,23 @@ class Worker:
         ch.setFormatter(
             logging.Formatter(f'%(asctime)s [CORE] %(message)s'))
         self.logging.addHandler(ch)
+        self.redis = Redis()
+
+    async def check_new(self, entry):
+
+        hash_db = await self.redis.get(entry['summonerId'])
+        hash_local = str(hash(str(entry)))
+        if hash_db == hash_local:
+            return False
+        else:
+            await self.redis.set(entry['summonerId'], hash_local)
+            return True
+
+    async def filter_data(self):
+        """Remove unchanged summoners."""
+        self.logging.info(f"Filtering {len(self.page_entries)} entries.")
+        self.page_entries = [entry for entry in self.page_entries if await self.check_new(entry)]
+
 
     async def push_data(self):
         """Send out gathered data via rabbitmq tasks."""
@@ -61,7 +80,6 @@ class Worker:
             name=f'SUMMONER_ID_IN_{server}',
             durable=True)
         await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
-
         self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
         loop = asyncio.get_event_loop()
 
@@ -139,7 +157,7 @@ class Worker:
                 async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
-                    if int(queues[f'SUMMONER_ID_IN_{server}']['messages']) < 100000:
+                    if int(queues[f'SUMMONER_ID_IN_{server}']['messages']) < 10000:
                         return
                     self.logging.info('Awaiting messages to be reduced.')
                     await asyncio.sleep(5)
@@ -155,6 +173,7 @@ class Worker:
             self.page_entries = []
             await asyncio.gather(*[asyncio.create_task(
                 self.worker(tier=tier, division=division)) for i in range(self.max_worker)])
+            await self.filter_data()
             await self.push_data()
             await self.rankmanager.update(key=(tier, division))
 

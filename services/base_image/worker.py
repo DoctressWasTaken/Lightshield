@@ -74,7 +74,7 @@ class Worker:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
                     messages = queues[self.message_out]["messages"]
-                    if int(messages) < 100000:
+                    if int(messages) < 10000:
                         return
                     self.logging.info(f"Awaiting messages to be reduced. [{messages}].")
                     await asyncio.sleep(5)
@@ -98,7 +98,7 @@ class Worker:
                     msg=msg,
                     **additional_args
                 )))
-                await asyncio.sleep(0.02)
+                await asyncio.sleep(0.01)
             responses = await asyncio.gather(*tasks)
         if len(tasks) > 0:
             await self.finalize(responses)
