@@ -39,7 +39,6 @@ class SummonerIDUpdater(Worker):
 
         if identifier in self.buffered_elements:
             return False
-
         if redis_entry := await self.redis.hgetall(f"user:{identifier}"):
             package = {**content, **redis_entry}
             await self.pika.push(package)
@@ -47,7 +46,6 @@ class SummonerIDUpdater(Worker):
         return {"foo": "bar"}
 
     async def process(self, session, identifier, msg, **kwargs):
-
         url = self.url_template % (identifier)
         self.logging.debug(f"Fetching {url}")
         try:
@@ -63,7 +61,7 @@ class SummonerIDUpdater(Worker):
             del self.buffered_elements[identifier]
 
     async def finalize(self, responses):
-
+        print("Starting finalize")
         for identifier, response, msg in [entry[1:] for entry in responses if entry[0] == 0]:
             await self.redis.hset(
                 key=f"user:{identifier}",

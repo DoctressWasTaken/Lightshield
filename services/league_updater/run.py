@@ -60,7 +60,7 @@ class Worker:
 
     async def filter_data(self):
         """Remove unchanged summoners."""
-
+        self.logging.info(f"Filtering {len(self.entries)} entries.")
         self.page_entries = [entry for entry in self.page_entries if self.check_new(entry)]
 
 
@@ -80,7 +80,6 @@ class Worker:
             name=f'SUMMONER_ID_IN_{server}',
             durable=True)
         await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
-
         self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
         loop = asyncio.get_event_loop()
 
@@ -174,6 +173,7 @@ class Worker:
             self.page_entries = []
             await asyncio.gather(*[asyncio.create_task(
                 self.worker(tier=tier, division=division)) for i in range(self.max_worker)])
+            await self.filter_data()
             await self.push_data()
             await self.rankmanager.update(key=(tier, division))
 

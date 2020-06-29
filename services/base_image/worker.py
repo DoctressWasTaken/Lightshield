@@ -98,7 +98,7 @@ class Worker:
                     msg=msg,
                     **additional_args
                 )))
-                await asyncio.sleep(0.02)
+                await asyncio.sleep(0.01)
             responses = await asyncio.gather(*tasks)
         if len(tasks) > 0:
             await self.finalize(responses)
