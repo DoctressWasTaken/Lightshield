@@ -86,7 +86,7 @@ class Pika:
             msg = await self.incoming.get(no_ack=self.no_ack, fail=False)
             return msg
         except Exception as err:
-            self.logging.info(f"[Reject:{requeue}] Got exception {err.__class__.__name__}: {repr(err)}")
+            self.logging.info(f"[Get] Got exception {err.__class__.__name__}: {repr(err)}")
             return None
 
     async def push(self, data, persistent=False):
