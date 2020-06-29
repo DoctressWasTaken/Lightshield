@@ -50,18 +50,18 @@ class Worker:
 
     async def check_new(self, entry):
 
-        hash_db = self.redis.get(entry['summonerId'])
-        hash_local = str(hash(entry))
+        hash_db = await self.redis.get(entry['summonerId'])
+        hash_local = str(hash(str(entry)))
         if hash_db == hash_local:
             return False
         else:
-            self.redis.set(entry['summonerId'], hash_local)
+            await self.redis.set(entry['summonerId'], hash_local)
             return True
 
     async def filter_data(self):
         """Remove unchanged summoners."""
-        self.logging.info(f"Filtering {len(self.entries)} entries.")
-        self.page_entries = [entry for entry in self.page_entries if self.check_new(entry)]
+        self.logging.info(f"Filtering {len(self.page_entries)} entries.")
+        self.page_entries = [entry for entry in self.page_entries if await self.check_new(entry)]
 
 
     async def push_data(self):
