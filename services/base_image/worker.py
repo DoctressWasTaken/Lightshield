@@ -82,15 +82,21 @@ class Worker:
     async def runner(self):
         """Manage starting new worker tasks."""
         tasks = []
+        max_buffer_wait = 0
         start = datetime.now()
         async with aiohttp.ClientSession() as session:
             while self.retry_after < datetime.now() and len(tasks) < self.chunksize:
                 while len(self.buffered_elements) >= self.max_buffer:
+                    max_buffer_wait += 1
                     await asyncio.sleep(0.1)
+                    if max_buffer_wait == 20:
+                        self.logging.info("Waiting at max buffer.")
+                max_buffer_wait = 0
 
                 try:
                     identifier, msg, additional_args = await self.next_task()
                 except NoMessageException:
+                    self.logging.info("Found no message after 10 seconds. Cleaning up cycle.")
                     break
                 tasks.append(asyncio.create_task(self.process(
                     session=session,
@@ -111,10 +117,18 @@ class Worker:
             await asyncio.sleep(delay)
 
     async def next_task(self):
-        timeout = 0
+        """Cycle through tasks. Returns task once found.
+
+        Cycles until a task is found that is to be called.
+        Non-eligible tasks are processed by the is_valid() function.
+        Returns either a task excepts as NoMessageException if no task has been found at all after
+        10 consecutive tries.
+        """
+        passed = 0
         while True:
+            timeout = 0
             while not (msg := await self.pika.get()):
-                if (timeout := timeout + 1) > 20:
+                if (timeout := timeout + 1) > 10:
                     raise NoMessageException()
                 await asyncio.sleep(0.5)
 
@@ -124,21 +138,16 @@ class Worker:
             else:
                 content = identifier = msg.body.decode('utf-8')
 
-            #if identifier in self.buffered_elements:  # Skip any further tasks for already queued
-            #    await self.pika.ack(msg)
-            #    continue
-
             if additional_args := await self.is_valid(identifier, content, msg):
                 self.buffered_elements[identifier] = True
+                if passed > 5:
+                    self.logging.info(f"Passed {passed} elements before returning.")
                 return identifier, msg, additional_args
-            continue
+            passed += 1
 
     async def fetch(self, session, url):
         async with session.get(url, proxy="http://proxy:8000") as response:
-            try:
-                resp = await response.json(content_type=None)
-            except:
-                pass
+            resp = await response.text()
         if response.status in [429, 430]:
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
@@ -148,7 +157,7 @@ class Worker:
             raise NotFoundException()
         if response.status != 200:
             raise Non200Exception()
-        return resp
+        return await response.json(content_type=None)
 
     async def initiate_pika(self, connection):
         """Abstract placeholder.
