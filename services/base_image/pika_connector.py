@@ -90,6 +90,8 @@ class Pika:
                 try:
                     msg = await self.incoming.get(no_ack=self.no_ack, fail=False)
                     return msg
+                except TimeoutError:
+                    await asyncio.sleep(0.5)
                 except Exception as err:
                     self.logging.info(f"[Get] Got exception {err.__class__.__name__}: {repr(err)}")
                     return None

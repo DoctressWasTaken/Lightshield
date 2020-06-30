@@ -114,7 +114,12 @@ class MatchHistoryUpdater(Worker):
             del self.buffered_elements[identifier]
 
     async def finalize(self, responses):
+        """Process responses after batch has been awaited.
 
+        Once a cycle of requests has been awaited the responses are processed. This usually
+        includes acknowledging the message as well as sending out a new one.
+        :param responses: list form of all responses returned by the requests.
+        """
         for identifier, content, matches in [entry[1:] for entry in responses if entry[0] == 0]:
 
             await self.redis.hset(

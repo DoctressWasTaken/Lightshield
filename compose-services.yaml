@@ -141,7 +141,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/db_worker/
-    container_name: ${COMPOSE_PROJECT_NAME}_db_worker
+    #container_name: ${COMPOSE_PROJECT_NAME}_db_worker
     environment:
       - SERVER=${SERVER}
       - POSTGRES_HOST=${POSTGRES_HOST}

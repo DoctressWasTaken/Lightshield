@@ -52,7 +52,11 @@ class Worker:
         self.redis = Redis()
 
     async def main(self):
-        """Run method. Called externally to initiate the worker."""
+        """Run method that initiates and repeatedly starts application cycles.
+
+        Calls the initially  required initiation methods then goes into a permanent loop cycling
+        through the main service loop 'runner()' and the overflow guard 'release_messaging_queue()'.
+        """
         rabbit = await self.pika.connect()  # Establish connection
         # Initiate Channel and Exchanges
         await self.initiate_pika(connection=rabbit)
@@ -62,7 +66,13 @@ class Worker:
             await self.runner()
 
     async def release_messaging_queue(self):
-        """Pause the application until the message queue falls below a certain message limit."""
+        """Pause the application until the message queue falls below a certain message limit.
+
+        To avoid overloading the messaging queue services are interrupted by this method before
+        being able to continue into the next cycle.
+        This method blocks the service until the web-api of the rabbitmq service used returns a
+        queue length below a set limit.
+        """
         headers = {
             'content-type': 'application/json'
         }
@@ -80,7 +90,17 @@ class Worker:
                     await asyncio.sleep(5)
                     
     async def runner(self):
-        """Manage starting new worker tasks."""
+        """Start and process batches of requests.
+
+        Called as main application loop. Opens continues async working methods until a thresh-
+         hold is either reached or the proxy/api responds with a ratelimit exception.
+         Tasks are gathered using the next_task() method returning details passed on to the worker
+         method.
+         As this is a standardized method custom parameter can be passed on from the next_task()
+         method to the task itself.
+         Once a request loop finishes all requests done are gathered and awaited. Responses
+         are processed by the finalize() method.
+         """
         tasks = []
         max_buffer_wait = 0
         start = datetime.now()
@@ -107,7 +127,7 @@ class Worker:
                 await asyncio.sleep(0.01)
             responses = await asyncio.gather(*tasks)
         if len(tasks) > 0:
-            await self.finalize(responses)
+            await self.finalize(responses=responses)
         else:
             await asyncio.sleep(5)
 
@@ -146,6 +166,19 @@ class Worker:
             passed += 1
 
     async def fetch(self, session, url):
+        """Execute call to external target using the proxy server.
+
+        Receives aiohttp session as well as url to be called. Executes the request and returns
+        either the content of the response as json or raises an exeption depending on response.
+        :param session: The aiohttp Clientsession used to execute the call.
+        :param url: String url ready to be requested.
+
+        :returns: Request response as dict.
+
+        :raises RatelimitException: on 429 or 430 HTTP Code.
+        :raises NotFoundException: on 404 HTTP Code.
+        :raises Non200Exception: on any other non 200 HTTP Code.
+        """
         async with session.get(url, proxy="http://proxy:8000") as response:
             resp = await response.text()
         if response.status in [429, 430]:
@@ -160,9 +193,14 @@ class Worker:
         return await response.json(content_type=None)
 
     async def initiate_pika(self, connection):
-        """Abstract placeholder.
+        """Initiate the required/used rabbitmq channel and exchanges.
 
-        Initiate channel and exchanges in the pika connector.
+        Declares all incoming and outgoing queues and exchanges for usage.
+        Sets the default outgoing exchange as well as the incoming queue in the pika module.
+        Sets the outgoing message_identifier for routing purposes via the exchange.
+
+        :param connection: rabbitmq connection that was previously created.
+        :return:
         """
         pass
 
@@ -179,9 +217,10 @@ class Worker:
         Contains calculation """
         pass
 
-    async def finalize(self, data):
-        """Abstract placeholder.
+    async def finalize(self, responses):
+        """Process a batch of requests once they have been awaited.
 
-        Called after the tasks have been awaited with the tasks responses as list.
+        This usually includes acknowledging the message as well as sending out a new one.
+        :param responses: list form of all responses returned by the requests.
         """
         pass
