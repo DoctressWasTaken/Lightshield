@@ -136,7 +136,7 @@ services:
     restart: always
 
   db_worker:
-    mem_limit: 80m
+    mem_limit: 250m
     cpus: 0.25
     build:
       dockerfile: Dockerfile

@@ -59,4 +59,4 @@ class Redis:
 
     async def get(self, key):
         await self.connect()
-        await self.redis.get(key)
+        return await self.redis.get(key)

@@ -61,7 +61,6 @@ class SummonerIDUpdater(Worker):
             del self.buffered_elements[identifier]
 
     async def finalize(self, responses):
-        print("Starting finalize")
         for identifier, response, msg in [entry[1:] for entry in responses if entry[0] == 0]:
             await self.redis.hset(
                 key=f"user:{identifier}",

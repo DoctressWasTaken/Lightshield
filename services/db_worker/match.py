@@ -20,14 +20,14 @@ class InsertMatch(WorkerClass):
     def get_tasks(self, channel):
         """Get tasks from rabbitmq."""
         tasks = []
-        log.info("Waiting for tasks.")
-        while len(tasks) < 250:
+        while len(tasks) < 750:
             message = channel.basic_get(
                 queue=f'DB_MATCH_IN_{self.server}'
             )
             if all(x is None for x in message):
                 if len(tasks) > 100:
                     break
+                log.info("Waiting for tasks.")
                 time.sleep(1)
                 continue
             tasks.append(message)
@@ -35,7 +35,7 @@ class InsertMatch(WorkerClass):
 
     def insert(self, tasks):
         """Insert the pulled tasks into the db."""
-
+        log.info(f"Inserting {len(tasks)} tasks.")
         lines = []
         for task in tasks:
             data = json.loads(task[2])

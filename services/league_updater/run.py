@@ -51,7 +51,7 @@ class Worker:
     async def check_new(self, entry):
 
         hash_db = await self.redis.get(entry['summonerId'])
-        hash_local = str(hash(str(entry)))
+        hash_local = f"{entry['wins']}_{entry['losses']}"
         if hash_db == hash_local:
             return False
         else:
@@ -66,7 +66,9 @@ class Worker:
 
     async def push_data(self):
         """Send out gathered data via rabbitmq tasks."""
-
+        if not self.page_entries:
+            self.logging.info("No changes to push. Skipping")
+            return
         rabbit = await aio_pika.connect_robust('amqp://guest:guest@rabbitmq/')
         # Outgoing
         channel = await rabbit.channel()
@@ -108,7 +110,6 @@ class Worker:
                     routing_key='SUMMONER_V1')
 
         await asyncio.wait([publish(entry) for entry in self.page_entries])
-        self.logging.info(f"Done pushing tasks.")
 
     async def worker(self, tier, division):
         """Create and execute calls until one of the multiple worker returns an empty page.
@@ -121,13 +122,15 @@ class Worker:
             if self.retry_after > datetime.now():
                 delay = (self.retry_after - datetime.now()).total_seconds()
                 await asyncio.sleep(delay)
+            if not failed and len(self.page_entries) < 5000:
+                page = self.next_page
+                self.next_page += 1
+            elif failed:
+                page = failed
+                failed = None
+            else:
+                return
             async with aiohttp.ClientSession() as session:
-                if not failed:
-                    page = self.next_page
-                    self.next_page += 1
-                else:
-                    page = failed
-                    failed = None
                 async with session.get(
                         url=self.url % (tier, division, page),
                         proxy="http://proxy:8000") as response:
@@ -152,14 +155,17 @@ class Worker:
         headers = {
             'content-type': 'application/json'
             }
+        out = False
         while True:
             async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
                 async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
-                    if int(queues[f'SUMMONER_ID_IN_{server}']['messages']) < 10000:
+                    if int(queues[f'SUMMONER_ID_IN_{server}']['messages']) < 5000:
                         return
-                    self.logging.info('Awaiting messages to be reduced.')
+                    if not out:
+                        self.logging.info('Awaiting messages to be reduced.')
+                        out = True
                     await asyncio.sleep(5)
 
     async def main(self):
@@ -171,10 +177,15 @@ class Worker:
             self.empty = False
             self.next_page = 1
             self.page_entries = []
-            await asyncio.gather(*[asyncio.create_task(
-                self.worker(tier=tier, division=division)) for i in range(self.max_worker)])
-            await self.filter_data()
-            await self.push_data()
+            while not self.empty:
+                await asyncio.gather(*[asyncio.create_task(
+                    self.worker(tier=tier, division=division)) for i in range(self.max_worker)])
+                if self.page_entries:
+                    await self.filter_data()
+                    await self.push_data()
+                    self.page_entries = []
+                await self.release_messaging_queue()
+
             await self.rankmanager.update(key=(tier, division))
 
 
