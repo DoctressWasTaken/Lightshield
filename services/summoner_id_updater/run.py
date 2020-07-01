@@ -62,7 +62,7 @@ class Worker(WorkerClass):
             package = {**content, **redis_entry}
             await self.outgoing.publish(
                 Message(bytes(json.dumps({**content, **redis_entry}), 'utf-8')),
-                f'MATCH_HISTORY_IN_{self.service.server}'
+                routing_key="SUMMONER_V2"
             )
             return None
         if identifier in self.service.buffered_elements:
