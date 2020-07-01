@@ -4,15 +4,21 @@ import logging
 import json
 import aiohttp
 from datetime import datetime, timedelta
+from aio_pika import Message
+import aioredis
+from worker import WorkerClass, ServiceClass
 
-from worker import Worker, RatelimitException, NotFoundException, Non200Exception
+from exceptions import (
+    RatelimitException,
+    NotFoundException,
+    Non200Exception,
+    NoMessageException
+)
 
+class SummonerIDUpdater(ServiceClass):
 
-class SummonerIDUpdater(Worker):
-
-    async def initiate_pika(self, connection):
-        channel = await connection.channel()
-        await channel.set_qos(prefetch_count=100)
+    async def init(self):
+        channel = await self.rabbitc.channel()
         # Incoming
         incoming = await channel.declare_queue(
             'SUMMONER_ID_IN_' + self.server, durable=True)
@@ -33,30 +39,55 @@ class SummonerIDUpdater(Worker):
 
         await db_in.bind(outgoing, 'SUMMONER_V2')
 
-        await self.pika.init(incoming=incoming, outgoing=outgoing, tag='SUMMONER_V2', no_ack=True)
 
-    async def is_valid(self, identifier, content, msg):
+class Worker(WorkerClass):
 
-        if identifier in self.buffered_elements:
-            return False
+    async def init(self):
+        await self.channel.set_qos(prefetch_count=5)
+        self.incoming = await self.channel.declare_queue(
+            'SUMMONER_ID_IN_' + self.server, durable=True)
+
+        self.outgoing = await self.channel.declare_exchange(
+            f'SUMMONER_ID_OUT_{self.server}', type='direct',
+            durable=True)
+
+        self.session = aiohttp.ClientSession()
+
+    async def get_task(self):
+        while not (msg := self.incoming.get(no_ack=True, fail=False)):
+            await asyncio.sleep(0.1)
+
+        content = json.loads(msg.body.decode('utf-8'))
+        identifier = content['summonerId']
+
         if redis_entry := await self.redis.hgetall(f"user:{identifier}"):
             package = {**content, **redis_entry}
-            await self.pika.push(package)
-            return False
-        return {"foo": "bar"}
+            await self.outgoing.publish(
+                Message(bytes(json.dumps({**content, **redis_entry}), 'utf-8')),
+                f'MATCH_HISTORY_IN_{self.service.server}'
+            )
+            return None
+        if identifier in self.service.buffered_elements:
+            return None
+        self.service.buffered_elements[identifier] = True
 
-    async def process(self, session, identifier, msg, **kwargs):
-        url = self.url_template % (identifier)
-        self.logging.debug(f"Fetching {url}")
+        return [identifier, content, msg]
+
+    async def process_task(self, data):
+        identifier, content, msg = data
+        url = self.service.url % identifier
         try:
-            response = await self.fetch(session, url)
-            return [0, identifier, response, msg]
-        except RatelimitException:
-            return [1]
-        except NotFoundException:
-            return [1]
-        except Non200Exception:
-            return [1]
+            response = await self.fetch(self.session, url)
+            await self.redis.hmset_dict(
+                f"user:{identifier}",
+                {'puuid': response['puuid'],
+                         'accountId': response['accountId']})
+            await self.outgoing.publish(
+                Message(bytes(json.dumps({**json.loads(msg.body.decode('utf-8')), **response}), 'utf-8')),
+                f'MATCH_HISTORY_IN_{self.service.server}'
+            )
+        except (RatelimitException, NotFoundException, Non200Exception):
+            pass
         finally:
             del self.buffered_elements[identifier]
 
