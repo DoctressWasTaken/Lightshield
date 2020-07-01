@@ -1,35 +1,29 @@
 """Match History updater. Pulls matchlists for all player."""
 
 import asyncio
+import json
+
 import uvloop
 import signal
 import os
+from aio_pika import Message, DeliveryMode
+import aioredis
+from worker_alternative import WorkerClass, ServiceClass
 
-if "SERVER" not in os.environ:
-    print("No SERVER env variable provided. exiting")
-    exit()
-
-os.environ['STATUS'] = "RUN"
-
-from worker import (
-    Worker,
+from exceptions import (
     RatelimitException,
     NotFoundException,
     Non200Exception,
     NoMessageException
 )
 
-def end_handler(sig, frame):
-
-    os.environ['STATUS'] = "STOP"
 
 
-class MatchUpdater(Worker):
+class MatchUpdater(ServiceClass):
 
-    async def initiate_pika(self, connection):
+    async def init(self):
 
-        channel = await connection.channel()
-        await channel.set_qos(prefetch_count=1)
+        channel = await self.rabbitc.channel()
         # Incoming
         incoming = await channel.declare_queue(
             'MATCH_IN_' + self.server, durable=True)
@@ -43,58 +37,58 @@ class MatchUpdater(Worker):
 
         await self.pika.init(incoming=incoming, outgoing=outgoing, tag='MATCH')
 
-    async def is_valid(self, identifier, content, msg):
 
-        if identifier in self.buffered_elements:
-            await self.pika.ack(msg)
-            return False
+class Worker(WorkerClass):
 
-        if prev := await self.redis.sismember(_set='matches', key=identifier):
-            await self.pika.ack(msg)
-            return False
-        return {"foo": "bar"}
+    async def init(self):
+        await self.channel.set_qos(prefetch_count=5)
+        self.incoming = await self.service.channel.declare_queue(
+            'MATCH_IN_' + self.server, durable=True)
 
-    async def process(self, session, identifier, msg, **kwargs):
+        self.outgoing = await self.service.channel.declare_exchange(
+            f'MATCH_OUT_{self.server}', type='direct',
+            durable=True)
 
-        url = self.url_template % (identifier)
-        self.logging.debug(f"Fetching {url}")
+    async def get_task(self):
+        while not (msg := await self.incoming.get(no_ack=False, fail=False)):
+            await asyncio.sleep(0.1)
+
+        identifier = msg.body.decode('utf-8')
+
+        if prev := await self.redis.sismember('matches', str(identifier)):
+            await msg.ack()
+            return None
+
+        if identifier in self.service.buffered_elements:
+            await msg.ack()
+            return None
+
+        self.service.buffered_elements[identifier] = True
+        return [identifier, msg]
+
+    async def process_task(self, session, data):
+        identifier, msg = data
+        url = self.service.url % identifier
+
         try:
             response = await self.fetch(session, url)
-            return [0, identifier, response, msg]
+            await self.service.redisc.sadd('matches', identifier)
 
-        except RatelimitException:
-            return [2, msg]  # 2 requeue
+            await self.outgoing.publish(
+                Message(body=bytes(data, 'utf-8'),
+                        delivery_mode=DeliveryMode.PERSISTENT),
+                routing_key="MATCH")
+
+        except (RatelimitException, Non200Exception):
+            await msg.reject(requeue=True)
         except NotFoundException:
-            return [1, msg]  # 1 drop
-        except Non200Exception:
-            return [2, msg]  # 2 requeue
+            await msg.reject(requeue=False)
         finally:
-            del self.buffered_elements[identifier]
-
-    async def finalize(self, responses):
-
-        for identifier, response, msg in [entry[1:] for entry in responses if entry[0] == 0]:
-            await self.redis.sadd(
-                _set='matches',
-                key=identifier)
-            await self.pika.push(response)
-            await self.pika.ack(msg)
-
-        for msg in [entry[1] for entry in responses if entry[0] == 1]:
-            await self.pika.reject(msg, requeue=False)
-        
-        for msg in [entry[1] for entry in responses if entry[0] == 2]:
-            await self.pika.reject(msg, requeue=False)
-
+            del self.service.buffered_elements[identifier]
 
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGTERM, end_handler)
-    uvloop.install()
-    buffer = int(os.environ['BUFFER'])
-    worker = MatchUpdater(
-        buffer=buffer,
-        url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/match/v4/matches/%s",
-        chunksize=2500,
-        identifier=None)
-    asyncio.run(worker.main())
+    service = MatchUpdater(
+        url_snippet="match/v4/matches/%s",
+        queues_out=[])
+    asyncio.run(service.run(Worker))
