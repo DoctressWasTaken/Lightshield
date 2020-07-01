@@ -64,7 +64,7 @@ class WorkerClass:
         if response.status in [429, 430]:
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
-                self.retry_after = datetime.now() + timedelta(seconds=delay)
+                self.service.retry_after = datetime.now() + timedelta(seconds=delay)
             raise RatelimitException()
         if response.status == 404:
             raise NotFoundException()
@@ -81,7 +81,7 @@ class WorkerClass:
         self.channel = channel
         await self.channel.set_qos(prefetch_count=5)
         while not self.service.__stopped:
-            if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
+            if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
             while self.service.queue_out_blocked:
                 await asyncio.sleep(0.1)
