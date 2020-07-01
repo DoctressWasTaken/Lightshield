@@ -133,7 +133,7 @@ class ServiceClass:
 
     async def run(self, Worker):
 
-        signal.signal(signal.SIGTERM, self.shutdown())
+        signal.signal(signal.SIGTERM, self.shutdown)
 
         self.rabbitc = await aio_pika.connect_robust(
             url=f'amqp://gues:guest@rabbitmq/')
