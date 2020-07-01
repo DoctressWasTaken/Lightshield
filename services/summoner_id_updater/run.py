@@ -45,13 +45,11 @@ class Worker(WorkerClass):
     async def init(self):
         await self.channel.set_qos(prefetch_count=5)
         self.incoming = await self.channel.declare_queue(
-            'SUMMONER_ID_IN_' + self.server, durable=True)
+            'SUMMONER_ID_IN_' + self.service.server, durable=True)
 
         self.outgoing = await self.channel.declare_exchange(
-            f'SUMMONER_ID_OUT_{self.server}', type='direct',
+            f'SUMMONER_ID_OUT_{self.service.server}', type='direct',
             durable=True)
-
-        self.session = aiohttp.ClientSession()
 
     async def get_task(self):
         while not (msg := self.incoming.get(no_ack=True, fail=False)):
@@ -73,11 +71,11 @@ class Worker(WorkerClass):
 
         return [identifier, content, msg]
 
-    async def process_task(self, data):
+    async def process_task(self, session, data):
         identifier, content, msg = data
         url = self.service.url % identifier
         try:
-            response = await self.fetch(self.session, url)
+            response = await self.fetch(session, url)
             await self.redis.hmset_dict(
                 f"user:{identifier}",
                 {'puuid': response['puuid'],

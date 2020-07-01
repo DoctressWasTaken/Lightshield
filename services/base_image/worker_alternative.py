@@ -37,7 +37,7 @@ class WorkerClass:
         await asyncio.sleep(0.5)
         return "Hello World"
 
-    async def process_task(self, task):
+    async def process_task(self, session, task):
         """Process Task.
 
         Abstract method. Processes the received task.
@@ -81,14 +81,15 @@ class WorkerClass:
         self.channel = channel
         await self.init()
 
-        while not self.service.stopping:
-            if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
-                await asyncio.sleep(delay)
-            while self.service.queue_out_blocked:
-                await asyncio.sleep(0.1)
+        async with aiohttp.ClientSession() as session:
+            while not self.service.stopping:
+                if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
+                    await asyncio.sleep(delay)
+                while self.service.queue_out_blocked:
+                    await asyncio.sleep(0.1)
 
-            if task := await self.get_task():
-                await self.process_task(task)
+                if task := await self.get_task():
+                    await self.process_task(session, task)
 
 
 class ServiceClass:
