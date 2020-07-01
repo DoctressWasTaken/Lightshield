@@ -170,7 +170,7 @@ class ServiceClass:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
                     for queue in self.queues_out:
-                        if messages := int(queues[queue % self.server]["messages"]) > 2000:
+                        if (messages := int(queues[queue % self.server]["messages"])) > 2000:
                             self.queue_out_blocked = True
                             self.logging.info(f"Awaiting messages to be reduced. [{messages}].")
                         else:
