@@ -79,7 +79,8 @@ class WorkerClass:
         API returns a ratelimit issue.
         """
         self.channel = channel
-        await self.channel.set_qos(prefetch_count=5)
+        await self.init()
+
         while not self.service.stopping:
             if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
