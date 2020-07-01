@@ -15,6 +15,7 @@ from exceptions import (
     NoMessageException
 )
 
+
 class SummonerIDUpdater(ServiceClass):
 
     async def init(self):
@@ -52,13 +53,12 @@ class Worker(WorkerClass):
             durable=True)
 
     async def get_task(self):
-        while not (msg := self.incoming.get(no_ack=True, fail=False)):
+        while not (msg := await self.incoming.get(no_ack=True, fail=False)):
             await asyncio.sleep(0.1)
 
         content = json.loads(msg.body.decode('utf-8'))
         identifier = content['summonerId']
-
-        if redis_entry := await self.redis.hgetall(f"user:{identifier}"):
+        if redis_entry := await self.service.redisc.hgetall(f"user:{identifier}"):
             package = {**content, **redis_entry}
             await self.outgoing.publish(
                 Message(bytes(json.dumps({**content, **redis_entry}), 'utf-8')),
@@ -68,7 +68,6 @@ class Worker(WorkerClass):
         if identifier in self.service.buffered_elements:
             return None
         self.service.buffered_elements[identifier] = True
-
         return [identifier, content, msg]
 
     async def process_task(self, session, data):
@@ -76,7 +75,7 @@ class Worker(WorkerClass):
         url = self.service.url % identifier
         try:
             response = await self.fetch(session, url)
-            await self.redis.hmset_dict(
+            await self.service.redisc.hmset_dict(
                 f"user:{identifier}",
                 {'puuid': response['puuid'],
                          'accountId': response['accountId']})
@@ -85,18 +84,9 @@ class Worker(WorkerClass):
                 f'MATCH_HISTORY_IN_{self.service.server}'
             )
         except (RatelimitException, NotFoundException, Non200Exception):
-            pass
+            return
         finally:
-            del self.buffered_elements[identifier]
-
-    async def finalize(self, responses):
-        for identifier, response, msg in [entry[1:] for entry in responses if entry[0] == 0]:
-            await self.redis.hset(
-                key=f"user:{identifier}",
-                mapping={'puuid': response['puuid'],
-                         'accountId': response['accountId']})
-            await self.pika.push({**json.loads(msg.body.decode('utf-8')), **response})
-
+            del self.service.buffered_elements[identifier]
 
 if __name__ == "__main__":
     service = SummonerIDUpdater(

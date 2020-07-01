@@ -18,7 +18,7 @@ from exceptions import (
 class WorkerClass:
 
     def __init__(self, service):
-
+        
         self.service = service
         self.logging = service.logging
         self.channel = None
@@ -80,17 +80,16 @@ class WorkerClass:
         """
         self.channel = channel
         await self.init()
-
         async with aiohttp.ClientSession() as session:
             while not self.service.stopping:
                 if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
                     await asyncio.sleep(delay)
                 while self.service.queue_out_blocked:
-                    await asyncio.sleep(0.1)
-
+                    await asyncio.sleep(0.5)
                 if task := await self.get_task():
                     await self.process_task(session, task)
 
+        self.logging.info("Exiting worker")
 
 class ServiceClass:
 
@@ -171,12 +170,13 @@ class ServiceClass:
                 async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
+                    temp = False
                     for queue in self.queues_out:
-                        if (messages := int(queues[queue % self.server]["messages"])) > 2000:
-                            self.queue_out_blocked = True
-                            self.logging.info(f"Awaiting messages to be reduced. [{messages}].")
-                        else:
-                            self.queue_out_blocked = False
+                        queue_full = queue % self.server
+                        if (messages := int(queues[queue_full]["messages"])) > 2000:
+                            temp = True
+                            self.logging.info(f"Awaiting messages to be reduced.")
+                    self.queue_out_blocked = temp
                     await asyncio.sleep(5)
 
 
