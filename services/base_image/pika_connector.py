@@ -50,16 +50,15 @@ class Pika:
 
     async def ack(self, msg):
         """Acknowledge a message."""
-        for j in range(2):
-            for i in range(3):
-                try:
-                    return await asyncio.wait_for(msg.ack(), timeout=2)
-                except asyncio.TimeoutError:
-                    pass
-                except Exception as err:
-                    self.logging.info(f"[Ack] Got exception {err.__class__.__name__}: {repr(err)}")
-                    return
-            await self.connect()
+        for i in range(5):
+            try:
+                return await asyncio.wait_for(msg.ack(), timeout=2)
+            except asyncio.TimeoutError:
+                self.logging.info(f"[Ack] Timeout error.")
+                await asyncio.sleep(0.5)
+            except Exception as err:
+                self.logging.info(f"[Ack] Got exception {err.__class__.__name__}: {repr(err)}")
+                return
         raise Exception("Failed to acknowledge message.")
 
     async def reject(self, msg, requeue):
@@ -67,17 +66,16 @@ class Pika:
 
         Additional param for requeing.
         """
-        for j in range(2):
-            for i in range(3):
-                try:
-                    await asyncio.wait_for(msg.reject(requeue=requeue), timeout=2)
-                    return
-                except asyncio.TimeoutError:
-                    pass
-                except Exception as err:
-                    self.logging.info(f"[Reject:{requeue}] Got exception {err.__class__.__name__}: {repr(err)}")
-                    return
-            await self.connect()
+        for i in range(5):
+            try:
+                await asyncio.wait_for(msg.reject(requeue=requeue), timeout=10)
+                return
+            except asyncio.TimeoutError:
+                self.logging.info(f"[Reject:{requeue}] Timeout error.")
+                await asyncio.sleep(0.5)
+            except Exception as err:
+                self.logging.info(f"[Reject:{requeue}] Got exception {err.__class__.__name__}: {repr(err)}")
+                return
         raise Exception("Failed to requeue message.")
 
     async def get(self):
@@ -85,17 +83,16 @@ class Pika:
 
         Returns either the message element or None on timeout.
         """
-        for j in range(2):
-            for i in range(3):
-                try:
-                    msg = await self.incoming.get(no_ack=self.no_ack, fail=False)
-                    return msg
-                except TimeoutError:
-                    await asyncio.sleep(0.5)
-                except Exception as err:
-                    self.logging.info(f"[Get] Got exception {err.__class__.__name__}: {repr(err)}")
-                    return None
-            await self.connect()
+        for i in range(5):
+            try:
+                msg = await asyncio.wait_for(self.incoming.get(no_ack=self.no_ack, fail=False), timeout=10)
+                return msg
+            except asyncio.TimeoutError:
+                self.logging.info(f"[Get] Timeout error.")
+                await asyncio.sleep(0.5)
+            except Exception as err:
+                self.logging.info(f"[Get] Got exception {err.__class__.__name__}: {repr(err)}")
+                return None
         raise Exception("Failed to get message.")
 
     async def push(self, data, persistent=False):
@@ -117,15 +114,14 @@ class Pika:
         else:
             message = Message(bytes(data, 'utf-8'))
 
-        for j in range(2):
-            for i in range(3):
-                try:
-                    return await self.outgoing.publish(message, self.tag)
-                except asyncio.TimeoutError:
-                    pass
-                except Exception as err:
-                    self.logging.info(f"[Send:{persistent}] Got exception {err.__class__.__name__}: {repr(err)}")
-                    return
-            await self.connect()
+        for i in range(3):
+            try:
+                return await asyncio.wait_for(self.outgoing.publish(message, self.tag), timeout=10)
+            except asyncio.TimeoutError:
+                self.logging.info(f"[Send:{persistent}] Timeout error.")
+                await asyncio.sleep(0.5)
+            except Exception as err:
+                self.logging.info(f"[Send:{persistent}] Got exception {err.__class__.__name__}: {repr(err)}")
+                return
         raise Exception("Failed to send message.")
 

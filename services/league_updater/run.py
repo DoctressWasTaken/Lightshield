@@ -122,7 +122,7 @@ class Worker:
             if self.retry_after > datetime.now():
                 delay = (self.retry_after - datetime.now()).total_seconds()
                 await asyncio.sleep(delay)
-            if not failed and len(self.page_entries) < 5000:
+            if not failed and len(self.page_entries) < 1000:
                 page = self.next_page
                 self.next_page += 1
             elif failed:
@@ -161,7 +161,7 @@ class Worker:
                 async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
-                    if int(queues[f'SUMMONER_ID_IN_{server}']['messages']) < 5000:
+                    if int(queues[f'SUMMONER_ID_IN_{server}']['messages']) < 1000:
                         return
                     if not out:
                         self.logging.info('Awaiting messages to be reduced.')

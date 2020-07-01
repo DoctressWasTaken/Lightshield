@@ -84,7 +84,7 @@ class Worker:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
                     messages = queues[self.message_out]["messages"]
-                    if int(messages) < 10000:
+                    if int(messages) < 2000:
                         return
                     self.logging.info(f"Awaiting messages to be reduced. [{messages}].")
                     await asyncio.sleep(5)

@@ -40,6 +40,15 @@ def main():
         postgres_user=os.environ['POSTGRES_USER'])
 
     match_inserter.start()
+    
+    match_inserter2 = InsertMatch(
+        server=server,
+        postgres_host=os.environ['POSTGRES_HOST'],
+        postgres_port=int(os.environ['POSTGRES_PORT']),
+        postgres_user=os.environ['POSTGRES_USER'])
+
+    match_inserter2.start()
+
     try:
         while True:
             time.sleep(5)
@@ -49,14 +58,19 @@ def main():
             if not match_inserter.is_alive():
                 log.error("Match Inserter Thread dead. Restarting.")
                 match_inserter.start()
+            if not match_inserter2.is_alive():
+                log.error("Match Inserter 2 Thread dead. Restarting.")
+                match_inserter2.start()
 
     except KeyboardInterrupt:
         log.info("Gracefully shutting down.")
         summoner_updater.stop()
         match_inserter.stop()
+        match_inserter2.stop()
 
     summoner_updater.join()
     match_inserter.join()
+    match_inserter2.join()
 
 
 if __name__ == "__main__":
