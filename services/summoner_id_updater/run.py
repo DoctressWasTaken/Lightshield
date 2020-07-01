@@ -101,10 +101,7 @@ class Worker(WorkerClass):
 
 
 if __name__ == "__main__":
-    buffer = int(os.environ['BUFFER'])
-    worker = SummonerIDUpdater(
-        buffer=buffer,
-        url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/summoner/v4/summoners/%s",
-        identifier="summonerId",
-        message_out=f"MATCH_HISTORY_IN_{os.environ['SERVER']}")
-    asyncio.run(worker.main())
+    service = SummonerIDUpdater(
+        url_snippet="summoner/v4/summoners/%s",
+        queues_out=["MATCH_HISTORY_IN_%s"])
+    asyncio.run(service.run(Worker))
