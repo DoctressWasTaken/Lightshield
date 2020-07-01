@@ -79,10 +79,11 @@ class Worker(WorkerClass):
                 f"user:{identifier}",
                 {'puuid': response['puuid'],
                          'accountId': response['accountId']})
+            
             await self.outgoing.publish(
-                Message(bytes(json.dumps({**json.loads(msg.body.decode('utf-8')), **response}), 'utf-8')),
-                f'MATCH_HISTORY_IN_{self.service.server}'
-            )
+                Message(
+                    body=bytes(json.dumps({**json.loads(msg.body.decode('utf-8')), **response}), 'utf-8')),
+                    routing_key="SUMMONER_V2")
         except (RatelimitException, NotFoundException, Non200Exception):
             return
         finally:
