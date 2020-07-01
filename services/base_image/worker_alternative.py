@@ -80,7 +80,7 @@ class WorkerClass:
         """
         self.channel = channel
         await self.channel.set_qos(prefetch_count=5)
-        while not self.service.__stopped:
+        while not self.service.stopping:
             if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
             while self.service.queue_out_blocked:
@@ -111,7 +111,7 @@ class ServiceClass:
         self.redisc = None
         self.queues_out = queues_out
         self.queue_out_blocked = True
-        self.__stopped = False
+        self.stopping = False
 
         self.retry_after = datetime.now()
 
@@ -122,7 +122,7 @@ class ServiceClass:
 
         Handler called by the sigterm signal.
         """
-        self.__stopped = True
+        self.stopping = True
 
     async def init(self):
         """Initiate service.
@@ -136,7 +136,7 @@ class ServiceClass:
         signal.signal(signal.SIGTERM, self.shutdown)
 
         self.rabbitc = await aio_pika.connect_robust(
-            url=f'amqp://gues:guest@rabbitmq/')
+            url=f'amqp://guest:guest@rabbitmq/')
 
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
@@ -164,7 +164,7 @@ class ServiceClass:
         headers = {
             'content-type': 'application/json'
         }
-        while not self.__stopped:
+        while not self.stopping:
             async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
                 async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
