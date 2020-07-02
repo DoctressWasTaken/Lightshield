@@ -1,9 +1,6 @@
-import pika
-import json
 import time
 import os
 from sqlalchemy import create_engine
-from sqlalchemy import Column, Integer, String, Enum
 from sqlalchemy.orm import sessionmaker
 import threading
 from tables import Base, Match
