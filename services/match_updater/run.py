@@ -80,11 +80,7 @@ class Worker(WorkerClass):
         try:
             response = await self.fetch(session, url)
             await self.service.redisc.sadd('matches', identifier)
-
-            await self.outgoing.publish(
-                Message(body=bytes(json.dumps(response), 'utf-8'),
-                        delivery_mode=DeliveryMode.PERSISTENT),
-                routing_key="MATCH")
+            self.service.task_holder.append(response)
             await msg.ack()
         except (RatelimitException, Non200Exception):
             await msg.reject(requeue=True)
