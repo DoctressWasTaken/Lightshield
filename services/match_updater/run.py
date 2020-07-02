@@ -101,5 +101,5 @@ if __name__ == "__main__":
     tasks = []
     service.set_task_holder(tasks)
     worker = DBWorker(tasks)
-    worker.run()
+    worker.start()
     asyncio.run(service.run(Worker))
