@@ -35,27 +35,30 @@ class MatchUpdater(ServiceClass):
             'DB_MATCH_IN_' + self.server, durable=True)
         await db_in.bind(outgoing, 'MATCH')
 
-        await self.pika.init(incoming=incoming, outgoing=outgoing, tag='MATCH')
-
 
 class Worker(WorkerClass):
 
     async def init(self):
-        await self.channel.set_qos(prefetch_count=5)
-        self.incoming = await self.service.channel.declare_queue(
-            'MATCH_IN_' + self.server, durable=True)
+        await self.channel.set_qos(prefetch_count=15)
+        self.incoming = await self.channel.declare_queue(
+            'MATCH_IN_' + self.service.server, durable=True)
 
-        self.outgoing = await self.service.channel.declare_exchange(
-            f'MATCH_OUT_{self.server}', type='direct',
+        self.outgoing = await self.channel.declare_exchange(
+            f'MATCH_OUT_{self.service.server}', type='direct',
             durable=True)
 
     async def get_task(self):
-        while not (msg := await self.incoming.get(no_ack=False, fail=False)):
-            await asyncio.sleep(0.1)
+        try:
+            while not (msg := await self.incoming.get(no_ack=False, fail=False)):
+                await asyncio.sleep(0.1)
+        except asyncio.exceptions.TimeoutError:
+            self.logging.info("TimeoutError")
+            await asyncio.sleep(0.2)
+            return None
 
         identifier = msg.body.decode('utf-8')
 
-        if prev := await self.redis.sismember('matches', str(identifier)):
+        if prev := await self.service.redisc.sismember('matches', str(identifier)):
             await msg.ack()
             return None
 
@@ -73,19 +76,22 @@ class Worker(WorkerClass):
         try:
             response = await self.fetch(session, url)
             await self.service.redisc.sadd('matches', identifier)
-
+        
             await self.outgoing.publish(
-                Message(body=bytes(data, 'utf-8'),
+                Message(body=bytes(json.dumps(response), 'utf-8'),
                         delivery_mode=DeliveryMode.PERSISTENT),
                 routing_key="MATCH")
-
+            await msg.ack()
         except (RatelimitException, Non200Exception):
             await msg.reject(requeue=True)
+            #self.logging.info("Rejecting + ")
         except NotFoundException:
             await msg.reject(requeue=False)
+            #self.logging.info("Rejecting")
         finally:
             del self.service.buffered_elements[identifier]
-
+        if identifier in self.service.buffered_elements:
+            self.logging.info("This one was not properly removed")
 
 if __name__ == "__main__":
     service = MatchUpdater(

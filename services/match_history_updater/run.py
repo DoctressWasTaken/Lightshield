@@ -55,8 +55,13 @@ class Worker(WorkerClass):
             durable=True)
 
     async def get_task(self):
-        while not (msg := await self.incoming.get(no_ack=True, fail=False)):
-            await asyncio.sleep(0.1)
+        try:
+            while not (msg := await self.incoming.get(no_ack=True, fail=False)):
+                await asyncio.sleep(0.1)
+        except asyncio.exceptions.TimeoutError:
+            self.logging.info("TimeoutError")
+            await asyncio.sleep(0.2)
+            return None
 
         content = json.loads(msg.body.decode('utf-8'))
         identifier = content['summonerId']
@@ -64,11 +69,11 @@ class Worker(WorkerClass):
         matches = content['wins'] + content['losses']
         if prev := await self.service.redisc.hgetall(f"user:{identifier}"):
             matches -= (int(prev['wins']) + int(prev['losses']))
-        if matches < self.required_matches:  # Skip if less than required new matches
+        if matches < self.service.required_matches:  # Skip if less than required new matches
             # TODO: Despite not having enough matches this should be considered to pass on to the db
             return None
 
-        if identifier in self.buffered_elements:
+        if identifier in self.service.buffered_elements:
             return None
 
         self.service.buffered_elements[identifier] = True
@@ -109,7 +114,7 @@ class Worker(WorkerClass):
             while matches:
                 id = matches.pop()
                 await self.outgoing.publish(
-                    Message(bytes(id, 'utf-8')),
+                    Message(bytes(str(id), 'utf-8')),
                     routing_key="MATCH"
                 )
         except NotFoundException:

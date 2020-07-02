@@ -9,8 +9,8 @@ ch.setLevel(logging.INFO)
 ch.setFormatter(logging.Formatter('%(asctime)s [RUN] %(message)s'))
 log.addHandler(ch)
 
-from summoner import UpdateSummoner
-from match import InsertMatch
+from summoner import Worker as UpdateSummoner
+from match_ import Worker as InsertMatch
 
 if 'SERVER' not in os.environ:
     print("No server provided, exiting.")
@@ -25,52 +25,29 @@ def main():
     calls requests in async method and uses the returned values to update.
     """
     # Pull data package
-    summoner_updater = UpdateSummoner(
-        server=server,
-        postgres_host=os.environ['POSTGRES_HOST'],
-        postgres_port=int(os.environ['POSTGRES_PORT']),
-        postgres_user=os.environ['POSTGRES_USER'])
+    summoner_updater = UpdateSummoner()
 
     summoner_updater.start()
 
-    match_inserter = InsertMatch(
-        server=server,
-        postgres_host=os.environ['POSTGRES_HOST'],
-        postgres_port=int(os.environ['POSTGRES_PORT']),
-        postgres_user=os.environ['POSTGRES_USER'])
-
-    match_inserter.start()
+    match_inserters = [InsertMatch() for i in range(10)]
+        
+    for worker in match_inserters:
+        worker.start()
     
-    match_inserter2 = InsertMatch(
-        server=server,
-        postgres_host=os.environ['POSTGRES_HOST'],
-        postgres_port=int(os.environ['POSTGRES_PORT']),
-        postgres_user=os.environ['POSTGRES_USER'])
-
-    match_inserter2.start()
-
     try:
         while True:
             time.sleep(5)
             if not summoner_updater.is_alive():
                 log.error("Summoner Updater Thread died. Restarting.")
                 summoner_updater.start()
-            if not match_inserter.is_alive():
-                log.error("Match Inserter Thread dead. Restarting.")
-                match_inserter.start()
-            if not match_inserter2.is_alive():
-                log.error("Match Inserter 2 Thread dead. Restarting.")
-                match_inserter2.start()
 
     except KeyboardInterrupt:
         log.info("Gracefully shutting down.")
         summoner_updater.stop()
         match_inserter.stop()
-        match_inserter2.stop()
 
     summoner_updater.join()
     match_inserter.join()
-    match_inserter2.join()
 
 
 if __name__ == "__main__":

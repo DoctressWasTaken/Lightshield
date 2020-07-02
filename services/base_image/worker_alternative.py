@@ -83,6 +83,8 @@ class WorkerClass:
         async with aiohttp.ClientSession() as session:
             while not self.service.stopping:
                 if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
+                    if delay > 5:
+                        self.logging.info(f"Sleeping for {delay}.")
                     await asyncio.sleep(delay)
                 while self.service.queue_out_blocked:
                     await asyncio.sleep(0.5)
@@ -161,6 +163,7 @@ class ServiceClass:
         """
         if not self.queues_out:
             self.queue_out_blocked = False
+            self.logging.info("Exiting blocker. No queues to block provided.")
             return
         headers = {
             'content-type': 'application/json'
