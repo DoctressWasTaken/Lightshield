@@ -31,7 +31,7 @@ class Worker(threading.Thread):
             match = self.get_task()
             self.process_task(match)
             if (inserted := inserted + 1) == 500:
-                print("Inserting 500 Matches.")
+                print("Inserting 500 Matches. Remaining tasks: {len(self.tasks)}.")
                 self.session.commit()
                 inserted = 0
 
