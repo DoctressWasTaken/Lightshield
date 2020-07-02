@@ -19,13 +19,14 @@ from exceptions import (
 
 from db_connector import Worker as DBWorker
 
+
 class MatchUpdater(ServiceClass):
 
     def set_task_holder(self, tasks_holder):
         self.task_holder = tasks_holder
 
     async def init(self):
-
+        self.logging.info("Initiating Service.")
         channel = await self.rabbitc.channel()
         # Incoming
         incoming = await channel.declare_queue(
