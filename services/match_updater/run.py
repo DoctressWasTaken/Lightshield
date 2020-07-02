@@ -18,8 +18,10 @@ from exceptions import (
 )
 
 
-
 class MatchUpdater(ServiceClass):
+
+    def set_task_holder(self, tasks_holder):
+        self.task_holder = tasks_holder
 
     async def init(self):
 
@@ -76,7 +78,7 @@ class Worker(WorkerClass):
         try:
             response = await self.fetch(session, url)
             await self.service.redisc.sadd('matches', identifier)
-        
+
             await self.outgoing.publish(
                 Message(body=bytes(json.dumps(response), 'utf-8'),
                         delivery_mode=DeliveryMode.PERSISTENT),
@@ -93,8 +95,13 @@ class Worker(WorkerClass):
         if identifier in self.service.buffered_elements:
             self.logging.info("This one was not properly removed")
 
+
 if __name__ == "__main__":
     service = MatchUpdater(
         url_snippet="match/v4/matches/%s",
         queues_out=[])
+    tasks = []
+    service.set_task_holder(tasks)
+    worker = Worker(tasks)
+    worker.run()
     asyncio.run(service.run(Worker))

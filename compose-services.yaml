@@ -114,11 +114,16 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_match_updater
     environment:
       - SERVER=${SERVER}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - SERVER=${SERVER}
       - BUFFER=${MATCH_BUFFER}
     links:
       - redis_match:redis
       - proxy:proxy
     external_links:
+      - lightshield_postgres:postres
       - lightshield_rabbitmq:rabbitmq
     depends_on:
       - redis_match
