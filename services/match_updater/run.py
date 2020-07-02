@@ -17,6 +17,7 @@ from exceptions import (
     NoMessageException
 )
 
+from db_connector import Worker as DBWorker
 
 class MatchUpdater(ServiceClass):
 
@@ -102,6 +103,6 @@ if __name__ == "__main__":
         queues_out=[])
     tasks = []
     service.set_task_holder(tasks)
-    worker = Worker(tasks)
+    worker = DBWorker(tasks)
     worker.run()
     asyncio.run(service.run(Worker))
