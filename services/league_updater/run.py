@@ -41,6 +41,7 @@ class Worker:
         signal.signal(signal.SIGTERM, self.shutdown)
 
     def shutdown(self):
+        self.logging.info("Received shutdown signal. Shutting down.")
         self.stopping = True
 
     async def check_new(self, entry):
@@ -114,6 +115,7 @@ class Worker:
         """
         failed = None
         while (not self.empty or failed) and not self.stopping:
+
             if self.retry_after > datetime.now():
                 delay = (self.retry_after - datetime.now()).total_seconds()
                 await asyncio.sleep(delay)
@@ -172,7 +174,7 @@ class Worker:
             self.empty = False
             self.next_page = 1
             self.page_entries = []
-            while not self.empty or not self.stopping:
+            while not self.empty and not self.stopping:
                 await asyncio.gather(*[asyncio.create_task(
                     self.worker(tier=tier, division=division)) for i in range(self.max_worker)])
                 if self.page_entries:

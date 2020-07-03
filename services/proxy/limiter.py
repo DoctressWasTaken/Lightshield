@@ -10,11 +10,11 @@ class LimitBlocked(Exception):
 
 class LimitHandler:
 
-    def __init__(self, limits=None, span=None, max=None):
+    def __init__(self, limits=None, span=None, max_=None):
         if limits:
-            span, max = [int(i) for i in limits]
+            span, max_ = [int(i) for i in limits]
         self.span = int(span)  # Duration of the bucket
-        self.max = max - 1  # Max Calls per bucket (Reduced by 1 for safety measures)
+        self.max = max(5, max_ - 5)  # Max Calls per bucket (Reduced by 1 for safety measures)
         self.count = 0  # Current Calls in this bucket
         self.bucket_start = None  # Cutoff after which no new requests are accepted
         self.bucket_end = None
@@ -28,8 +28,8 @@ class LimitHandler:
         # (Re)set bucket if applicable
         if not self.bucket_start or self.bucket_end < datetime.now(timezone.utc):
             self.bucket_start = datetime.now(timezone.utc)
-            self.bucket_end = self.bucket_start + timedelta(seconds=self.span + 0.5)  # EXTRA 0.5 seconds when initiated
-            self.bucket_reset_ready = self.bucket_start + timedelta(seconds=self.span * 0.8)
+            self.bucket_end = self.bucket_start + timedelta(seconds=self.span + 1.5)  # EXTRA time when initiated
+            self.bucket_reset_ready = self.bucket_start + timedelta(seconds=(self.span + 1.5) * 0.8)
 
             self.count = 0
 

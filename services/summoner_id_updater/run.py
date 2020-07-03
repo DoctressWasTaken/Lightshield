@@ -6,7 +6,7 @@ import aiohttp
 from datetime import datetime, timedelta
 from aio_pika import Message
 import aioredis
-from worker_alternative import WorkerClass, ServiceClass
+from worker import WorkerClass, ServiceClass
 
 from exceptions import (
     RatelimitException,

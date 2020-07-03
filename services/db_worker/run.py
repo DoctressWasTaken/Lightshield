@@ -10,7 +10,6 @@ ch.setFormatter(logging.Formatter('%(asctime)s [RUN] %(message)s'))
 log.addHandler(ch)
 
 from summoner import Worker as UpdateSummoner
-from match_ import Worker as InsertMatch
 
 if 'SERVER' not in os.environ:
     print("No server provided, exiting.")

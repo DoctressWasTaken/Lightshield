@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 from aio_pika import Message
 import aioredis
-from worker_alternative import WorkerClass, ServiceClass
+from worker import WorkerClass, ServiceClass
 
 from exceptions import (
     RatelimitException,
@@ -57,7 +57,7 @@ class Worker(WorkerClass):
     async def get_task(self):
         try:
             while not (msg := await self.incoming.get(no_ack=True, fail=False))\
-                    and not self.stopping:
+                    and not self.service.stopping:
                 await asyncio.sleep(0.1)
         except asyncio.exceptions.TimeoutError:
             self.logging.info("TimeoutError")
