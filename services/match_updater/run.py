@@ -31,14 +31,6 @@ class MatchUpdater(ServiceClass):
         # Incoming
         incoming = await channel.declare_queue(
             'MATCH_IN_' + self.server, durable=True)
-        # Outgoing
-        outgoing = await channel.declare_exchange(
-            f'MATCH_OUT_{self.server}', type='direct',
-            durable=True)
-        db_in = await channel.declare_queue(
-            'DB_MATCH_IN_' + self.server, durable=True)
-        await db_in.bind(outgoing, 'MATCH')
-
 
 class Worker(WorkerClass):
 
@@ -46,10 +38,6 @@ class Worker(WorkerClass):
         await self.channel.set_qos(prefetch_count=15)
         self.incoming = await self.channel.declare_queue(
             'MATCH_IN_' + self.service.server, durable=True)
-
-        self.outgoing = await self.channel.declare_exchange(
-            f'MATCH_OUT_{self.service.server}', type='direct',
-            durable=True)
 
     async def get_task(self):
         try:

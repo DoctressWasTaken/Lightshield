@@ -29,11 +29,6 @@ def main():
 
     summoner_updater.start()
 
-    match_inserters = [InsertMatch() for i in range(10)]
-        
-    for worker in match_inserters:
-        worker.start()
-    
     try:
         while True:
             time.sleep(5)
@@ -44,10 +39,8 @@ def main():
     except KeyboardInterrupt:
         log.info("Gracefully shutting down.")
         summoner_updater.stop()
-        match_inserter.stop()
 
     summoner_updater.join()
-    match_inserter.join()
 
 
 if __name__ == "__main__":

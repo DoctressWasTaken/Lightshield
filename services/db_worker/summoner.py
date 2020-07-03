@@ -44,7 +44,7 @@ class Worker(threading.Thread):
             while True:
                 message = self.get_task()
                 self.process_task(message)
-                if (inserted := inserted + 1) == 100:
+                if (inserted := inserted + 1) == 200:
                     self.session.commit()
                     print("Inserted 100 Summoner.")
                     inserted = 0
