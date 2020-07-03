@@ -53,9 +53,11 @@ class Worker(WorkerClass):
             durable=True)
 
     async def get_task(self):
-        while not (msg := await self.incoming.get(no_ack=True, fail=False)):
+        while not (msg := await self.incoming.get(no_ack=True, fail=False))\
+                and not self.service.stopping:
             await asyncio.sleep(0.1)
-
+        if not msg:
+            return None
         content = json.loads(msg.body.decode('utf-8'))
         identifier = content['summonerId']
         if redis_entry := await self.service.redisc.hgetall(f"user:{identifier}"):

@@ -56,13 +56,15 @@ class Worker(WorkerClass):
 
     async def get_task(self):
         try:
-            while not (msg := await self.incoming.get(no_ack=True, fail=False)):
+            while not (msg := await self.incoming.get(no_ack=True, fail=False))\
+                    and not self.stopping:
                 await asyncio.sleep(0.1)
         except asyncio.exceptions.TimeoutError:
             self.logging.info("TimeoutError")
             await asyncio.sleep(0.2)
             return None
-
+        if not msg:
+            return None
         content = json.loads(msg.body.decode('utf-8'))
         identifier = content['summonerId']
 

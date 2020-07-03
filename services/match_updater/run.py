@@ -1,7 +1,7 @@
 """Match History updater. Pulls matchlists for all player."""
 
 import asyncio
-from worker_alternative import WorkerClass, ServiceClass
+from worker import WorkerClass, ServiceClass
 
 from exceptions import (
     RatelimitException,
@@ -35,13 +35,15 @@ class Worker(WorkerClass):
 
     async def get_task(self):
         try:
-            while not (msg := await self.incoming.get(no_ack=False, fail=False)):
+            while not (msg := await self.incoming.get(no_ack=False, fail=False)) \
+                    and not self.service.stopping:
                 await asyncio.sleep(0.1)
         except asyncio.exceptions.TimeoutError:
             self.logging.info("TimeoutError")
             await asyncio.sleep(0.2)
             return None
-
+        if not msg:
+            return None
         identifier = msg.body.decode('utf-8')
 
         if prev := await self.service.redisc.sismember('matches', str(identifier)):
@@ -66,10 +68,10 @@ class Worker(WorkerClass):
             await msg.ack()
         except (RatelimitException, Non200Exception):
             await msg.reject(requeue=True)
-            #self.logging.info("Rejecting + ")
+            # self.logging.info("Rejecting + ")
         except NotFoundException:
             await msg.reject(requeue=False)
-            #self.logging.info("Rejecting")
+            # self.logging.info("Rejecting")
         finally:
             del self.service.buffered_elements[identifier]
         if identifier in self.service.buffered_elements:
