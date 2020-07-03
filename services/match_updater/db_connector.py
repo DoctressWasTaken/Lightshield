@@ -9,9 +9,9 @@ from tables.enums import Server
 
 class Worker(threading.Thread):
 
-    def __init__(self, tasks, echo=False):
+    def __init__(self, service, echo=False):
         super().__init__()
-        self.tasks = tasks
+        self.service = service
         self.engine = create_engine(
             f'postgresql://%s@%s:%s/data' %
             (os.environ['POSTGRES_USER'],
@@ -20,29 +20,39 @@ class Worker(threading.Thread):
             echo=echo)
 
         Base.metadata.create_all(self.engine)
-        self.server = os.environ['SERVER']
+        self.server = self.service.server
         self.Session = sessionmaker(bind=self.engine)
         self.session = self.Session()
 
     def run(self):
-        print("Starting Match Worker..")
-        while True:
-            while len(self.tasks) < 100:
+        self.service.logging.info("Starting Match Worker..")
+        while not self.service.stopping:
+            while len(self.service.task_holder) < 100:
                 time.sleep(0.5)
             task_list = self.process_task()
-            print(f"Inserting {len(task_list)} Matches. Remaining tasks: {len(self.tasks)}.")
+            self.service.logging.info(f"Inserting {len(task_list)} Matches. Remaining tasks: {len(self.service.task_holder)}.")
+            self.session.bulk_save_objects(task_list)
+            self.session.commit()
+        time.sleep(2)
+        if self.service.task_holder:
+            task_list = self.process_task()
+            self.service.logging.info(f"Inserting {len(task_list)} Matches. Remaining tasks: {len(self.service.task_holder)}.")
             self.session.bulk_save_objects(task_list)
             self.session.commit()
 
+        self.service.logging.info("Shutting down DB_Connector")
+
     def get_task(self):
-        while not self.tasks:
+        while not self.service.task_holder and not self.service.stopping:
+            if self.service.stopping:
+                return None
             time.sleep(0.5)
-        return self.tasks.pop()
+        return self.service.task_holder.pop()
 
     def process_task(self):
         tasks_list = []
-        while self.tasks:
-            match = self.tasks.pop()
+        while self.service.task_holder:
+            match = self.service.task_holder.pop()
             if not self.session.query(Match) \
                     .filter_by(matchId=match['gameId']) \
                     .filter_by(server=Server.get(self.server)) \
