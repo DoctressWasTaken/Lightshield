@@ -1,153 +1,84 @@
+import pika
 import json
 import time
-import logging
+import os
+from sqlalchemy import create_engine
+from sqlalchemy import Column, Integer, String, Enum
+from sqlalchemy.orm import sessionmaker
+import threading
+from tables import Base, Summoner
+from tables.enums import Tier, Rank, Server
 
-import pika
-import psycopg2
+class Worker(threading.Thread):
 
-from templates import WorkerClass
+    def __init__(self, echo=False):
+        super().__init__()
+        self.engine = create_engine(
+                f'postgresql://%s@%s:%s/data' %
+                (os.environ['POSTGRES_USER'],
+                 os.environ['POSTGRES_HOST'],
+                 os.environ['POSTGRES_PORT']),
+                echo=echo)
 
-log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-ch.setFormatter(logging.Formatter('%(asctime)s [SUMMONER] %(message)s'))
-log.addHandler(ch)
+        Base.metadata.create_all(self.engine)
+        self.server = os.environ['SERVER']
+        self.Session = sessionmaker(bind=self.engine)
+        self.channel = None
+        self.session = self.Session()
 
-map_tiers = {
-    'IRON': 0,
-    'BRONZE': 4,
-    'SILVER': 8,
-    'GOLD': 12,
-    'PLATINUM': 16,
-    'DIAMOND': 20,
-    'MASTER': 24,
-    'GRANDMASTER': 24,
-    'CHALLENGER': 24}
-map_tiers_numeric = {
-    'IRON': 0,
-    'BRONZE': 1,
-    'SILVER': 2,
-    'GOLD': 3,
-    'PLATINUM': 4,
-    'DIAMOND': 5,
-    'MASTER': 6,
-    'GRANDMASTER': 7,
-    'CHALLENGER': 8}
-map_rank = {
-    'IV': 0,
-    'III': 1,
-    'II': 2,
-    'I': 3}
-
-
-class UpdateSummoner(WorkerClass):
-
-    def get_tasks(self, channel):
-        """Get tasks from rabbitmq."""
-        tasks = []
-        while len(tasks) < 750:
-            message = channel.basic_get(
-                queue=f'DB_SUMMONER_IN_{self.server}'
-            )
-            if all(x is None for x in message):
-                if len(tasks) > 100:
-                    break
-                log.info("Waiting for tasks.")
-                time.sleep(1)
-                continue
-
-            tasks.append(message)
-        return tasks
-
-    def insert(self, tasks):
-        """Insert the pulled tasks into the db."""
-        lines = []
-        currentIds = []
-        for task in tasks:
-            data = json.loads(task[2])
-            if data['summonerId'] in currentIds:
-                continue
-            currentIds.append(data['summonerId'])
-            ranking = map_tiers[data['tier']]
-            ranking += map_rank[data['rank']]
-            ranking += data['leaguePoints']
-            tier = map_tiers_numeric[data['tier']]
-            series = None
-            if 'miniSeries' in data:
-                series = data['miniSeries']['progress'][:-1]
-            line = "('%s', '%s', '%s', '%s', %s, %s, '%s', %s, %s)"
-            line = line % (
-                data['summonerName'],
-                data['summonerId'],
-                data['accountId'],
-                data['puuid'],
-                ranking,
-                tier,
-                series,
-                data['wins'],
-                data['losses']
-            )
-            lines.append(line)
-        log.info(f"Inserting {len(lines)} lines.")
-        with psycopg2.connect(
-                host=self.postgres_host,
-                user=self.postgres_user,
-                port=self.postgres_port,
-                dbname=f'data_{self.server.lower()}') as connection:
-            cur = connection.cursor()
-            cur.execute(f"""
-                               INSERT INTO player
-                                   (summonerName, summonerId, accountId, 
-                                   puuid, ranking, tier, series, wins, losses)
-                               VALUES {",".join(lines)}
-                               ON CONFLICT (summonerId) DO UPDATE SET
-                                   summonerName = EXCLUDED.summonerName,
-                                   ranking = EXCLUDED.ranking,
-                                   tier = EXCLUDED.tier,
-                                   series = EXCLUDED.series,
-                                   wins = EXCLUDED.wins,
-                                   losses = EXCLUDED.losses;
-                           """
-                        )
-            connection.commit()
-
-    def ack_tasks(self, tasks, channel):
-        """Acknowledge the tasks being done towards rabbitmq."""
-        for task in tasks:
-            channel.basic_ack(
-                delivery_tag=task[0].delivery_tag)
+    def get_message(self):
+        message = self.channel.basic_get(queue=f'DB_SUMMONER_IN_{self.server}')
+        if all(x is None for x in message):
+            return None
+        return message
 
     def run(self):
-        log.info("Initiated.")
-        while not self._is_interrupted:  # Try loop
-            try:
-                with pika.BlockingConnection(
-                        pika.ConnectionParameters(
-                            'rabbitmq',
-                            connection_attempts=2,
-                            socket_timeout=30)) as rabbit_connection:
-                    channel = rabbit_connection.channel()
-                    channel.basic_qos(prefetch_count=1)
-                    # Incoming
-                    queue = channel.queue_declare(
-                        queue=f'DB_SUMMONER_IN_{self.server}',
-                        durable=True)
+        with pika.BlockingConnection(
+                pika.ConnectionParameters(
+                    'rabbitmq',
+                    connection_attempts=2,
+                    socket_timeout=30)) as rabbit_connection:
+            self.channel = rabbit_connection.channel()
+            inserted = 0
+            print("Starting Summoner Worker.")
+            while True:
+                message = self.get_task()
+                self.process_task(message)
+                if (inserted := inserted + 1) == 200:
+                    self.session.commit()
+                    print("Inserted 100 Summoner.")
+                    inserted = 0
 
-                    while not self._is_interrupted:  # Work loop
-                        tasks = self.get_tasks(channel)
-                        if len(tasks) == 0:
-                            log.info("No tasks, sleeping")
-                            time.sleep(5)
-                            continue
-                        self.insert(tasks)
-                        self.ack_tasks(tasks, channel)
-                        time.sleep(1)
+    def get_task(self):
+        while not (message := self.get_message()):
+            time.sleep(0.5)
+        return message
 
-            except RuntimeError:
-                # Raised when rabbitmq cant connect
-                log.info("Failed to reach rabbitmq")
-                time.sleep(1)
-            except Exception as err:
-                log.info(f"Got {err}.")
-                time.sleep(1)
+    def process_task(self, message):
+
+        user = json.loads(message[2])
+        if not self.session.query(Summoner).filter_by(puuid=user['puuid']).first():
+
+            series = None
+            if "miniSeries" in user:
+                series=user['miniSeries']['progress'][:-1]
+
+            summoner = Summoner(
+                summonerId=user['summonerId'],
+                accountId=user['accountId'],
+                puuid=user['puuid'],
+                summonerName=user['summonerName'],
+                tier=Tier.get(user['tier']),
+                rank=Rank.get(user['rank']),
+                series=series,
+                server=Server.get(self.server),
+                wins=user['wins'],
+                losses=user['losses'])
+            self.session.add(summoner)
+        self.channel.basic_ack(
+                delivery_tag=message[0].delivery_tag)
+
+
+if __name__ == "__main__":
+    worker = Worker()
+    worker.run()

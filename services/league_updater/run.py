@@ -6,32 +6,21 @@ import os
 from datetime import datetime, timedelta
 import aiohttp
 import aio_pika
+import signal
 from aio_pika import Message
 from aio_pika.pool import Pool
 from rank_manager import RankManager
 
 from redis_connector import Redis
 
-class EmptyPageException(Exception):
-    """Custom Exception called when at least 1 page is empty."""
-
-    def __init__(self, success, failed):
-        """Accept response data and failed pages."""
-        self.success = success
-        self.failed = failed
-
-if 'SERVER' not in os.environ:
-    print("No server provided, exiting.")
-    exit()
-
-server = os.environ['SERVER']
-
 
 class Worker:
 
     def __init__(self, parallel_worker):
         self.rankmanager = RankManager()
-        self.url = f"http://{server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+
+        self.server = os.environ['SERVER']
+        self.url = f"http://{self.server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         self.retry_after = datetime.now()
         self.max_worker = parallel_worker
 
@@ -47,6 +36,12 @@ class Worker:
             logging.Formatter(f'%(asctime)s [CORE] %(message)s'))
         self.logging.addHandler(ch)
         self.redis = Redis()
+        self.stopping = False
+
+        signal.signal(signal.SIGTERM, self.shutdown)
+
+    def shutdown(self):
+        self.stopping = True
 
     async def check_new(self, entry):
 
@@ -75,11 +70,11 @@ class Worker:
         await channel.set_qos(prefetch_count=1)
 
         rabbit_exchange_out = await channel.declare_exchange(
-            name=f'LEAGUE_OUT_{server}',
+            name=f'LEAGUE_OUT_{self.server}',
             type='direct',
             durable=True)
         summoner_in = await channel.declare_queue(
-            name=f'SUMMONER_ID_IN_{server}',
+            name=f'SUMMONER_ID_IN_{self.server}',
             durable=True)
         await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
         self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
@@ -99,9 +94,9 @@ class Worker:
 
         async def publish(entry):
             """Publish to channel."""
-            async with channel_pool.acquire() as channel:  # type: aio_pika.Channel
+            async with channel_pool.acquire() as channel:
                 rabbit_exchange_out = await channel.declare_exchange(
-                    name=f'LEAGUE_OUT_{server}',
+                    name=f'LEAGUE_OUT_{self.server}',
                     type='direct',
                     durable=True)
                 await rabbit_exchange_out.publish(
@@ -118,11 +113,11 @@ class Worker:
         Worker don't exit until their failed page is resolved.
         """
         failed = None
-        while not self.empty or failed:
+        while (not self.empty or failed) and not self.stopping:
             if self.retry_after > datetime.now():
                 delay = (self.retry_after - datetime.now()).total_seconds()
                 await asyncio.sleep(delay)
-            if not failed and len(self.page_entries) < 5000:
+            if not failed and len(self.page_entries) < 1000:
                 page = self.next_page
                 self.next_page += 1
             elif failed:
@@ -156,12 +151,12 @@ class Worker:
             'content-type': 'application/json'
             }
         out = False
-        while True:
+        while not self.stopping:
             async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
                 async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
-                    if int(queues[f'SUMMONER_ID_IN_{server}']['messages']) < 5000:
+                    if int(queues[f'SUMMONER_ID_IN_{self.server}']['messages']) < 1000:
                         return
                     if not out:
                         self.logging.info('Awaiting messages to be reduced.')
@@ -177,7 +172,7 @@ class Worker:
             self.empty = False
             self.next_page = 1
             self.page_entries = []
-            while not self.empty:
+            while not self.empty or not self.stopping:
                 await asyncio.gather(*[asyncio.create_task(
                     self.worker(tier=tier, division=division)) for i in range(self.max_worker)])
                 if self.page_entries:
@@ -194,12 +189,10 @@ async def main():
 
     The loop is limited to run once every 6 hours max.
     """
-    parallel_workers = int(os.environ['BUFFER'])
-    update_interval = int(os.environ['UPDATE_INTERVAL'])
     while True:
         await asyncio.gather(
-            Worker(parallel_worker=parallel_workers).main(),
-            asyncio.sleep(3600 * update_interval)  # 3 Hour sleep period
+            Worker(parallel_worker=int(os.environ['BUFFER'])).main(),
+            asyncio.sleep(3600 * int(os.environ['UPDATE_INTERVAL']))
         )
 
 if __name__ == "__main__":

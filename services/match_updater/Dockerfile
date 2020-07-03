@@ -7,6 +7,7 @@ RUN chmod 500 startup.sh
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+COPY tables/ tables/
 COPY *.py ./
 
 CMD . ./startup.sh

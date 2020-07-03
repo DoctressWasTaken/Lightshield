@@ -4,15 +4,22 @@ import logging
 import json
 import aiohttp
 from datetime import datetime, timedelta
+from aio_pika import Message
+import aioredis
+from worker_alternative import WorkerClass, ServiceClass
 
-from worker import Worker, RatelimitException, NotFoundException, Non200Exception
+from exceptions import (
+    RatelimitException,
+    NotFoundException,
+    Non200Exception,
+    NoMessageException
+)
 
 
-class SummonerIDUpdater(Worker):
+class SummonerIDUpdater(ServiceClass):
 
-    async def initiate_pika(self, connection):
-        channel = await connection.channel()
-        await channel.set_qos(prefetch_count=100)
+    async def init(self):
+        channel = await self.rabbitc.channel()
         # Incoming
         incoming = await channel.declare_queue(
             'SUMMONER_ID_IN_' + self.server, durable=True)
@@ -33,47 +40,59 @@ class SummonerIDUpdater(Worker):
 
         await db_in.bind(outgoing, 'SUMMONER_V2')
 
-        await self.pika.init(incoming=incoming, outgoing=outgoing, tag='SUMMONER_V2', no_ack=True)
 
-    async def is_valid(self, identifier, content, msg):
+class Worker(WorkerClass):
 
-        if identifier in self.buffered_elements:
-            return False
-        if redis_entry := await self.redis.hgetall(f"user:{identifier}"):
+    async def init(self):
+        await self.channel.set_qos(prefetch_count=5)
+        self.incoming = await self.channel.declare_queue(
+            'SUMMONER_ID_IN_' + self.service.server, durable=True)
+
+        self.outgoing = await self.channel.declare_exchange(
+            f'SUMMONER_ID_OUT_{self.service.server}', type='direct',
+            durable=True)
+
+    async def get_task(self):
+        while not (msg := await self.incoming.get(no_ack=True, fail=False))\
+                and not self.service.stopping:
+            await asyncio.sleep(0.1)
+        if not msg:
+            return None
+        content = json.loads(msg.body.decode('utf-8'))
+        identifier = content['summonerId']
+        if redis_entry := await self.service.redisc.hgetall(f"user:{identifier}"):
             package = {**content, **redis_entry}
-            await self.pika.push(package)
-            return False
-        return {"foo": "bar"}
+            await self.outgoing.publish(
+                Message(bytes(json.dumps({**content, **redis_entry}), 'utf-8')),
+                routing_key="SUMMONER_V2"
+            )
+            return None
+        if identifier in self.service.buffered_elements:
+            return None
+        self.service.buffered_elements[identifier] = True
+        return [identifier, content, msg]
 
-    async def process(self, session, identifier, msg, **kwargs):
-        url = self.url_template % (identifier)
-        self.logging.debug(f"Fetching {url}")
+    async def process_task(self, session, data):
+        identifier, content, msg = data
+        url = self.service.url % identifier
         try:
             response = await self.fetch(session, url)
-            return [0, identifier, response, msg]
-        except RatelimitException:
-            return [1]
-        except NotFoundException:
-            return [1]
-        except Non200Exception:
-            return [1]
-        finally:
-            del self.buffered_elements[identifier]
-
-    async def finalize(self, responses):
-        for identifier, response, msg in [entry[1:] for entry in responses if entry[0] == 0]:
-            await self.redis.hset(
-                key=f"user:{identifier}",
-                mapping={'puuid': response['puuid'],
+            await self.service.redisc.hmset_dict(
+                f"user:{identifier}",
+                {'puuid': response['puuid'],
                          'accountId': response['accountId']})
-            await self.pika.push({**json.loads(msg.body.decode('utf-8')), **response})
-
+            
+            await self.outgoing.publish(
+                Message(
+                    body=bytes(json.dumps({**json.loads(msg.body.decode('utf-8')), **response}), 'utf-8')),
+                    routing_key="SUMMONER_V2")
+        except (RatelimitException, NotFoundException, Non200Exception):
+            return
+        finally:
+            del self.service.buffered_elements[identifier]
 
 if __name__ == "__main__":
-    buffer = int(os.environ['BUFFER'])
-    worker = SummonerIDUpdater(
-        buffer=buffer,
-        url=f"http://{os.environ['SERVER']}.api.riotgames.com/lol/summoner/v4/summoners/%s",
-        identifier="summonerId",
-        message_out=f"MATCH_HISTORY_IN_{os.environ['SERVER']}")
-    asyncio.run(worker.main())
+    service = SummonerIDUpdater(
+        url_snippet="summoner/v4/summoners/%s",
+        queues_out=["MATCH_HISTORY_IN_%s"])
+    asyncio.run(service.run(Worker))

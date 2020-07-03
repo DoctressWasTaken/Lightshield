@@ -1,4 +1,4 @@
-FROM python:3.7-slim
+FROM python:3.8-slim
 
 WORKDIR /project
 RUN python -m pip install --upgrade pip
@@ -10,6 +10,7 @@ RUN chmod 500 wait-for-it.sh startup.sh
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 # Main Application
+COPY tables/ tables/
 COPY *.py ./
 
 CMD . ./startup.sh

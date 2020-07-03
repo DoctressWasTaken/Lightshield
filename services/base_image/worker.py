@@ -1,38 +1,102 @@
 import asyncio
+import signal
 import os
 import logging
 from datetime import datetime, timedelta
 import aiohttp
-from pika_connector import Pika
-from redis_connector import Redis
+import aio_pika
+import aioredis
 import json
 
+from exceptions import (
+    RatelimitException,
+    NotFoundException,
+    Non200Exception,
+    NoMessageException
+)
 
-class RatelimitException(Exception):
-    """On 429 or 430 Response."""
-    pass
+class WorkerClass:
 
+    def __init__(self, service):
+        
+        self.service = service
+        self.logging = service.logging
+        self.channel = None
 
-class NotFoundException(Exception):
-    """On 404-Response."""
-    pass
+    async def init(self):
+        """Initiate worker.
 
+        Abstract method replaced by the worker.
+        """
 
-class Non200Exception(Exception):
-    """On Non-200 Response thats not 429, 430 or 404."""
-    pass
+    async def get_task(self):
+        """Get Task.
 
-class NoMessageException(Exception):
-    """Timeout exception if no message is found."""
-    pass
+        Abstract method. Returns pseudo message.
+        """
+        await asyncio.sleep(0.5)
+        return "Hello World"
 
-class Worker:
+    async def process_task(self, session, task):
+        """Process Task.
 
-    def __init__(self, buffer, url, identifier, chunksize=5000, message_out=None, **kwargs):
-        """Initiate logging as well as pika and redis connector."""
+        Abstract method. Processes the received task.
+        """
+        await asyncio.sleep(0.5)
+        self.logging.info(f"Received {task}.")
 
-        self.chunksize = chunksize
-        self.message_out = message_out
+    async def fetch(self, session, url):
+        """Execute call to external target using the proxy server.
+
+        Receives aiohttp session as well as url to be called. Executes the request and returns
+        either the content of the response as json or raises an exeption depending on response.
+        :param session: The aiohttp Clientsession used to execute the call.
+        :param url: String url ready to be requested.
+
+        :returns: Request response as dict.
+
+        :raises RatelimitException: on 429 or 430 HTTP Code.
+        :raises NotFoundException: on 404 HTTP Code.
+        :raises Non200Exception: on any other non 200 HTTP Code.
+        """
+        async with session.get(url, proxy="http://proxy:8000") as response:
+            resp = await response.text()
+        if response.status in [429, 430]:
+            if "Retry-After" in response.headers:
+                delay = int(response.headers['Retry-After'])
+                self.service.retry_after = datetime.now() + timedelta(seconds=delay)
+            raise RatelimitException()
+        if response.status == 404:
+            raise NotFoundException()
+        if response.status != 200:
+            raise Non200Exception()
+        return await response.json(content_type=None)
+
+    async def run(self, channel):
+        """Handle the core worker loop.
+
+        Waits for task received, processes task. Interrupts if the outgoing queue is blocked or the
+        API returns a ratelimit issue.
+        """
+        self.channel = channel
+        await self.init()
+        async with aiohttp.ClientSession() as session:
+            while not self.service.stopping:
+                if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
+                    if delay > 5:
+                        self.logging.info(f"Sleeping for {delay}.")
+                    await asyncio.sleep(delay)
+                while self.service.queue_out_blocked:
+                    await asyncio.sleep(0.5)
+                if task := await self.get_task():
+                    await self.process_task(session, task)
+
+        self.logging.info("Exiting worker")
+
+class ServiceClass:
+
+    def __init__(self, url_snippet, queues_out):
+
         self.logging = logging.getLogger("Worker")
         self.logging.setLevel(logging.INFO)
         ch = logging.StreamHandler()
@@ -40,139 +104,88 @@ class Worker:
         ch.setFormatter(
             logging.Formatter(f'%(asctime)s [WORKER] %(message)s'))
         self.logging.addHandler(ch)
+        self.max_buffer = int(os.environ['BUFFER'])
 
-        self.max_buffer = buffer
-        self.url_template = url
-        self.identifier = identifier
-        self.retry_after = datetime.now()
-        self.buffered_elements = {}
         self.server = os.environ['SERVER']
 
-        self.pika = Pika()
-        self.redis = Redis()
+        self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + url_snippet
 
-    async def main(self):
-        """Run method. Called externally to initiate the worker."""
-        rabbit = await self.pika.connect()  # Establish connection
-        # Initiate Channel and Exchanges
-        await self.initiate_pika(connection=rabbit)
-        # Start runner
-        while True:
-            await self.release_messaging_queue()
-            await self.runner()
+        self.rabbitc = None
+        self.redisc = None
+        self.queues_out = queues_out
+        self.queue_out_blocked = True
+        self.stopping = False
 
-    async def release_messaging_queue(self):
-        """Pause the application until the message queue falls below a certain message limit."""
+        self.retry_after = datetime.now()
+
+        self.buffered_elements = {}
+
+    def shutdown(self):
+        """Set stopping flag.
+
+        Handler called by the sigterm signal.
+        """
+        self.logging.info("Received shutdown signal.")
+        self.stopping = True
+
+    async def init(self):
+        """Initiate service.
+
+        Abstract method replaced by the service.
+        """
+        self.logging.info("Initiated service.")
+
+    async def run(self, Worker):
+
+        signal.signal(signal.SIGTERM, self.shutdown)
+
+        self.rabbitc = await aio_pika.connect_robust(
+            url=f'amqp://guest:guest@rabbitmq/')
+
+        self.redisc = await aioredis.create_redis_pool(
+            ('redis', 6379), db=0, encoding='utf-8')
+
+        await self.init()
+
+        workers = [Worker(self) for i in range(self.max_buffer)]
+
+        await asyncio.gather(
+            self.block_messaging_queue(),
+            *[worker.run(await self.rabbitc.channel()) for worker in workers]
+        )
+
+    async def block_messaging_queue(self):
+        """Pause the application until the message queue falls below a certain message limit.
+
+        To avoid overloading the messaging queue services are interrupted by this method before
+        being able to continue into the next cycle.
+        This method blocks the service until the web-api of the rabbitmq service used returns a
+        queue length below a set limit.
+        """
+        if not self.queues_out:
+            self.queue_out_blocked = False
+            self.logging.info("Exiting blocker. No queues to block provided.")
+            return
         headers = {
             'content-type': 'application/json'
         }
-        if not self.message_out:
-            return
-        while True:
+        while not self.stopping:
             async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
                 async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
-                    messages = queues[self.message_out]["messages"]
-                    if int(messages) < 10000:
-                        return
-                    self.logging.info(f"Awaiting messages to be reduced. [{messages}].")
+                    temp = False
+                    for queue in self.queues_out:
+                        queue_full = queue % self.server
+                        if (messages := int(queues[queue_full]["messages"])) > 2000:
+                            temp = True
+                            self.logging.info(f"Awaiting messages to be reduced.")
+                    self.queue_out_blocked = temp
                     await asyncio.sleep(5)
-                    
-    async def runner(self):
-        """Manage starting new worker tasks."""
-        tasks = []
-        start = datetime.now()
-        async with aiohttp.ClientSession() as session:
-            while self.retry_after < datetime.now() and len(tasks) < self.chunksize:
-                while len(self.buffered_elements) >= self.max_buffer:
-                    await asyncio.sleep(0.1)
 
-                try:
-                    identifier, msg, additional_args = await self.next_task()
-                except NoMessageException:
-                    break
-                tasks.append(asyncio.create_task(self.process(
-                    session=session,
-                    identifier=identifier,
-                    msg=msg,
-                    **additional_args
-                )))
-                await asyncio.sleep(0.01)
-            responses = await asyncio.gather(*tasks)
-        if len(tasks) > 0:
-            await self.finalize(responses)
-        else:
-            await asyncio.sleep(5)
 
-        end = datetime.now()
-        self.logging.info(f"Flushed {len(tasks)} tasks. {round(len(tasks) / (end - start).total_seconds(), 2)} task/s.")
-        if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
-            await asyncio.sleep(delay)
-
-    async def next_task(self):
-        timeout = 0
-        while True:
-            while not (msg := await self.pika.get()):
-                if (timeout := timeout + 1) > 20:
-                    raise NoMessageException()
-                await asyncio.sleep(0.5)
-
-            if self.identifier:
-                content = json.loads(msg.body.decode('utf-8'))
-                identifier = content[self.identifier]
-            else:
-                content = identifier = msg.body.decode('utf-8')
-
-            #if identifier in self.buffered_elements:  # Skip any further tasks for already queued
-            #    await self.pika.ack(msg)
-            #    continue
-
-            if additional_args := await self.is_valid(identifier, content, msg):
-                self.buffered_elements[identifier] = True
-                return identifier, msg, additional_args
-            continue
-
-    async def fetch(self, session, url):
-        async with session.get(url, proxy="http://proxy:8000") as response:
-            try:
-                resp = await response.json(content_type=None)
-            except:
-                pass
-        if response.status in [429, 430]:
-            if "Retry-After" in response.headers:
-                delay = int(response.headers['Retry-After'])
-                self.retry_after = datetime.now() + timedelta(seconds=delay)
-            raise RatelimitException()
-        if response.status == 404:
-            raise NotFoundException()
-        if response.status != 200:
-            raise Non200Exception()
-        return resp
-
-    async def initiate_pika(self, connection):
-        """Abstract placeholder.
-
-        Initiate channel and exchanges in the pika connector.
-        """
-        pass
-
-    async def is_valid(self, identifier, content, msg):
-        """Abstract placeholder.
-
-        Method to decide if a msg is a valid call target or should be dropped.
-        """
-        pass
-
-    async def process(self, session, identifier, msg, **kwargs):
-        """Abstract placeholder.
-
-        Contains calculation """
-        pass
-
-    async def finalize(self, data):
-        """Abstract placeholder.
-
-        Called after the tasks have been awaited with the tasks responses as list.
-        """
-        pass
+if __name__ == "__main__":
+    service = ServiceClass(
+        url_snippet="summoner/v4/summoners/%s",
+        queues_out=['MATCH_HISTORY_IN_%s'])
+    asyncio.run(service.run(WorkerClass))
