@@ -9,7 +9,7 @@ db.sqlite3
 *.swp
 *.swo
 *.pyc
-*/.tox/
+.tox
 */*.egg-info/
 /temp/
 logs/

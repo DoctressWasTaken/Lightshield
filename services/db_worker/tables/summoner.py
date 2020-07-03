@@ -1,8 +1,11 @@
+"""Tables related to Summoner Data."""
 from sqlalchemy import Column, Integer, String, Enum
 from . import Base
 from .enums import Tier, Rank, Server
 
-class Summoner(Base):
+
+class Summoner(Base):  # pylint: disable=R0903
+    """Summoner Details Merged from Summoner-V4 and League-V4."""
     __tablename__ = 'summoner'
 
     summonerId = Column(String(50))

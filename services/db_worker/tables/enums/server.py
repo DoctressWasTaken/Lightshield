@@ -1,6 +1,9 @@
+"""Enum containing Server values mapped."""
 import enum
 
+
 class Server(enum.Enum):
+    """Server codes mapped."""
     BR1 = 0
     EUN1 = 1
     EUW1 = 2
@@ -15,4 +18,5 @@ class Server(enum.Enum):
 
     @classmethod
     def get(cls, server):
+        """Return Enum value matching string provided."""
         return getattr(cls, server)

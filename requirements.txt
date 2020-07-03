@@ -1,0 +1,7 @@
+aioredis
+aio_pika
+aiohttp
+pika
+sqlalchemy
+psycopg2-binary
+uvloop

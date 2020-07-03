@@ -1,25 +1,30 @@
+"""Default worker module containing Service and Worker classes.
+
+Both classes are inherited and expanded by the services.
+"""
 import asyncio
 import signal
 import os
 import logging
+
 from datetime import datetime, timedelta
+from exceptions import RatelimitException, NotFoundException, Non200Exception
+
 import aiohttp
 import aio_pika
 import aioredis
-import json
-
-from exceptions import (
-    RatelimitException,
-    NotFoundException,
-    Non200Exception,
-    NoMessageException
-)
 
 class WorkerClass:
+    """Worker default class.
 
-    def __init__(self, service):
-        
-        self.service = service
+    Multiple worker are initiated by the ServiceClass.
+    """
+    def __init__(self, parent_service):
+        """Pass relevant data to worker.
+
+        ::param service: Parent service object.
+        """
+        self.service = parent_service
         self.logging = service.logging
         self.channel = None
 
@@ -37,13 +42,13 @@ class WorkerClass:
         await asyncio.sleep(0.5)
         return "Hello World"
 
-    async def process_task(self, session, task):
+    async def process_task(self, session, task):  # pylint: disable=W0613
         """Process Task.
 
         Abstract method. Processes the received task.
         """
         await asyncio.sleep(0.5)
-        self.logging.info(f"Received {task}.")
+        self.logging.info("Received %s.", task)
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
@@ -59,8 +64,11 @@ class WorkerClass:
         :raises NotFoundException: on 404 HTTP Code.
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
-        async with session.get(url, proxy="http://proxy:8000") as response:
-            resp = await response.text()
+        try:
+            async with session.get(url, proxy="http://proxy:8000") as response:
+                await response.text()
+        except aiohttp.ClientConnectionError:
+            raise Non200Exception()
         if response.status in [429, 430]:
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
@@ -84,7 +92,7 @@ class WorkerClass:
             while not self.service.stopping:
                 if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
                     if delay > 5:
-                        self.logging.info(f"Sleeping for {delay}.")
+                        self.logging.info("Sleeping for %s.", delay)
                     await asyncio.sleep(delay)
                 while self.service.queue_out_blocked:
                     await asyncio.sleep(0.5)
@@ -93,17 +101,27 @@ class WorkerClass:
 
         self.logging.info("Exiting worker")
 
-class ServiceClass:
 
+class ServiceClass:  # pylint: disable=R0902
+    """Service base class.
+
+    Contains basic setup for the individual services using it as base class.
+    """
     def __init__(self, url_snippet, queues_out):
+        """Initiate logging and relevant variables.
 
+        ::param url_snippet: Url part used to make calls against the API.
+        Generic url part is included in the base class.
+        ::param queues_out: List of queues that the service will check for size. If any of the
+        queues goes above the set length the service pauses.
+        """
         self.logging = logging.getLogger("Worker")
         self.logging.setLevel(logging.INFO)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(
-            logging.Formatter(f'%(asctime)s [WORKER] %(message)s'))
-        self.logging.addHandler(ch)
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(
+            logging.Formatter('%(asctime)s [WORKER] %(message)s'))
+        self.logging.addHandler(handler)
         self.max_buffer = int(os.environ['BUFFER'])
 
         self.server = os.environ['SERVER']
@@ -135,12 +153,15 @@ class ServiceClass:
         """
         self.logging.info("Initiated service.")
 
-    async def run(self, Worker):
+    async def run(self, Worker):  # pylint: disable=C0103
+        """Start the main service loop.
 
+        ::param Worker: Worker class that has been inherited from the basic WorkerClass.
+        """
         signal.signal(signal.SIGTERM, self.shutdown)
 
         self.rabbitc = await aio_pika.connect_robust(
-            url=f'amqp://guest:guest@rabbitmq/')
+            url='amqp://guest:guest@rabbitmq/')
 
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
@@ -171,15 +192,16 @@ class ServiceClass:
         }
         while not self.stopping:
             async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
-                async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
+                async with session.get(
+                        'http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
                     temp = False
                     for queue in self.queues_out:
                         queue_full = queue % self.server
-                        if (messages := int(queues[queue_full]["messages"])) > 2000:
+                        if int(queues[queue_full]["messages"]) > 2000:
                             temp = True
-                            self.logging.info(f"Awaiting messages to be reduced.")
+                            self.logging.info("Awaiting messages to be reduced.")
                     self.queue_out_blocked = temp
                     await asyncio.sleep(5)
 

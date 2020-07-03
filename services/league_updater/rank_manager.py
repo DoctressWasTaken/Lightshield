@@ -2,7 +2,6 @@
 import json
 import logging
 from datetime import datetime
-import asyncio
 
 tiers = [
     "IRON",
@@ -23,15 +22,19 @@ divisions = [
 
 
 class RankManager:
+    """Ordering and Management of ranking updates."""
 
     def __init__(self):
+        """Initiate logging."""
         self.logging = logging.getLogger("RankManager")
         self.logging.setLevel(logging.INFO)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(
-            logging.Formatter(f'%(asctime)s [RankManager] %(message)s'))
-        self.logging.addHandler(ch)
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(
+            logging.Formatter('%(asctime)s [RankManager] %(message)s'))
+        self.logging.addHandler(handler)
+
+        self.ranks = None
 
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
@@ -70,12 +73,12 @@ class RankManager:
             if not oldest_timestamp or entry[2] < oldest_timestamp:
                 oldest_key = entry[0:2]
                 oldest_timestamp = entry[2]
-        self.logging.info(f"Commencing on {oldest_key}.")
+        self.logging.info("Commencing on %s.", oldest_key)
         return oldest_key
 
     async def update(self, key):
         """Update the stats on a rank that is done pulling."""
-        self.logging.info(f"Done with {key}.")
+        self.logging.info("Done with %s.", key)
         now = datetime.timestamp(datetime.now())
         for index, entry in enumerate(self.ranks):
             if entry[0] == key[0] and entry[1] == key[1]:

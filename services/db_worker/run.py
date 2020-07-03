@@ -1,6 +1,7 @@
-import os
+"""DB Interface to insert Summoner Profiles."""
 import time
 import logging
+from summoner import Worker as UpdateSummoner
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -9,12 +10,6 @@ ch.setLevel(logging.INFO)
 ch.setFormatter(logging.Formatter('%(asctime)s [RUN] %(message)s'))
 log.addHandler(ch)
 
-from summoner import Worker as UpdateSummoner
-
-if 'SERVER' not in os.environ:
-    print("No server provided, exiting.")
-    exit()
-server = os.environ['SERVER']
 
 def main():
     """Update user match lists.
@@ -24,7 +19,7 @@ def main():
     calls requests in async method and uses the returned values to update.
     """
     # Pull data package
-    summoner_updater = UpdateSummoner()
+    summoner_updater = UpdateSummoner(log)
 
     summoner_updater.start()
 

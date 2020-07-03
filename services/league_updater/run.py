@@ -3,62 +3,74 @@ import asyncio
 import json
 import logging
 import os
+import signal
 from datetime import datetime, timedelta
 import aiohttp
 import aio_pika
-import signal
+import aioredis
 from aio_pika import Message
 from aio_pika.pool import Pool
 from rank_manager import RankManager
 
-from redis_connector import Redis
 
-
-class Worker:
+class Worker:  # pylint: disable=R0902
+    """Core service worker object."""
 
     def __init__(self, parallel_worker):
+        """Initiate sync elements on creation."""
         self.rankmanager = RankManager()
 
         self.server = os.environ['SERVER']
-        self.url = f"http://{self.server}.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+        self.url = f"http://{self.server}.api.riotgames.com/lol" \
+                   f"/league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         self.retry_after = datetime.now()
         self.max_worker = parallel_worker
 
         self.empty = False
         self.next_page = 1
         self.page_entries = []
-        
+
         self.logging = logging.getLogger("Core")
         self.logging.setLevel(logging.INFO)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(
-            logging.Formatter(f'%(asctime)s [CORE] %(message)s'))
-        self.logging.addHandler(ch)
-        self.redis = Redis()
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(
+            logging.Formatter('%(asctime)s [CORE] %(message)s'))
+        self.logging.addHandler(handler)
+        self.redis = None
+        self.host = 'redis'
+        self.port = 6379
         self.stopping = False
 
         signal.signal(signal.SIGTERM, self.shutdown)
 
     def shutdown(self):
+        """Set shutdown flag."""
         self.logging.info("Received shutdown signal. Shutting down.")
         self.stopping = True
 
-    async def check_new(self, entry):
+    async def init(self):
+        """Initiate async elements during runtime."""
+        self.redis = await aioredis.create_redis_pool(
+            (self.host, self.port), db=0, encoding='utf-8')
 
+    async def check_new(self, entry):
+        """Check received element for changes compared to cached info.
+
+        Does return false if no difference in wins/losses has occurred.
+        Else True.
+        """
         hash_db = await self.redis.get(entry['summonerId'])
         hash_local = f"{entry['wins']}_{entry['losses']}"
         if hash_db == hash_local:
             return False
-        else:
-            await self.redis.set(entry['summonerId'], hash_local)
-            return True
+        await self.redis.set(entry['summonerId'], hash_local)
+        return True
 
     async def filter_data(self):
         """Remove unchanged summoners."""
-        self.logging.info(f"Filtering {len(self.page_entries)} entries.")
+        self.logging.info("Filtering %s entries.", len(self.page_entries))
         self.page_entries = [entry for entry in self.page_entries if await self.check_new(entry)]
-
 
     async def push_data(self):
         """Send out gathered data via rabbitmq tasks."""
@@ -78,7 +90,7 @@ class Worker:
             name=f'SUMMONER_ID_IN_{self.server}',
             durable=True)
         await summoner_in.bind(rabbit_exchange_out, 'SUMMONER_V1')
-        self.logging.info(f"Pushing {len(self.page_entries)} summoner.")
+        self.logging.info("Pushing %s summoner.", len(self.page_entries))
         loop = asyncio.get_event_loop()
 
         async def get_connection():
@@ -133,7 +145,7 @@ class Worker:
                         proxy="http://proxy:8000") as response:
                     try:
                         resp = await response.json(content_type=None)
-                    except:
+                    except aiohttp.ClientConnectionError:
                         pass
                     if response.status in [429, 430]:
                         if "Retry-After" in response.headers:
@@ -143,19 +155,21 @@ class Worker:
                         failed = page
                     else:
                         if len(resp) == 0:
-                            self.logging.info(f"Empty page {page} found.")
+                            self.logging.info("Empty page %s found.", page)
                             self.empty = True
                         else:
                             self.page_entries += resp
 
     async def release_messaging_queue(self):
+        """Interrupt application until the target message queue falls below a certain threshhold."""
         headers = {
             'content-type': 'application/json'
             }
         out = False
         while not self.stopping:
             async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
-                async with session.get('http://rabbitmq:15672/api/queues', headers=headers) as response:
+                async with session.get(
+                        'http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
                     queues = {entry['name']: entry for entry in resp}
                     if int(queues[f'SUMMONER_ID_IN_{self.server}']['messages']) < 1000:
@@ -168,7 +182,8 @@ class Worker:
     async def main(self):
         """Manage ranks to call and worker start/stops."""
         await self.rankmanager.init()
-        for rank in range(await self.rankmanager.get_total()):
+        await self.init()
+        for _ in range(await self.rankmanager.get_total()):
             await self.release_messaging_queue()
             tier, division = await self.rankmanager.get_next()
             self.empty = False
@@ -176,7 +191,7 @@ class Worker:
             self.page_entries = []
             while not self.empty and not self.stopping:
                 await asyncio.gather(*[asyncio.create_task(
-                    self.worker(tier=tier, division=division)) for i in range(self.max_worker)])
+                    self.worker(tier=tier, division=division)) for __ in range(self.max_worker)])
                 if self.page_entries:
                     await self.filter_data()
                     await self.push_data()
