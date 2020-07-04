@@ -1,3 +1,2 @@
-uvloop
 sqlalchemy
 psycopg2-binary

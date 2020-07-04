@@ -23,10 +23,9 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_league_updater
     environment:
       - SERVER=${SERVER}
-      - UPDATE_INTERVAL=${UPDATE_INTERVAL}
-      - BUFFER=${LEAGUE_BUFFER}
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
+      - UPDATE_INTERVAL=${LU_UPDATE_INTERVAL}
+      - WORKER=${LU_WORKER}
+      - REQUIRED_SUBSCRIBER=${LU_REQUIRED_SUBSCRIBER}
     links:
       - proxy:proxy
       - redis_league:redis
@@ -52,12 +51,13 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_summoner_id_updater
     environment:
       - SERVER=${SERVER}
-      - BUFFER=${SUMMONER_ID_BUFFER}
+      - WORKER=${SI_WORKER}
+      - REQUIRED_SUBSCRIBER=${SI_REQUIRED_SUBSCRIBER}
+      - MAX_TASK_BUFFER=${SI_MAX_TASK_BUFFER}
     links:
       - redis_summoner_id:redis
       - proxy:proxy
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
+      - league_updater:provider
     depends_on:
       - redis_summoner_id
     restart: always
@@ -82,14 +82,15 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_match_history_updater
     environment:
       - SERVER=${SERVER}
-      - BUFFER=${MATCH_HISTORY_BUFFER}
-      - MATCHES_TO_UPDATE=${MATCHES_TO_UPDATE}
+      - WORKER=${MH_WORKER}
+      - MATCHES_TO_UPDATE=${MH_MATCHES_TO_UPDATE}
       - TIME_LIMIT=${TIME_LIMIT}
+      - MAX_TASK_BUFFER=${MH_MAX_TASK_BUFFER}
+      - REQUIRED_SUBSCRIBER=${MH_REQUIRED_SUBSCRIBER}
     links:
       - redis_match_history:redis
       - proxy:proxy
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
+      - summoner_id_updater:provider
     depends_on:
       - redis_match_history
     restart: always
@@ -117,13 +118,14 @@ services:
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_USER=${POSTGRES_USER}
-      - BUFFER=${MATCH_BUFFER}
+      - WORKER=${MD_WORKER}
+      - MAX_TASK_BUFFER=${MD_MAX_TASK_BUFFER}
     links:
       - redis_match:redis
       - proxy:proxy
+      - match_history_updater:provider
     external_links:
       - lightshield_postgres:postres
-      - lightshield_rabbitmq:rabbitmq
     depends_on:
       - redis_match
     restart: always
@@ -153,7 +155,6 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
     external_links:
       - lightshield_postgres:postres
-      - lightshield_rabbitmq:rabbitmq
     restart: always
 
 volumes:
