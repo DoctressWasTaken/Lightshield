@@ -20,7 +20,7 @@ class Subscriber(threading.Thread):
         self.service_name = service_name
         self.stopped = False
         self.redisc = None
-        self.max_buffer = os.environ['MAX_TASK_BUFFER']
+        self.max_buffer = int(os.environ['MAX_TASK_BUFFER'])
 
         self.logging = logging.getLogger("Subscriber")
         self.logging.setLevel(logging.INFO)
@@ -57,21 +57,26 @@ class Subscriber(threading.Thread):
     async def async_run(self) -> None:
         """Initiate and Start the websocket client."""
         await self.init()
-        while not self.stopped:
-            async with websockets.connect(self.uri) as websocket:
-                await websocket.send("ACK_" + self.service_name)
+        while True:
+            try:
+                self.logging.info("Connecting to provider.")
                 while not self.stopped:
-                    try:
-                        message = await asyncio.wait_for(websocket.recv(), timeout=2)
-                        content = json.loads(message)
-                    except asyncio.TimeoutError:
-                        continue
-                    except json.JSONDecodeError:
-                        continue
-                    length = self.redisc.lpush('tasks', json.dumps(content))
-                    if length >= self.max_buffer:
-                        await self.pause_handler(websocket=websocket)
-
+                    async with websockets.connect(self.uri) as websocket:
+                        await websocket.send("ACK_" + self.service_name)
+                        while not self.stopped:
+                            try:
+                                message = await asyncio.wait_for(websocket.recv(), timeout=10)
+                                content = json.loads(message)
+                            except asyncio.TimeoutError:
+                                continue
+                            except json.JSONDecodeError:
+                                continue
+                            length = await self.redisc.lpush('tasks', json.dumps(content))
+                            if length >= self.max_buffer:
+                                await self.pause_handler(websocket=websocket)
+            except:
+                self.logging.info("Connection broke. Resetting")
+                await asyncio.sleep(1)
 
 
 

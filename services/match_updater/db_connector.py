@@ -55,7 +55,11 @@ class Worker(threading.Thread):
             await asyncio.sleep(0.5)
         if self.stopped:
             return
-        return self.redisc.lrange('packages', 0, length)
+            
+        tasks = []
+        while task := await self.redisc.lpop('packages'):
+            tasks.append(task)
+        return tasks
 
     def run(self):
 

@@ -86,7 +86,7 @@ class ServiceClass:  # pylint: disable=R0902
 
         :return redis task or None.
         """
-        if task := self.redisc.lpop('tasks'):
+        if task := await self.redisc.lpop('tasks'):
             task = json.loads(task)
         return task
 
@@ -126,14 +126,22 @@ class ServiceClass:  # pylint: disable=R0902
         :param package: A dict to be stored in redis (as stringified json).
         :return the size of the local buffer.
         """
-        return self.redisc.lpush('packages', json.dumps(package))
+        return await self.redisc.lpush('packages', json.dumps(package))
 
     async def check_local_buffer(self) -> None:
         """Set local_buffer_full flag to pause local calls."""
-
+        count = 0
         while not self.stopped:
-            if await self.redisc.llen('packages') > self.max_local_buffer:
+            count += 1
+            if (length := await self.redisc.llen('packages')) > self.max_local_buffer:
                 self.local_buffer_full = True
             else:
                 self.local_buffer_full = False
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)
+            if count == 60:
+                self.logging.info("Incoming Queue: %s, Outgoing Queue: %s/%s",
+                        await self.redisc.llen('tasks'),
+                        await self.redisc.llen('packages'),
+                        self.max_local_buffer)
+                count = 0
+

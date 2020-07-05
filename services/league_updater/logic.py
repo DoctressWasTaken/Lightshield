@@ -13,9 +13,9 @@ from exceptions import RatelimitException, NotFoundException, Non200Exception
 class Service(ServiceClass):  # pylint: disable=R0902
     """Core service worker object."""
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         """Initiate sync elements on creation."""
-        super().__init__()
+        super().__init__(*args, **kwargs)
 
         self.rankmanager = RankManager()
 
@@ -39,19 +39,16 @@ class Service(ServiceClass):  # pylint: disable=R0902
         """
         await self.init()
         workers = [Worker(self) for i in range(self.parallel_worker)]
-
-        while not self.service.stopped:
+        buffer_check = asyncio.create_task(self.check_local_buffer())
+        while not self.stopped:
             tier, division = await self.rankmanager.get_next()
 
             self.empty = False
             self.next_page = 1
 
-            await asyncio.gather(
-                self.check_local_buffer(),
-                *[worker.run(tier=tier, division=division) for worker in workers]
-            )
-
+            await asyncio.gather(*[worker.run(tier=tier, division=division) for worker in workers])
             await self.rankmanager.update(key=(tier, division))
+        await buffer_check
 
 
 class Worker(WorkerClass):
@@ -83,6 +80,7 @@ class Worker(WorkerClass):
                     content = await self.service.fetch(session, url=self.service.url % (
                     tier, division, page))
                     if len(content) == 0:
+                        self.logging.info("Page %s is empty.", page)
                         self.service.empty = True
                         return
                     await self.process_task(content)

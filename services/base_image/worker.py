@@ -22,7 +22,6 @@ class WorkerClass:
 
         Abstract method replaced by the worker.
         """
-        self.logging.info("Default async init. Service did not overwrite.")
 
     async def process_task(self, session, task):  # pylint: disable=W0613
         """Process Task.
@@ -40,7 +39,7 @@ class WorkerClass:
         """
         await self.init()
         async with aiohttp.ClientSession() as session:
-            while not self.service.stopping:
+            while not self.service.stopped:
                 if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
                     if delay > 5:
                         self.logging.info("Sleeping for %s.", delay)

@@ -11,7 +11,7 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 if __name__ == "__main__":
     subscriber = Subscriber(service_name="MD")
-    service = Service(url_snippet="match/v4/matches/%s", max_local_buffer=50)
+    service = Service(url_snippet="match/v4/matches/%s", max_local_buffer=80)
     db_connector = DBWorker()
 
     def shutdown_handler():
@@ -19,7 +19,7 @@ if __name__ == "__main__":
         service.shutdown()
 
     signal.signal(signal.SIGTERM, shutdown_handler)
-
+    db_connector.start()
     subscriber.start()
     asyncio.run(service.run(Worker))
 
