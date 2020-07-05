@@ -15,6 +15,7 @@ class Summoner(Base):  # pylint: disable=R0903
     summonerName = Column(String)
     tier = Column(Enum(Tier))
     rank = Column(Enum(Rank))
+    leaguePoints = Column(Integer)
 
     series = Column(String(4))
 
