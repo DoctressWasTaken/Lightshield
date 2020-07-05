@@ -1,14 +1,14 @@
 pipeline {
     agent any
     environment {
-        github = credentials('4145361a-82d9-4899-8224-6e9071be7c45')
+        github = credentials('40e37eb6-34d9-4bc0-9d2d-d924c671ee8')
         url = 'github.com/LightshieldDotDev/Lightshield'
     }
     stages {
         stage('Fetch git') {
             steps {
                git branch: 'master',
-                credentialsId: '4145361a-82d9-4899-8224-6e9071be7c45',
+                credentialsId: '40e37eb6-34d9-4bc0-9d2d-d924c671ee8',
                 url: 'https://' + env.url
             }
         }
