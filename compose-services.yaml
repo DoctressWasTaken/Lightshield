@@ -164,7 +164,7 @@ services:
     restart: always
 
 volumes:
-  league_rankins:
+  league_rankings:
     name: ${SERVER}_league_rankins
   summoner_ids:
     name: ${SERVER}_summoner_ids

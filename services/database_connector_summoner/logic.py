@@ -50,7 +50,7 @@ class Worker(threading.Thread):
             ('redis', 6379), db=0, encoding='utf-8')
 
     async def get_tasks(self):
-        while (await self.redisc.llen('tasks')) < 10 and not self.stopped:
+        while (await self.redisc.llen('tasks')) < 50 and not self.stopped:
             await asyncio.sleep(0.5)
         if self.stopped:
             return
@@ -68,7 +68,8 @@ class Worker(threading.Thread):
             tasks = loop.run_until_complete(self.get_tasks())
             if not tasks:
                 continue
-            processed_tasks = [self.process_task(task) for task in tasks]
+            processed_tasks = [task for task in [self.process_task(task) for task in tasks] if task]
+
             self.logging.info("Inserting %s Matches.", len(processed_tasks))
             self.session.bulk_save_objects(processed_tasks)
             self.session.commit()
@@ -78,22 +79,23 @@ class Worker(threading.Thread):
         summoner = json.loads(task)
 
         summoner_db = self.session.query(Summoner).filter_by(puuid=summoner['puuid']).first()
-        to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePOints', 'summonerName']
-        if not summoner_db or all([summoner[key] == summoner_db[key] for key in to_check]):
+        to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints', 'summonerName']
+        if summoner_db and not all([summoner[key] == getattr(summoner_db, key) for key in to_check]):
+            return
 
-            series = None
-            if "miniSeries" in summoner:
-                series = summoner['miniSeries']['progress'][:-1]
-            db_entry = Summoner(
-                summonerId=summoner['summonerId'],
-                accountId=summoner['accountId'],
-                puuid=summoner['puuid'],
-                summonerName=summoner['summonerName'],
-                tier=Tier.get(summoner['tier']),
-                rank=Rank.get(summoner['rank']),
-                leaguePoints=summoner['leaguePoints'],
-                series=series,
-                server=Server.get(self.server),
-                wins=summoner['wins'],
-                losses=summoner['losses'])
-            return db_entry
+        series = None
+        if "miniSeries" in summoner:
+            series = summoner['miniSeries']['progress'][:-1]
+        db_entry = Summoner(
+            summonerId=summoner['summonerId'],
+            accountId=summoner['accountId'],
+            puuid=summoner['puuid'],
+            summonerName=summoner['summonerName'],
+            tier=Tier.get(summoner['tier']),
+            rank=Rank.get(summoner['rank']),
+            leaguePoints=summoner['leaguePoints'],
+            series=series,
+            server=Server.get(self.server),
+            wins=summoner['wins'],
+            losses=summoner['losses'])
+        return db_entry
