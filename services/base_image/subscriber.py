@@ -48,7 +48,7 @@ class Subscriber(threading.Thread):
     async def pause_handler(self, websocket) -> None:
         """Handle the pausing and unpausing commands to the parent services."""
         await websocket.send("PAUSE")
-        while not self.stopped and await self.redisc.llen('tasks') > self.max_buffer:
+        while not self.stopped and await self.redisc.llen('tasks') > 0.8 * self.max_buffer:
             await asyncio.sleep(0.5)
         if self.stopped:
             return

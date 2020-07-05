@@ -60,23 +60,19 @@ class Publisher(threading.Thread):
         while not self.stopped:
             if missing := [item for item in self.required_subs if
                               item not in self.client_names.keys()]:
-                self.logging.info("Following required subs still missing: %s", self.required_subs)
-                while missing := [item for item in self.required_subs if
+                self.logging.info("Following required subs still missing: %s", missing)
+                while [item for item in self.required_subs if
                               item not in self.client_names.keys()]:
                     await asyncio.sleep(1)
                 self.logging.info("Connection to all required subs established.")
                 continue
-            
+
             if not all([self.client_names[name] for name in self.client_names]):
-                self.logging.info("Client paused.")
                 while not all([self.client_names[name] for name in self.client_names]):
                     await asyncio.sleep(0.2)
-                self.logging.info("All lients ready.")
                 continue
-
             if (task := await self.redisc.lpop('packages')) and self.clients:
                 await asyncio.wait([client.send(task) for client in self.clients])
-
 
     async def server(self, websocket, path) -> None:
         """Handle the websocket client connection."""
