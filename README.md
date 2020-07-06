@@ -1,3 +1,8 @@
+## **There have been a bunch of changes not added to the readme yet.**
+## Will be updated in the coming days, or just send me a message.
+
+
+
 # Lightshield (LS)
 
 * [Requirements](#requirements)
@@ -53,7 +58,7 @@ docker build -t lightshield_service ./services/base_image/
 ```
 All services are connected to an external network. It has to be created before running the container with:
 ```shell script
-docker network create
+docker network create lightshield
 ```
 
 ### III. Centralized Elements
