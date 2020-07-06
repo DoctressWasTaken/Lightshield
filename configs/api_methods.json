@@ -1,0 +1,7 @@
+[
+  ["match/v4/matches", "/123456789"],
+  ["match/v4/matchlists", "/by-account/accountId"],
+  ["match/v4/timelines", "/by-match/123456789"],
+  ["league-exp/v4/entries", "/420/GOLD/I"],
+  ["summoner/v4/summoners", "/by-account/accountId"]
+]

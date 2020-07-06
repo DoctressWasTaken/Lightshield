@@ -9,13 +9,13 @@ from aiohttp.web import HTTPInternalServerError
 import aiohttp
 import sys
 import os
+
 sys.path.append(os.getcwd())
 
 from datetime import timezone, datetime, timedelta
 import pytz
 import json
 import logging
-
 # Middleware
 from auth import Headers, Logging
 from rate_limiter import AppLimiter, MethodLimiter
@@ -28,6 +28,7 @@ MIDDLEWARES = [
     Headers,
     Logging
 ]
+
 
 class Proxy:
     """The proxy class contains the proxy server to be run.
@@ -67,7 +68,6 @@ class Proxy:
                 async with session.get(request.url, headers=dict(request.headers)) as response:
                     body = await response.json()
         except Exception as err:
-            print("Got", err)
             raise HTTPInternalServerError()
 
         headers = dict(response.headers)
@@ -78,10 +78,33 @@ class Proxy:
         return web.Response(text=json.dumps(body), headers=returned_headers, status=response.status)
 
 
+async def setup():
+    try:
+        open('config/limits.json', 'r')
+    except:
+        print("No limits specified. Generating default calls.")
+        method_limits = {}
+        app_limits = []
+        for method in open('config/api_methods.json', 'r').read():
+            url = "https://%s.api.riotgames.com/lol/%s%s" % (
+                os.environ['SERVER'],
+                method[0],
+                method[1])
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                        url,
+                        headers={'X-Riot-Token': os.environ['API_KEY']}) as response:
+                    await response.json()
+                    headers = response.headers
+                    if not app_limits:
+                        app_limits = headers['X-App-Rate-Limit'].split(",")
+                    method_limits[method[0]] = headers['X-Method-Rate-Limit'].split(",")
+        with open('limits.json', 'w+') as limit_file:
+            limit_file.write(json.dumps({'APP': app_limits, 'METHODS': method_limits}))
+        print("Done.")
+
+
 async def start_gunicorn():
+    await setup()
     proxy = Proxy()
     return proxy.run_gunicorn()
-
-if __name__ == '__main__':
-    proxy = Proxy()
-    proxy.run(port=8000, host="0.0.0.0")

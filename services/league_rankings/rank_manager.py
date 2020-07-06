@@ -3,7 +3,7 @@ import json
 import os
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 tiers = [
     "IRON",
@@ -42,11 +42,11 @@ class RankManager:
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
         try:
-            self.ranks = json.loads(open("ranking_cooldown.json", "r+").read())
+            self.ranks = json.loads(open("configs/ranking_cooldown.json", "r+").read())
             self.logging.info("Loaded data file.")
         except FileNotFoundError:
             self.logging.info("File not found. Recreating.")
-            now = datetime.timestamp(datetime.now())
+            now = datetime.timestamp(datetime.now() - timedelta(hours=self.update_interval))
             self.ranks = []
             for tier in tiers:
                 if tier in ['MASTER', 'GRANDMASTER', 'CHALLENGER']:
@@ -58,7 +58,7 @@ class RankManager:
 
     async def save_to_file(self):
         """Save the current stats to the tracking file."""
-        with open("ranking_cooldown.json", "w+") as datafile:
+        with open("configs/ranking_cooldown.json", "w+") as datafile:
             datafile.write(json.dumps(self.ranks))
 
     async def get_next(self):
@@ -69,11 +69,11 @@ class RankManager:
             if not oldest_timestamp or entry[2] < oldest_timestamp:
                 oldest_key = entry[0:2]
                 oldest_timestamp = entry[2]
-        #if (total_seconds := (datetime.now() - datetime.fromtimestamp(
-        #        oldest_timestamp)).total_seconds() - self.update_interval) > 0:
-        #    self.logging.info("Waiting for %s seconds before starting next element.",
-        #                      total_seconds)
-        #    await asyncio.sleep(total_seconds)
+        if (total_seconds := (datetime.now() - datetime.fromtimestamp(
+                oldest_timestamp)).total_seconds() - self.update_interval * 3600) > 0:
+            self.logging.info("Waiting for %s seconds before starting next element.",
+                              total_seconds)
+            await asyncio.sleep(total_seconds)
         self.logging.info("Commencing on %s.", oldest_key)
         return oldest_key
 
