@@ -10,6 +10,6 @@ db.sqlite3
 *.swo
 *.pyc
 .tox
-*/*.egg-info/
+*.egg-info/
 /temp/
 logs/

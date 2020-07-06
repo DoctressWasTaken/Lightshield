@@ -1,93 +1,65 @@
 pipeline {
     agent any
     environment {
-        github = credentials('4145361a-82d9-4899-8224-6e9071be7c45')
+        github = credentials('40e37eb6-34d9-4bc0-9d2d-d924c671ee8')
         url = 'github.com/LightshieldDotDev/Lightshield'
     }
     stages {
         stage('Fetch git') {
             steps {
-                script {
-                    def BEFORE = sh(
-                        script: 'git log --format="%H" -n 1',
-                        returnStdout: true
-                    ).trim()
-                    env.BEFORE = BEFORE
-                }
                git branch: 'master',
-                credentialsId: '4145361a-82d9-4899-8224-6e9071be7c45',
+                credentialsId: '40e37eb6-34d9-4bc0-9d2d-d924c671ee8',
                 url: 'https://' + env.url
-                script {
-                    def AFTER = sh(
-                        script: 'git log --format="%H" -n 1',
-                        returnStdout: true
-                    ).trim()
-                    env.AFTER = AFTER
-                }
-                echo "FROM ${env.BEFORE} to ${env.AFTER}"
             }
         }
-        stage('Set Changes and Pull') {
+        stage('Tox') {
+            steps {
+                sh 'tox'
+            }
+        }
+        stage('Create Network') {
+            steps {
+                sh 'docker network create lightshield'
+            }
+        }
+        stage('Create Postgres') {
+            steps {
+                sh 'docker-compose -f compose-persistent.yaml up -d'
+            }
+        }
+        stage('Build Base Image') {
+            steps {
+                sh 'docker build -t lightshield_service services/base_image/'
+            }
+        }
+        stage('Create NA') {
             environment {
-                def PROXY_CHANGED = sh(
-                        script: 'git diff ${BEFORE}...${AFTER} -- proxy || echo changed',
-                        returnStdout: true
-                    ).trim()
-                def LEAGUE_UPDATER_CHANGED = sh(
-                        script: 'git diff ${BEFORE}...${AFTER} -- league_updater || echo changed',
-                        returnStdout: true
-                    ).trim()
-                def SUMMONER_ID_UPDATER_CHANGED = sh(
-                        script: 'git diff ${BEFORE}...${AFTER} -- summoner_id_updater || echo changed',
-                        returnStdout: true
-                    ).trim()
-                def MATCH_HISTORY_UPDATER_CHANGED = sh(
-                        script: 'git diff ${BEFORE}...${AFTER} -- match_history_updater || echo changed',
-                        returnStdout: true
-                    ).trim()
-            }
+                def SERVER=NA1
+                def COMPOSE_PROJECT_NAME=lightshield_na1
+                }
             steps {
-                echo ""
+                sh 'docker-compose build'
+                sh 'docker-compose up -d'
             }
         }
-        stage('Proxy') {
-            when {  not { equals expected: null, actual: env.PROXY_CHANGED }}
-            steps {
-                echo "Proxy"
-                echo env.PROXY_CHANGED
-                dir('proxy') {
-                    sh 'tox'
+        stage('Create EUW') {
+            environment {
+                def SERVER=EUW1
+                def COMPOSE_PROJECT_NAME=lightshield_euw1
                 }
+            steps {
+                sh 'docker-compose build'
+                sh 'docker-compose up -d'
             }
         }
-        stage('League_Updater') {
-            when { not { equals expected: null, actual: env.LEAGUE_UPDATER_CHANGED}}
-            steps {
-                echo "League Updater"
-                echo env.LEAGUE_UPDATER_CHANGED
-                dir('league_updater') {
-                    sh 'tox'
+        stage('Create KR') {
+            environment {
+                def SERVER=KR
+                def COMPOSE_PROJECT_NAME=lightshield_kr
                 }
-            }
-        }
-        stage('SummonerID_Updater') {
-            when { not { equals expected: null, actual: env.SUMMONER_ID_UPDATER_CHANGED}}
             steps {
-                echo "SummonerID Updater"
-                echo env.SUMMONER_ID_UPDATER_CHANGED
-                dir('summoner_id_updater') {
-                    sh 'tox'
-                }
-            }
-        }
-        stage('Match_History_Updater') {
-            when { not { equals expected: null, actual: env.MATCH_HISTORY_UPDATER_CHANGED}}
-            steps {
-                echo "Match History Updater"
-                echo env.MATCH_HISTORY_UPDATER_CHANGED
-                dir('match_history_updater') {
-                    sh 'tox'
-                }
+                sh 'docker-compose build'
+                sh 'docker-compose up -d'
             }
         }
     }

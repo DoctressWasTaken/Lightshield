@@ -1,3 +1,4 @@
 aioredis
-aio_pika
 aiohttp
+websockets
+uvloop

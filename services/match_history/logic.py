@@ -1,71 +1,32 @@
 """Match History updater. Pulls matchlists for all player."""
-
 import asyncio
-import json
 import os
+from exceptions import RatelimitException, NotFoundException, Non200Exception
+from worker import WorkerClass
+from service import ServiceClass
 from datetime import datetime
-from aio_pika import Message
-import aioredis
-from worker import WorkerClass, ServiceClass
-
-from exceptions import (
-    RatelimitException,
-    NotFoundException,
-    Non200Exception,
-    NoMessageException
-)
 
 
-server = os.environ['SERVER']
+class Service(ServiceClass):
 
-
-class MatchHistoryUpdater(ServiceClass):
+    timelimit = None
 
     async def init(self):
-        self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
+        """Initiate timelimit for pulled matches."""
         try:
             self.timelimit = int(os.environ['TIME_LIMIT'])
         except:
-            self.timelimit = None
-        channel = await self.rabbitc.channel()
-        incoming = await channel.declare_queue(
-            'MATCH_HISTORY_IN_' + self.server, durable=True)
-        # Outgoing
-        outgoing = await channel.declare_exchange(
-            f'MATCH_HISTORY_OUT_{self.server}', type='direct',
-            durable=True)
-
-        # Output to the Match_Updater
-        match_in = await channel.declare_queue(
-            f'MATCH_IN_{self.server}',
-            durable=True
-        )
-        await match_in.bind(outgoing, 'MATCH')
+            pass
+        try:
+            self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
+        except:
+            pass
 
 
 class Worker(WorkerClass):
 
-    async def init(self):
-        await self.channel.set_qos(prefetch_count=5)
-        self.incoming = await self.channel.declare_queue(
-            'MATCH_HISTORY_IN_' + self.service.server, durable=True)
-        # Outgoing
-        self.outgoing = await self.channel.declare_exchange(
-            f'MATCH_HISTORY_OUT_{self.service.server}', type='direct',
-            durable=True)
+    async def process_task(self, session, content):
 
-    async def get_task(self):
-        try:
-            while not (msg := await self.incoming.get(no_ack=True, fail=False))\
-                    and not self.service.stopping:
-                await asyncio.sleep(0.1)
-        except asyncio.exceptions.TimeoutError:
-            self.logging.info("TimeoutError")
-            await asyncio.sleep(0.2)
-            return None
-        if not msg:
-            return None
-        content = json.loads(msg.body.decode('utf-8'))
         identifier = content['summonerId']
 
         matches = content['wins'] + content['losses']
@@ -73,17 +34,12 @@ class Worker(WorkerClass):
             matches -= (int(prev['wins']) + int(prev['losses']))
         if matches < self.service.required_matches:  # Skip if less than required new matches
             # TODO: Despite not having enough matches this should be considered to pass on to the db
-            return None
+            return
 
         if identifier in self.service.buffered_elements:
             return None
 
         self.service.buffered_elements[identifier] = True
-
-        return [identifier, content, msg, matches]
-
-    async def process_task(self, session, data):
-        identifier, content, msg, matches = data
 
         matches_to_call = matches + 3
         calls = int(matches_to_call / 100) + 1
@@ -115,10 +71,7 @@ class Worker(WorkerClass):
             )
             while matches:
                 id = matches.pop()
-                await self.outgoing.publish(
-                    Message(bytes(str(id), 'utf-8')),
-                    routing_key="MATCH"
-                )
+                await self.service.add_package({"match_id": id})
         except NotFoundException:
             pass
         finally:
@@ -126,30 +79,23 @@ class Worker(WorkerClass):
 
     async def handler(self, session, url):
         rate_flag = False
-        while True:
+        while not self.service.stopped:
             if datetime.now() < self.service.retry_after or rate_flag:
                 rate_flag = False
                 delay = max(0.5, (self.service.retry_after - datetime.now()).total_seconds())
                 await asyncio.sleep(delay)
             try:
-                response = await self.fetch(session, url)
+                response = await self.service.fetch(session, url)
                 if not self.service.timelimit:
                     return [match['gameId'] for match in response['matches'] if
                             match['queue'] == 420 and
-                            match['platformId'] == server]
+                            match['platformId'] == self.service.server]
                 return [match['gameId'] for match in response['matches'] if
                         match['queue'] == 420 and
-                        match['platformId'] == server and
+                        match['platformId'] == self.service.server and
                         int(str(match['timestamp'])[:10]) >= self.service.timelimit]
 
             except RatelimitException:
                 rate_flag = True
             except Non200Exception:
-                pass
-
-
-if __name__ == "__main__":
-    service = MatchHistoryUpdater(
-        url_snippet="match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s&queue=420",
-        queues_out=["MATCH_IN_%s"])
-    asyncio.run(service.run(Worker))
+                await asyncio.sleep(0.1)

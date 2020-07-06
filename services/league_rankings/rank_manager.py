@@ -1,5 +1,7 @@
 """Manage which rank is to be crawled next."""
 import json
+import os
+import asyncio
 import logging
 from datetime import datetime
 
@@ -35,6 +37,7 @@ class RankManager:
         self.logging.addHandler(handler)
 
         self.ranks = None
+        self.update_interval = int(os.environ['UPDATE_INTERVAL'])
 
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
@@ -53,13 +56,6 @@ class RankManager:
                     self.ranks.append([tier, division, now])
         await self.save_to_file()
 
-    async def get_total(self):
-        """Return the number of entries in the file.
-
-        Allows to call each entry once.
-        """
-        return len(self.ranks)
-
     async def save_to_file(self):
         """Save the current stats to the tracking file."""
         with open("ranking_cooldown.json", "w+") as datafile:
@@ -73,6 +69,11 @@ class RankManager:
             if not oldest_timestamp or entry[2] < oldest_timestamp:
                 oldest_key = entry[0:2]
                 oldest_timestamp = entry[2]
+        #if (total_seconds := (datetime.now() - datetime.fromtimestamp(
+        #        oldest_timestamp)).total_seconds() - self.update_interval) > 0:
+        #    self.logging.info("Waiting for %s seconds before starting next element.",
+        #                      total_seconds)
+        #    await asyncio.sleep(total_seconds)
         self.logging.info("Commencing on %s.", oldest_key)
         return oldest_key
 
