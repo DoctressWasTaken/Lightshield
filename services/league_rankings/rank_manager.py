@@ -42,7 +42,7 @@ class RankManager:
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
         try:
-            self.ranks = json.loads(open("configs/ranking_cooldown.json", "r+").read())
+            self.ranks = json.loads(open(f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "r+").read())
             self.logging.info("Loaded data file.")
         except FileNotFoundError:
             self.logging.info("File not found. Recreating.")
@@ -58,7 +58,7 @@ class RankManager:
 
     async def save_to_file(self):
         """Save the current stats to the tracking file."""
-        with open("configs/ranking_cooldown.json", "w+") as datafile:
+        with open(f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "w+") as datafile:
             datafile.write(json.dumps(self.ranks))
 
     async def get_next(self):
@@ -69,11 +69,11 @@ class RankManager:
             if not oldest_timestamp or entry[2] < oldest_timestamp:
                 oldest_key = entry[0:2]
                 oldest_timestamp = entry[2]
-        if (total_seconds := (datetime.now() - datetime.fromtimestamp(
-                oldest_timestamp)).total_seconds() - self.update_interval * 3600) > 0:
-            self.logging.info("Waiting for %s seconds before starting next element.",
-                              total_seconds)
-            await asyncio.sleep(total_seconds)
+        #if (total_seconds := (datetime.now() - datetime.fromtimestamp(
+        #        oldest_timestamp)).total_seconds() - self.update_interval * 3600) > 0:
+        #    self.logging.info("Waiting for %s seconds before starting next element.",
+        #                      total_seconds)
+        #    await asyncio.sleep(total_seconds)
         self.logging.info("Commencing on %s.", oldest_key)
         return oldest_key
 

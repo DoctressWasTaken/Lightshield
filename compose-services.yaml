@@ -9,7 +9,7 @@ services:
     environment:
       - SERVER=${SERVER}
     env_file:
-      - configs/secrets.env
+      - secrets.env
     restart: always
     volumes:
         - ./logs/:/project/logs/

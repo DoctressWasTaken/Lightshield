@@ -80,12 +80,12 @@ class Proxy:
 
 async def setup():
     try:
-        open('config/limits.json', 'r')
+        open('configs/limits.json', 'r')
     except:
         print("No limits specified. Generating default calls.")
         method_limits = {}
         app_limits = []
-        for method in open('config/api_methods.json', 'r').read():
+        for method in json.loads(open('configs/api_methods.json', 'r').read()):
             url = "https://%s.api.riotgames.com/lol/%s%s" % (
                 os.environ['SERVER'],
                 method[0],
@@ -99,7 +99,7 @@ async def setup():
                     if not app_limits:
                         app_limits = headers['X-App-Rate-Limit'].split(",")
                     method_limits[method[0]] = headers['X-Method-Rate-Limit'].split(",")
-        with open('limits.json', 'w+') as limit_file:
+        with open('configs/limits.json', 'w+') as limit_file:
             limit_file.write(json.dumps({'APP': app_limits, 'METHODS': method_limits}))
         print("Done.")
 
