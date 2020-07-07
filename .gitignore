@@ -1,6 +1,6 @@
 venv/*
 .idea/*
-configs/secrets.env
+secrets.env
 
 .py3/
 */.py3/*

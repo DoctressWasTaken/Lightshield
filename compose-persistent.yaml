@@ -1,16 +1,6 @@
 version: '2.3'
 services:
 
-  rabbitmq:
-    container_name: ${COMPOSE_PROJECT_NAME}_rabbitmq
-    image: rabbitmq:3-management
-    mem_limit: 4g
-    cpus: 4
-    hostname: rabbitmq
-    volumes:
-      - rabbitmq:/var/lib/rabbitmq
-    restart: always
-
   postgres:
     cpus: 1
     mem_limit: 1g
@@ -27,7 +17,6 @@ services:
     restart: always
 
 volumes:
-  rabbitmq:
   postgres:
 
 networks:
