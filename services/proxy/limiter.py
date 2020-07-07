@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 import pytz
-
+import logging
 
 class LimitBlocked(Exception):
 
@@ -12,7 +12,7 @@ class LimitHandler:
 
     def __init__(self, limits=None, span=None, max_=None):
         if limits:
-            span, max_ = [int(i) for i in limits]
+            max_, span = [int(i) for i in limits]
         self.span = int(span)  # Duration of the bucket
         self.max = max(5, max_ - 5)  # Max Calls per bucket (Reduced by 1 for safety measures)
         self.count = 0  # Current Calls in this bucket
@@ -21,7 +21,16 @@ class LimitHandler:
         self.bucket_reset_ready = None
         self.bucket_verifier = None
 
-        print(f"Initiated {self.max}:{self.span}.")
+        logging.info(f"Initiated {self.max}:{self.span}.")
+
+    def __repr__(self):
+
+        return str(self.max + 5)  + ":" + str(self.span)
+
+
+    def __str__(self):
+
+        return self.__repr__()
 
     @property
     def add(self):

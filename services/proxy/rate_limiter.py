@@ -2,7 +2,7 @@ import asyncio
 from aiohttp.web import middleware, HTTPException
 import os
 import json
-
+import logging
 from limiter import LimitBlocked, LimitHandler
 
 
@@ -16,7 +16,7 @@ class AppLimiter:
 
     def __init__(self):
         self.required_header = ['Date', 'X-App-Rate-Limit-Count']
-        limits = json.loads(open("config/limits.json", "r").read())
+        limits = json.loads(open("configs/limits.json", "r").read())
         self.limits = [LimitHandler(limit.split(":")) for limit in limits['APP']]
 
     @middleware
@@ -48,11 +48,11 @@ class MethodLimiter:
 
     def __init__(self):
         self.required_header = ['Date', 'X-Method-Rate-Limit-Count']
-        limits = json.loads(open("config/limits.json", "r").read())['METHODS']
+        limits = json.loads(open("configs/limits.json", "r").read())['METHODS']
         self.limits = {}
         for method in limits:
             self.limits[method] = [
-                LimitHandler(method.split(":") for method in limits[method].split(","))]
+                LimitHandler(meth.split(":")) for meth in limits[method]]
 
     @middleware
     async def middleware(self, request, handler):
@@ -62,7 +62,7 @@ class MethodLimiter:
         response: No changes.
         """
         url = str(request.url)
-        method = "/".join(url.split("/lol/")[1].split("/", 1)[0:3])
+        method = "/".join(url.split("/lol/")[1].split("/")[0:3])
 
         try:
             for limit in self.limits[method]:
@@ -70,12 +70,14 @@ class MethodLimiter:
         except LimitBlocked as err:
             raise HTTPTooManyRequestsLocal(headers={"Retry-After": str(err.retry_after)})
         except KeyError:
-            response = await handler(request)
+            raise HTTPException("Request target was not recognized")
+        response = await handler(request)
         if 'X-Method-Rate-Limit-Count' not in response.headers:
             raise HTTPException
         if 'Date' not in response.headers:
             raise HTTPException
-        await self.limits[method].update(
-            response.headers['Date'],
-            response.headers['X-Method-Rate-Limit-Count'].split(","))
+        for limit in self.limits[method]:
+            await limit.update(
+                response.headers['Date'],
+                response.headers['X-Method-Rate-Limit-Count'].split(","))
         return response
