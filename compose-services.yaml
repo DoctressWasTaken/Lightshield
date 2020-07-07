@@ -79,11 +79,9 @@ services:
       context: services/match_details
     environment:
       - SERVER=${SERVER}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_USER=${POSTGRES_USER}
       - WORKER=${MD_WORKER}
       - MAX_TASK_BUFFER=${MD_MAX_TASK_BUFFER}
+      - REQUIRED_SUBSCRIBER=${MH_REQUIRED_SUBSCRIBER}
     links:
       - match_details_redis:redis
       - proxy:proxy
@@ -112,6 +110,26 @@ services:
       - summoner_ids:provider
       - database_connector_summoner_redis:redis
     restart: always
+
+  database_connector_match_details:
+    mem_limit: 250m
+    cpus: 0.25
+    build:
+      dockerfile: Dockerfile
+      context: services/database_connector_match_details/
+    environment:
+      - SERVER=${SERVER}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - MAX_TASK_BUFFER=500  # TODO: Move to ENV file
+    external_links:
+      - lightshield_postgres:postres
+    links:
+      - match_details:provider
+      - database_connector_match_details_redis:redis
+    restart: always
+
 
 ### REDIS Databases
 
@@ -166,6 +184,16 @@ services:
       - database_connector_summoner:/data/
     restart: always
 
+  database_connector_summoner_match_details:
+    mem_limit: 50m
+    cpus: 0.1
+    build:
+      context: databases/redis
+      dockerfile: Dockerfile
+    volumes:
+      - database_connector_match_details:/data/
+    restart: always
+
 volumes:
   league_rankings:
     name: ${SERVER}_league_rankins
@@ -177,6 +205,8 @@ volumes:
     name: ${SERVER}_match_details
   database_connector_summoner:
     name: ${SERVER}_database_connector_summoner
+  database_connector_match_details:
+    name: ${SERVER}_database_connector_match_details
 
 networks:
   default:

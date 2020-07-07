@@ -10,6 +10,7 @@ import logging
 import asyncio
 import aioredis
 
+
 class Worker(threading.Thread):
 
     def __init__(self, echo=False):
@@ -49,15 +50,14 @@ class Worker(threading.Thread):
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
 
-
     async def get_tasks(self):
-        while (length := await self.redisc.llen('packages')) < 10 and not self.stopped:
+        while (length := await self.redisc.llen('tasks')) < 10 and not self.stopped:
             await asyncio.sleep(0.5)
         if self.stopped:
             return
-            
+
         tasks = []
-        while task := await self.redisc.lpop('packages'):
+        while task := await self.redisc.lpop('tasks'):
             tasks.append(task)
         return tasks
 
@@ -75,7 +75,6 @@ class Worker(threading.Thread):
             self.session.bulk_save_objects(db_objects)
             self.session.commit()
         self.logging.info("Shutting down DB_Connector")
-
 
     def process_tasks(self, tasks):
         db_objects = []

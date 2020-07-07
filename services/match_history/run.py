@@ -18,7 +18,6 @@ if __name__ == "__main__":
         subscriber.shutdown()
         service.shutdown()
 
-
     signal.signal(signal.SIGTERM, shutdown_handler)
 
     publisher.start()

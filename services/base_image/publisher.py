@@ -15,7 +15,9 @@ class Publisher(threading.Thread):
     def __init__(self, host='0.0.0.0', port=9999):
         """Initiate logging and global variables."""
         super().__init__()
-        self.required_subs = os.environ['REQUIRED_SUBSCRIBER'].split(',')
+        self.required_subs = None
+        if 'REQUIRED_SUBSCRIBER' in os.environ and os.environ['REQUIRED_SUBSCRIBER'] != '':
+            self.required_subs = os.environ['REQUIRED_SUBSCRIBER'].split(',')
 
         self.host = host
         self.port = port
@@ -58,14 +60,15 @@ class Publisher(threading.Thread):
     async def worker(self) -> None:
         """Handle sending out tasks to clients."""
         while not self.stopped:
-            if missing := [item for item in self.required_subs if
-                              item not in self.client_names.keys()]:
-                self.logging.info("Following required subs still missing: %s", missing)
-                while [item for item in self.required_subs if
-                              item not in self.client_names.keys()]:
-                    await asyncio.sleep(1)
-                self.logging.info("Connection to all required subs established.")
-                continue
+            if self.required_subs:
+                if missing := [item for item in self.required_subs if
+                                  item not in self.client_names.keys()]:
+                    self.logging.info("Following required subs still missing: %s", missing)
+                    while [item for item in self.required_subs if
+                                  item not in self.client_names.keys()]:
+                        await asyncio.sleep(1)
+                    self.logging.info("Connection to all required subs established.")
+                    continue
 
             if not all([self.client_names[name] for name in self.client_names]):
                 while not all([self.client_names[name] for name in self.client_names]):
