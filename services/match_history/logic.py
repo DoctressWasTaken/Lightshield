@@ -8,7 +8,6 @@ from datetime import datetime
 
 
 class Service(ServiceClass):
-
     timelimit = None
 
     async def init(self):
@@ -29,10 +28,20 @@ class Worker(WorkerClass):
 
         identifier = content['summonerId']
 
-        matches = content['wins'] + content['losses']
-        if prev := await self.service.redisc.hgetall(f"user:{identifier}"):
-            matches -= (int(prev['wins']) + int(prev['losses']))
-        if matches < self.service.required_matches:  # Skip if less than required new matches
+        new_matches = matches = content['wins'] + content['losses']
+        if prev := await self.service.marker.execute_read(
+                'SELECT matches FROM match_history WHERE summonerId = %s;' % identifier):
+            print(prev)
+            new_matches = matches - int(prev[0])
+        elif prev := await self.service.redisc.hgetall(f"user:{identifier}"):
+            temp = (int(prev['wins']) + int(prev['losses']))
+            new_matches = matches - temp
+            await self.service.marker.execute_write(
+                'INSERT INTO match_history (summonerId, matches) VALUES (%s, %s);' % (identifier,
+                                                                                      temp))
+            await self.service.redisc.hdel(f'user:{identifier}')
+
+        if new_matches < self.service.required_matches:  # Skip if less than required new matches
             # TODO: Despite not having enough matches this should be considered to pass on to the db
             return
 
@@ -45,7 +54,6 @@ class Worker(WorkerClass):
         calls = int(matches_to_call / 100) + 1
         ids = [start_id * 100 for start_id in range(calls)]
         calls_in_progress = []
-        matches = []
         while ids:
             id = ids.pop()
             calls_in_progress.append(asyncio.create_task(
@@ -57,20 +65,12 @@ class Worker(WorkerClass):
             await asyncio.sleep(0.1)
         try:
             responses = await asyncio.gather(*calls_in_progress)
-            matches = list(set().union(*responses))
-            await self.service.redisc.hmset_dict(
-                f"user:{identifier}",
-                {
-                    "summonerName": content['summonerName'],
-                    "wins": content['wins'],
-                    "losses": content['losses'],
-                    "tier": content['tier'],
-                    "rank": content['rank'],
-                    "leaguePoints": content['leaguePoints']
-                }
-            )
-            while matches:
-                id = matches.pop()
+            match_data = list(set().union(*responses))
+            await self.service.marker.execute_write(
+                'UPDATE match_history SET matches = %s WHERE summonerId =  %s;' % (matches,
+                                                                                   identifier))
+            while match_data:
+                id = match_data.pop()
                 await self.service.add_package({"match_id": id})
         except NotFoundException:
             pass
