@@ -82,6 +82,8 @@ services:
       - WORKER=${MD_WORKER}
       - MAX_TASK_BUFFER=${MD_MAX_TASK_BUFFER}
       - REQUIRED_SUBSCRIBER=${MD_REQUIRED_SUBSCRIBER}
+    volumes:
+      - ./sqlite/{SERVER}_match_details.db:/project/sqlite3.db
     links:
       - match_details_redis:redis
       - proxy:proxy

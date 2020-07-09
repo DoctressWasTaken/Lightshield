@@ -12,14 +12,18 @@ import asyncio
 from publisher import Publisher
 from subscriber import Subscriber
 from logic import Service, Worker
+from repeat_marker import RepeatMarker
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 if __name__ == "__main__":
+    marker = RepeatMarker()
+    await asyncio.run(marker.build(""))
+
     publisher = Publisher()
     subscriber = Subscriber(service_name="")
-    service = Service(url_snippet="")
+    service = Service(url_snippet="", marker=marker)
 
     def shutdown_handler():
         """Shutdown handler called by the termination signal manager.

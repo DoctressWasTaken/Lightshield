@@ -67,9 +67,7 @@ class Subscriber(threading.Thread):
             try:
                 self.logging.info("Connecting to provider.")
                 while not self.stopped:
-                    print(type(websockets))
                     async with websockets.connect(self.uri) as websocket:
-                        print("AAQQW", websocket)
                         await websocket.send("ACK_" + self.service_name)
                         while not self.stopped:
                             try:
