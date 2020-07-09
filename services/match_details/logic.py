@@ -4,6 +4,7 @@ from worker import WorkerClass
 from service import ServiceClass
 import json
 
+
 class Service(ServiceClass):
 
     async def init(self):
