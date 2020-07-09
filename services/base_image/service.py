@@ -16,6 +16,7 @@ class ServiceClass:  # pylint: disable=R0902
 
     Contains basic setup for the individual services using it as base class.
     """
+
     def __init__(self, url_snippet, max_local_buffer=100):
         """Initiate logging and relevant variables.
 
@@ -68,7 +69,6 @@ class ServiceClass:  # pylint: disable=R0902
 
         ::param Worker: Worker class that has been inherited from the basic WorkerClass.
         """
-
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
 
@@ -133,15 +133,14 @@ class ServiceClass:  # pylint: disable=R0902
         count = 0
         while not self.stopped:
             count += 1
-            if (length := await self.redisc.llen('packages')) > self.max_local_buffer:
+            if await self.redisc.llen('packages') > self.max_local_buffer:
                 self.local_buffer_full = True
             else:
                 self.local_buffer_full = False
             await asyncio.sleep(1)
             if count == 60:
                 self.logging.info("Incoming Queue: %s, Outgoing Queue: %s/%s",
-                        await self.redisc.llen('tasks'),
-                        await self.redisc.llen('packages'),
-                        self.max_local_buffer)
+                                  await self.redisc.llen('tasks'),
+                                  await self.redisc.llen('packages'),
+                                  self.max_local_buffer)
                 count = 0
-

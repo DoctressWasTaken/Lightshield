@@ -1,6 +1,6 @@
 """Default worker module containing the Worker class."""
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 import aiohttp
 
 
@@ -9,6 +9,7 @@ class WorkerClass:
 
     Multiple worker are initiated by the ServiceClass.
     """
+
     def __init__(self, parent_service):
         """Pass relevant data to worker.
 

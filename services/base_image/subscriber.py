@@ -1,3 +1,9 @@
+"""The Subscriber service provides the input module for a service.
+
+By linking a container to this container using the alias 'provider' this service will
+attempt to connect to the publishing services websocket on (default) ws://provider:9999.
+The service will authenticate using the passed on service name.
+"""
 import os
 import json
 import asyncio
@@ -46,7 +52,7 @@ class Subscriber(threading.Thread):
             ('redis', 6379), db=0, encoding='utf-8')
 
     async def pause_handler(self, websocket) -> None:
-        """Handle the pausing and unpausing commands to the parent services."""
+        """Send the pause and unpause flags to the publishing services."""
         await websocket.send("PAUSE")
         while not self.stopped and await self.redisc.llen('tasks') > 0.8 * self.max_buffer:
             await asyncio.sleep(0.5)
@@ -57,11 +63,13 @@ class Subscriber(threading.Thread):
     async def async_run(self) -> None:
         """Initiate and Start the websocket client."""
         await self.init()
-        while True:
+        while not self.stopped:
             try:
                 self.logging.info("Connecting to provider.")
                 while not self.stopped:
+                    print(type(websockets))
                     async with websockets.connect(self.uri) as websocket:
+                        print("AAQQW", websocket)
                         await websocket.send("ACK_" + self.service_name)
                         while not self.stopped:
                             try:
@@ -74,10 +82,10 @@ class Subscriber(threading.Thread):
                             length = await self.redisc.lpush('tasks', json.dumps(content))
                             if length >= self.max_buffer:
                                 await self.pause_handler(websocket=websocket)
-            except:
-                self.logging.info("Connection broke. Resetting")
+            except websockets.exceptions.InvalidHandshake:
+                self.logging.info("Could not establish connection, handshake failed.")
                 await asyncio.sleep(1)
-
-
-
-
+            except Exception as err:  # pylint: disable=broad-except
+                self.logging.info("Connection broke. Resetting. [%s]", err.__class__.__name__)
+                #raise err
+                await asyncio.sleep(1)

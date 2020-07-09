@@ -1,5 +1,6 @@
 """Custom Exceptions."""
 
+
 class RatelimitException(Exception):
     """On 429 or 430 Response."""
 

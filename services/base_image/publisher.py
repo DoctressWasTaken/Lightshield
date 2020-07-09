@@ -1,3 +1,9 @@
+"""The Publisher is the output segment of the service. It will broadcast all packages processed.
+
+Each service can limit the output by providing a list of Required Subscriber. As long as not all
+required subscriber are connected the publisher will pause.
+Additional service can connect without halting/interrupting the publishing (e.g. logging systems).
+"""
 import os
 import logging
 import asyncio
@@ -19,8 +25,7 @@ class Publisher(threading.Thread):
         if 'REQUIRED_SUBSCRIBER' in os.environ and os.environ['REQUIRED_SUBSCRIBER'] != '':
             self.required_subs = os.environ['REQUIRED_SUBSCRIBER'].split(',')
 
-        self.host = host
-        self.port = port
+        self.connection_params = [host, port]
         self.stopped = False
         self.redisc = None
 
@@ -35,15 +40,15 @@ class Publisher(threading.Thread):
             logging.Formatter('%(asctime)s [Publisher] %(message)s'))
         self.logging.addHandler(handler)
 
-    def run(self) -> None:
-        """Initiate the async loop/websocket server."""
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(self.async_run())
-
     def stop(self) -> None:
         """Initiate shutdown."""
         self.logging.info("Received shutdown signal. Shutting down.")
         self.stopped = True
+
+    def run(self) -> None:
+        """Initiate the async loop/websocket server."""
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self.async_run())
 
     async def init(self) -> None:
         """Initiate redis connection."""
@@ -55,17 +60,17 @@ class Publisher(threading.Thread):
         await self.init()
         await asyncio.gather(
             self.worker(),
-            websockets.serve(self.server, self.host, self.port))
+            websockets.serve(self.server, *self.connection_params))
 
     async def worker(self) -> None:
         """Handle sending out tasks to clients."""
         while not self.stopped:
             if self.required_subs:
                 if missing := [item for item in self.required_subs if
-                                  item not in self.client_names.keys()]:
+                               item not in self.client_names.keys()]:
                     self.logging.info("Following required subs still missing: %s", missing)
                     while [item for item in self.required_subs if
-                                  item not in self.client_names.keys()]:
+                           item not in self.client_names.keys()]:
                         await asyncio.sleep(1)
                     self.logging.info("Connection to all required subs established.")
                     continue
@@ -77,7 +82,7 @@ class Publisher(threading.Thread):
             if (task := await self.redisc.lpop('packages')) and self.clients:
                 await asyncio.wait([client.send(task) for client in self.clients])
 
-    async def server(self, websocket, path) -> None:
+    async def server(self, websocket, _) -> None:
         """Handle the websocket client connection."""
         self.clients.add(websocket)
         client_name = None
@@ -92,9 +97,8 @@ class Publisher(threading.Thread):
                     self.client_names[client_name] = False
                 if message == "UNPAUSE":
                     self.client_names[client_name] = True
-        except:
-            self.logging.info("Websocket lost connection.")
-            pass
+        except Exception as err:  # pylint: disable=broad-except
+            self.logging.info("Websocket lost connection. [%s]", err.__class__.__name__)
         finally:
             del self.client_names[client_name]
             self.clients.remove(websocket)
