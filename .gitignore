@@ -5,6 +5,8 @@ secrets.env
 .py3/
 */.py3/*
 db.sqlite3
+.coverage
+
 
 *.swp
 *.swo
