@@ -17,7 +17,7 @@ class ServiceClass:  # pylint: disable=R0902
     Contains basic setup for the individual services using it as base class.
     """
 
-    def __init__(self, url_snippet, marker, max_local_buffer=100):
+    def __init__(self, url_snippet, marker=None, max_local_buffer=100):
         """Initiate logging and relevant variables.
 
         ::param url_snippet: Url part used to make calls against the API.
