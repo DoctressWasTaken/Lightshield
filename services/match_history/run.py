@@ -18,7 +18,8 @@ if __name__ == "__main__":
     publisher = Publisher()
     subscriber = Subscriber(service_name="MH")
     service = Service(
-        url_snippet="match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s&queue=420")
+        url_snippet="match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s&queue=420",
+        marker=marker)
 
 
     def shutdown_handler():

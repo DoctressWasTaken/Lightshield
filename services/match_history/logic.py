@@ -12,6 +12,7 @@ class Service(ServiceClass):
 
     async def init(self):
         """Initiate timelimit for pulled matches."""
+        await self.marker.connect()
         try:
             self.timelimit = int(os.environ['TIME_LIMIT'])
         except:
@@ -30,16 +31,17 @@ class Worker(WorkerClass):
 
         new_matches = matches = content['wins'] + content['losses']
         if prev := await self.service.marker.execute_read(
-                'SELECT matches FROM match_history WHERE summonerId = %s;' % identifier):
+                'SELECT matches FROM match_history WHERE summonerId = "%s";' % identifier):
             print(prev)
             new_matches = matches - int(prev[0])
         elif prev := await self.service.redisc.hgetall(f"user:{identifier}"):
             temp = (int(prev['wins']) + int(prev['losses']))
             new_matches = matches - temp
             await self.service.marker.execute_write(
-                'INSERT INTO match_history (summonerId, matches) VALUES (%s, %s);' % (identifier,
+                'INSERT INTO match_history (summonerId, matches) VALUES ("%s", %s);' % (identifier,
                                                                                       temp))
-            await self.service.redisc.hdel(f'user:{identifier}')
+            await self.service.redisc.hdel(f'user:{identifier}', 
+                    'wins', 'losses', 'tier', 'rank', 'leaguePoints', 'summonerName')
 
         if new_matches < self.service.required_matches:  # Skip if less than required new matches
             # TODO: Despite not having enough matches this should be considered to pass on to the db
@@ -67,7 +69,7 @@ class Worker(WorkerClass):
             responses = await asyncio.gather(*calls_in_progress)
             match_data = list(set().union(*responses))
             await self.service.marker.execute_write(
-                'UPDATE match_history SET matches = %s WHERE summonerId =  %s;' % (matches,
+                'UPDATE match_history SET matches = %s WHERE summonerId =  "%s";' % (matches,
                                                                                    identifier))
             while match_data:
                 id = match_data.pop()
