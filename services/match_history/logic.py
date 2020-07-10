@@ -33,7 +33,7 @@ class Worker(WorkerClass):
         if prev := await self.service.marker.execute_read(
                 'SELECT matches FROM match_history WHERE summonerId = "%s";' % identifier):
             print(prev)
-            new_matches = matches - int(prev[0])
+            new_matches = matches - int(prev[0][0])
         elif prev := await self.service.redisc.hgetall(f"user:{identifier}"):
             temp = (int(prev['wins']) + int(prev['losses']))
             new_matches = matches - temp

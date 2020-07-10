@@ -5,6 +5,12 @@ Import is done directly.
 """
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from worker import WorkerClass
+from service import ServiceClass
+
+class Service(ServiceClass):
+
+    async def init(self):
+        await self.marker.connect()
 
 
 class Worker(WorkerClass):
@@ -14,7 +20,7 @@ class Worker(WorkerClass):
         """Create only a new call if the summoner is not yet in the db."""
         identifier = task['summonerId']
         if data := await self.service.marker.execute_read(
-                'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = %s;' % identifier):
+                'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
             package = {**task, 'accountId': data[0][0], 'puuid': data[0][1]}
 
         elif redis_entry := await self.service.redisc.hgetall(f"user:{identifier}"):

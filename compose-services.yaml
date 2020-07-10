@@ -148,6 +148,8 @@ services:
     volumes:
       - league_rankings:/data/
     restart: always
+    ports:
+      - 127.0.0.1:6382:6379
 
   summoner_ids_redis:
     mem_limit: 250m
@@ -158,6 +160,8 @@ services:
     volumes:
         - summoner_ids:/data/
     restart: always
+    ports:
+      - 127.0.0.1:6381:6379
 
 
   match_history_redis:
@@ -169,6 +173,8 @@ services:
     volumes:
         - match_history:/data/
     restart: always
+    ports:
+      - 127.0.0.1:6380:6379
 
   match_details_redis:
     mem_limit: 250m
@@ -179,6 +185,8 @@ services:
     volumes:
         - match_details:/data/
     restart: always
+    ports:
+      - 127.0.0.1:6379:6379
 
   database_connector_summoner_redis:
     mem_limit: 50m
