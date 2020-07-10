@@ -29,7 +29,7 @@ class Service(ServiceClass):  # pylint: disable=R0902
         """
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
-
+        await self.marker.connect()
         await self.rankmanager.init()
 
     async def run(self, Worker):
@@ -61,7 +61,6 @@ class Worker(WorkerClass):
         """
         failed = None
         while (not self.service.empty or failed) and not self.service.stopped:
-
             if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
             while not self.service.stopped and self.service.local_buffer_full:
@@ -95,9 +94,21 @@ class Worker(WorkerClass):
         Check for changes that would warrent it be sent on.
          """
         for entry in content:
-            hash_db = await self.service.redisc.get(entry['summonerId'])
-            hash_local = f"{entry['wins']}_{entry['losses']}"
-            if hash_db == hash_local:
+
+            if prev := await self.service.marker.execute_read(
+                    'SELECT matches FROM summoner WHERE summonerId = "%s";' % entry['summonerId']):
+                matches = int(prev[0][0])
+            else:
+                hash_db = await self.service.redisc.get(entry['summonerId'])
+                matches = sum([int(val) for val in hash_db.split("_")])
+                await self.service.marker.execute_write(
+                    'INSERT INTO summoner (summonerId, matches) VALUES ("%s", %s);' % (
+                entry['summonerId'],
+                matches))
+                await self.service.redisc.delete(entry['summonerId'])
+
+            matches_local = entry['wins'] + entry['losses']
+            if matches == matches_local:
                 return
-            await self.service.redisc.set(entry['summonerId'], hash_local)
+
             await self.service.add_package(entry)
