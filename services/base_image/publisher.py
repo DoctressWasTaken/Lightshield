@@ -102,7 +102,7 @@ class Publisher(threading.Thread):
             if not [item for item in self.required_subs if
                            item not in self.client_names.keys()]:
                 self.logging.info("Dumping data.")
-                while [item for item in self.required_subs if
+                while not [item for item in self.required_subs if
                        item not in self.client_names.keys()]:
                     task = await self.redisc.lpop('packages')
                     if task:
