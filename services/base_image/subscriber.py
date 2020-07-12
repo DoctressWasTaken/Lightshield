@@ -78,6 +78,7 @@ class Subscriber(threading.Thread):
                         await ws.close()
                         break
                 except asyncio.TimeoutError:
+                    self.logging.info("Failed to get message.")
                     await asyncio.sleep(1)
 
             self.logging.info("Received %s tasks", count)
