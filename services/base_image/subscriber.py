@@ -74,6 +74,7 @@ class Subscriber(threading.Thread):
                         content = json.loads(message.data)
                     except:
                         self.logging.info(message.data)
+                        continue
                     count += 1
                     if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
                         await ws.close()
