@@ -63,8 +63,8 @@ class Publisher(threading.Thread):
             try:
                 await websockets.serve(self.server, *self.connection_params)
             except BaseException as err:
-                self.logging.info("Websocket lost connection. [%s]", err.__class__.__name__)
-
+                self.logging.info("Websocket lost connection (external). [%s]", err.__class__.__name__)
+                await asyncio.sleep(1)
         await worker
 
     async def worker(self) -> None:
@@ -95,7 +95,8 @@ class Publisher(threading.Thread):
             async for message in websocket:
                 print(message)
         except BaseException as err:  # pylint: disable=broad-except
-            self.logging.info("Websocket lost connection. [%s]", err.__class__.__name__)
+            self.logging.info("Websocket lost connection (internal). [%s]", err.__class__.__name__)
+            await asyncio.sleep(1)
         finally:
             del self.client_names[client_name]
             self.clients.remove(websocket)
