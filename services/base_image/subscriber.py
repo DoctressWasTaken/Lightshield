@@ -10,7 +10,7 @@ import asyncio
 import logging
 import threading
 import aioredis
-import websockets
+import aiohttp
 
 
 class Subscriber(threading.Thread):
@@ -51,35 +51,27 @@ class Subscriber(threading.Thread):
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
 
-    async def runner(self) -> None:
-        try:
-            self.logging.info("Connecting to provider.")
-            async with websockets.connect(self.uri) as websocket:
-                await websocket.send("ACK_" + self.service_name)
-                while not self.stopped:
-                    try:
-                        message = await asyncio.wait_for(websocket.recv(), timeout=2)
-                        content = json.loads(message)
-                    except asyncio.TimeoutError:
-                        return
-                    except json.JSONDecodeError:
-                        continue
-                    length = await self.redisc.lpush('tasks', json.dumps(content))
-                    if length >= self.max_buffer:
-                        return
-        except BaseException as err:  # pylint: disable=broad-except
-            self.logging.info("Connection broke. Resetting. [%s]", err.__class__.__name__)
-            #raise err
-            await asyncio.sleep(1)
-        finally:
-            await websocket.close()
-            self.logging.info("Closing connection to publisher.")
-
     async def async_run(self) -> None:
         """Initiate and Start the websocket client."""
         await self.init()
         while not self.stopped:
             while not self.stopped and await self.redisc.llen('tasks') > 0.3 * self.max_buffer:
                 await asyncio.sleep(0.5)
-            await self.runner()
 
+            async with aiohttp.ClientSession() as session:
+                await self.runner(session)
+
+    async def runner(self, session) -> None:
+        async with session.ws_connect(self.uri) as ws:
+            self.logging.info("Connected to provider.")
+            ws.send_str("ACK_" + self.service_name)
+
+            count = 0
+            while not self.stopped:
+                message = await asyncio.wait_for(ws.receive(), timeout=2)
+                content = json.loads(message)
+                count += 1
+                if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
+                    await ws.close()
+                    break
+            self.logging.info("Received %s tasks", count)
