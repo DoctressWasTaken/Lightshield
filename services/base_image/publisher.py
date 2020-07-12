@@ -61,7 +61,8 @@ class Publisher(threading.Thread):
         worker = asyncio.create_task(self.worker())
         while not self.stopped:
             try:
-                await websockets.serve(self.server, *self.connection_params)
+                await asyncio.get_event_loop().run_until_complete(
+                    websockets.serve(self.server, *self.connection_params))
             except BaseException as err:
                 self.logging.info("Websocket lost connection (external). [%s]", err.__class__.__name__)
                 await asyncio.sleep(1)
