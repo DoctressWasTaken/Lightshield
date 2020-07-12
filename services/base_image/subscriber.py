@@ -70,7 +70,10 @@ class Subscriber(threading.Thread):
             while not self.stopped:
                 try:
                     message = await asyncio.wait_for(ws.receive(), timeout=2)
-                    content = json.loads(message.data)
+                    try:
+                        content = json.loads(message.data)
+                    except:
+                        self.logging.info(message.data)
                     count += 1
                     if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
                         await ws.close()
