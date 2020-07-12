@@ -89,7 +89,6 @@ class Publisher(threading.Thread):
         try:
             msg = await websocket.recv()
             if not msg.startswith('ACK'):
-                await websocket.close()
                 return
             client_name = msg.split("_")[1]
             self.client_names[client_name] = True
@@ -100,3 +99,4 @@ class Publisher(threading.Thread):
         finally:
             del self.client_names[client_name]
             self.clients.remove(websocket)
+            await websocket.close()
