@@ -70,6 +70,7 @@ class Subscriber(threading.Thread):
             while not self.stopped:
                 try:
                     message = await asyncio.wait_for(ws.receive(), timeout=2)
+                    self.logging.info("Message type %s", message.type)
                     self.logging.info(message.data)
                     content = json.loads(message.data)
                     count += 1
