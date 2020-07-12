@@ -71,7 +71,7 @@ class Subscriber(threading.Thread):
         except websockets.exceptions.InvalidHandshake:
             self.logging.info("Could not establish connection, handshake failed.")
             await asyncio.sleep(1)
-        except Exception as err:  # pylint: disable=broad-except
+        except BaseException as err:  # pylint: disable=broad-except
             self.logging.info("Connection broke. Resetting. [%s]", err.__class__.__name__)
             #raise err
             await asyncio.sleep(1)

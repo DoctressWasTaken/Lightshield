@@ -74,11 +74,6 @@ class Publisher(threading.Thread):
                         await asyncio.sleep(1)
                     self.logging.info("Connection to all required subs established.")
                     continue
-
-            if not all([self.client_names[name] for name in self.client_names]):
-                while not all([self.client_names[name] for name in self.client_names]):
-                    await asyncio.sleep(0.2)
-                continue
             if (task := await self.redisc.lpop('packages')) and self.clients:
                 await asyncio.wait([client.send(task) for client in self.clients])
 
@@ -93,11 +88,8 @@ class Publisher(threading.Thread):
             client_name = msg.split("_")[1]
             self.client_names[client_name] = True
             async for message in websocket:
-                if message == "PAUSE":
-                    self.client_names[client_name] = False
-                if message == "UNPAUSE":
-                    self.client_names[client_name] = True
-        except Exception as err:  # pylint: disable=broad-except
+                print(message)
+        except BaseException as err:  # pylint: disable=broad-except
             self.logging.info("Websocket lost connection. [%s]", err.__class__.__name__)
         finally:
             del self.client_names[client_name]
