@@ -48,7 +48,11 @@ class Publisher(threading.Thread):
     def run(self) -> None:
         """Initiate the async loop/websocket server."""
         loop = asyncio.new_event_loop()
-        loop.run_until_complete(self.async_run())
+        loop.run_until_complete(self.init())
+
+        start_server = websockets.serve(self.server, *self.connection_params)
+        loop.run_until_complete(start_server)
+        loop.run_forever()
 
     async def init(self) -> None:
         """Initiate redis connection."""
@@ -93,8 +97,18 @@ class Publisher(threading.Thread):
                 return
             client_name = msg.split("_")[1]
             self.client_names[client_name] = True
-            async for message in websocket:
-                print(message)
+            if not [item for item in self.required_subs if
+                           item not in self.client_names.keys()]:
+                self.logging.info("Dumping data.")
+                while [item for item in self.required_subs if
+                       item not in self.client_names.keys()]:
+                    task = await self.redisc.lpop('packages')
+                    if task:
+                        await asyncio.wait([client.send(task) for client in self.clients])
+                    else:
+                        await asyncio.sleep(0.5)
+            while websocket.open:
+                await asyncio.sleep(0.2)
         except BaseException as err:  # pylint: disable=broad-except
             self.logging.info("Websocket lost connection (internal). [%s]", err.__class__.__name__)
             await asyncio.sleep(1)
