@@ -48,6 +48,7 @@ class Publisher(threading.Thread):
     def run(self) -> None:
         """Initiate the async loop/websocket server."""
         loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         loop.run_until_complete(self.init())
 
         start_server = websockets.serve(self.server, *self.connection_params)
