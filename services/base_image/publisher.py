@@ -94,7 +94,7 @@ class Publisher(threading.Thread):
         client_name = None
         try:
             msg = await websocket.recv()
-            self.logging.info("Received message: %s", msg=msg)
+            self.logging.info("Received message: %s", msg)
             if not msg.startswith('ACK'):
                 return
             client_name = msg.split("_")[1]

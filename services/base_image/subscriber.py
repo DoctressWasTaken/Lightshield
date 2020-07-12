@@ -68,11 +68,15 @@ class Subscriber(threading.Thread):
 
             count = 0
             while not self.stopped:
-                message = await asyncio.wait_for(ws.receive(), timeout=2)
-                self.logging.info(message)
-                content = json.loads(message)
-                count += 1
-                if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
-                    await ws.close()
-                    break
+                try:
+                    message = await asyncio.wait_for(ws.receive(), timeout=2)
+                    self.logging.info(message.data)
+                    content = json.loads(message.data)
+                    count += 1
+                    if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
+                        await ws.close()
+                        break
+                except asyncio.TimeoutError:
+                    await asyncio.sleep(1)
+
             self.logging.info("Received %s tasks", count)
