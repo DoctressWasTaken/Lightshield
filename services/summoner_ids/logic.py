@@ -23,14 +23,6 @@ class Worker(WorkerClass):
                 'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
             package = {**task, 'accountId': data[0][0], 'puuid': data[0][1]}
 
-        elif redis_entry := await self.service.redisc.hgetall(f"user:{identifier}"):
-            package = {**task, **redis_entry}
-            await self.service.marker.execute_write(
-                'INSERT INTO summoner_ids (summonerId, accountId, puuid) '
-                'VALUES ("%s", "%s", "%s");' % (
-                identifier, redis_entry['accountId'], redis_entry['puuid']))
-            await self.service.redisc.hdel(f'user:{identifier}',
-                                           'accountId', 'puuid')
             await self.service.add_package(package)
             return
         if identifier in self.service.buffered_elements:

@@ -33,6 +33,7 @@ services:
       - league_rankings_redis:redis
     restart: always
     volumes:
+      - ./sqlite/${SERVER}_league_rankings.db:/project/sqlite3.db
       - ./configs/:/project/configs/
 
   summoner_ids:
@@ -47,7 +48,7 @@ services:
       - REQUIRED_SUBSCRIBER=${SI_REQUIRED_SUBSCRIBER}
       - MAX_TASK_BUFFER=${SI_MAX_TASK_BUFFER}
     volumes:
-      - ./sqlite/${SERVER}_summoner_id.db:/project/sqlite3.db
+      - ./sqlite/${SERVER}_summoner_ids.db:/project/sqlite3.db
     links:
       - summoner_ids_redis:redis
       - proxy:proxy
@@ -148,8 +149,6 @@ services:
     volumes:
       - league_rankings:/data/
     restart: always
-    ports:
-      - 127.0.0.1:6382:6379
 
   summoner_ids_redis:
     mem_limit: 250m
@@ -160,9 +159,6 @@ services:
     volumes:
         - summoner_ids:/data/
     restart: always
-    ports:
-      - 127.0.0.1:6381:6379
-
 
   match_history_redis:
     mem_limit: 250m
@@ -173,8 +169,6 @@ services:
     volumes:
         - match_history:/data/
     restart: always
-    ports:
-      - 127.0.0.1:6380:6379
 
   match_details_redis:
     mem_limit: 250m
@@ -185,8 +179,6 @@ services:
     volumes:
         - match_details:/data/
     restart: always
-    ports:
-      - 127.0.0.1:6379:6379
 
   database_connector_summoner_redis:
     mem_limit: 50m

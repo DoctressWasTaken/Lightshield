@@ -94,21 +94,17 @@ class Worker(WorkerClass):
         Check for changes that would warrent it be sent on.
          """
         for entry in content:
-
-            if prev := await self.service.marker.execute_read(
-                    'SELECT matches FROM summoner WHERE summonerId = "%s";' % entry['summonerId']):
-                matches = int(prev[0][0])
-            else:
-                hash_db = await self.service.redisc.get(entry['summonerId'])
-                matches = sum([int(val) for val in hash_db.split("_")])
-                await self.service.marker.execute_write(
-                    'INSERT INTO summoner (summonerId, matches) VALUES ("%s", %s);' % (
-                entry['summonerId'],
-                matches))
-                await self.service.redisc.delete(entry['summonerId'])
-
             matches_local = entry['wins'] + entry['losses']
-            if matches == matches_local:
+            matches = None
+            if prev := await self.service.marker.execute_read(
+                    'SELECT matches FROM match_history WHERE summonerId = "%s";' % entry['summonerId']):
+                matches = int(prev[0][0])
+                
+            if matches and matches == matches_local:
                 return
+            await self.service.marker.execute_write(
+                'UPDATE match_history SET matches = %s WHERE summonerId = "%s";' % (
+                matches_local,
+            entry['summonerId']))
 
             await self.service.add_package(entry)

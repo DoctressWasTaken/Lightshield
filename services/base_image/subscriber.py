@@ -51,39 +51,37 @@ class Subscriber(threading.Thread):
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
 
-    async def pause_handler(self, websocket) -> None:
-        """Send the pause and unpause flags to the publishing services."""
-        await websocket.send("PAUSE")
-        while not self.stopped and await self.redisc.llen('tasks') > 0.8 * self.max_buffer:
-            await asyncio.sleep(0.5)
-        if self.stopped:
-            return
-        await websocket.send("UNPAUSE")
+    async def runner(self) -> None:
+        try:
+            self.logging.info("Connecting to provider.")
+            async with websockets.connect(self.uri) as websocket:
+                await websocket.send("ACK_" + self.service_name)
+                while not self.stopped:
+                    try:
+                        message = await asyncio.wait_for(websocket.recv(), timeout=10)
+                        content = json.loads(message)
+                    except asyncio.TimeoutError:
+                        continue
+                    except json.JSONDecodeError:
+                        continue
+                    length = await self.redisc.lpush('tasks', json.dumps(content))
+                    if length >= self.max_buffer:
+                        return
+
+        except websockets.exceptions.InvalidHandshake:
+            self.logging.info("Could not establish connection, handshake failed.")
+            await asyncio.sleep(1)
+        except Exception as err:  # pylint: disable=broad-except
+            self.logging.info("Connection broke. Resetting. [%s]", err.__class__.__name__)
+            #raise err
+            await asyncio.sleep(1)
+        
 
     async def async_run(self) -> None:
         """Initiate and Start the websocket client."""
         await self.init()
         while not self.stopped:
-            try:
-                self.logging.info("Connecting to provider.")
-                while not self.stopped:
-                    async with websockets.connect(self.uri) as websocket:
-                        await websocket.send("ACK_" + self.service_name)
-                        while not self.stopped:
-                            try:
-                                message = await asyncio.wait_for(websocket.recv(), timeout=10)
-                                content = json.loads(message)
-                            except asyncio.TimeoutError:
-                                continue
-                            except json.JSONDecodeError:
-                                continue
-                            length = await self.redisc.lpush('tasks', json.dumps(content))
-                            if length >= self.max_buffer:
-                                await self.pause_handler(websocket=websocket)
-            except websockets.exceptions.InvalidHandshake:
-                self.logging.info("Could not establish connection, handshake failed.")
-                await asyncio.sleep(1)
-            except Exception as err:  # pylint: disable=broad-except
-                self.logging.info("Connection broke. Resetting. [%s]", err.__class__.__name__)
-                #raise err
-                await asyncio.sleep(1)
+            while not self.stopped and await self.redisc.llen('tasks') > 0.3 * self.max_buffer:
+                await asyncio.sleep(0.5)
+            await self.runner()
+
