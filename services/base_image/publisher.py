@@ -117,4 +117,3 @@ class Publisher(threading.Thread):
         finally:
             del self.client_names[client_name]
             self.clients.remove(websocket)
-            await websocket.close()
