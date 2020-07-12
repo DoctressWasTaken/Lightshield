@@ -69,6 +69,7 @@ class Subscriber(threading.Thread):
             count = 0
             while not self.stopped:
                 message = await asyncio.wait_for(ws.receive(), timeout=2)
+                self.logging.info(message)
                 content = json.loads(message)
                 count += 1
                 if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
