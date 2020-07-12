@@ -106,7 +106,10 @@ class Publisher(threading.Thread):
                        item not in self.client_names.keys()]:
                     task = await self.redisc.lpop('packages')
                     if task:
-                        await asyncio.wait([client.send(task) for client in self.clients])
+                        try:
+                            await asyncio.wait([client.send(task) for client in self.clients])
+                        except:
+                            return
                     else:
                         await asyncio.sleep(0.5)
             while websocket.open:
