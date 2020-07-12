@@ -106,6 +106,7 @@ class Publisher(threading.Thread):
                        item not in self.client_names.keys()]:
                     task = await self.redisc.lpop('packages')
                     if task:
+                        self.logging.info(task)
                         try:
                             await asyncio.wait([client.send(task) for client in self.clients])
                         except:
