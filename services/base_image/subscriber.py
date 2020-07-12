@@ -64,7 +64,7 @@ class Subscriber(threading.Thread):
     async def runner(self, session) -> None:
         async with session.ws_connect(self.uri) as ws:
             self.logging.info("Connected to provider.")
-            ws.send_str("ACK_" + self.service_name)
+            await ws.send_str("ACK_" + self.service_name)
 
             count = 0
             while not self.stopped:
