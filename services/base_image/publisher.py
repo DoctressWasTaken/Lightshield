@@ -58,9 +58,14 @@ class Publisher(threading.Thread):
     async def async_run(self) -> None:
         """Run async initiation and start websocket server."""
         await self.init()
-        await asyncio.gather(
-            self.worker(),
-            websockets.serve(self.server, *self.connection_params))
+        worker = asyncio.create_task(self.worker())
+        while not self.stopped:
+            try:
+                await websockets.serve(self.server, *self.connection_params)
+            except BaseException as err:
+                self.logging.info("Websocket lost connection. [%s]", err.__class__.__name__)
+
+        await worker
 
     async def worker(self) -> None:
         """Handle sending out tasks to clients."""
@@ -84,6 +89,7 @@ class Publisher(threading.Thread):
         try:
             msg = await websocket.recv()
             if not msg.startswith('ACK'):
+                await websocket.close()
                 return
             client_name = msg.split("_")[1]
             self.client_names[client_name] = True

@@ -58,24 +58,23 @@ class Subscriber(threading.Thread):
                 await websocket.send("ACK_" + self.service_name)
                 while not self.stopped:
                     try:
-                        message = await asyncio.wait_for(websocket.recv(), timeout=10)
+                        message = await asyncio.wait_for(websocket.recv(), timeout=2)
                         content = json.loads(message)
                     except asyncio.TimeoutError:
-                        continue
+                        await websocket.close()
+                        return
                     except json.JSONDecodeError:
                         continue
                     length = await self.redisc.lpush('tasks', json.dumps(content))
                     if length >= self.max_buffer:
+                        await websocket.close()
                         return
-
-        except websockets.exceptions.InvalidHandshake:
-            self.logging.info("Could not establish connection, handshake failed.")
-            await asyncio.sleep(1)
         except BaseException as err:  # pylint: disable=broad-except
             self.logging.info("Connection broke. Resetting. [%s]", err.__class__.__name__)
             #raise err
             await asyncio.sleep(1)
-        
+        finally:
+            self.logging.info("Closing connection to publisher.")
 
     async def async_run(self) -> None:
         """Initiate and Start the websocket client."""
