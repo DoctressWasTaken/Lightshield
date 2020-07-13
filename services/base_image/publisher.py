@@ -73,21 +73,6 @@ class Publisher(threading.Thread):
                 await asyncio.sleep(1)
         await worker
 
-    async def worker(self) -> None:
-        """Handle sending out tasks to clients."""
-        while not self.stopped:
-            if self.required_subs:
-                if missing := [item for item in self.required_subs if
-                               item not in self.client_names.keys()]:
-                    self.logging.info("Following required subs still missing: %s", missing)
-                    while [item for item in self.required_subs if
-                           item not in self.client_names.keys()]:
-                        await asyncio.sleep(1)
-                    self.logging.info("Connection to all required subs established.")
-                    continue
-            if (task := await self.redisc.lpop('packages')) and self.clients:
-                await asyncio.wait([client.send(task) for client in self.clients])
-
     async def server(self, websocket, _) -> None:
         """Handle the websocket client connection."""
         self.clients.add(websocket)
@@ -95,24 +80,40 @@ class Publisher(threading.Thread):
         try:
             msg = await websocket.recv()
             self.logging.info("Received message: %s", msg)
+            self.logging.info("%s clients connected.", len(self.clients))
             if not msg.startswith('ACK'):
                 return
             client_name = msg.split("_")[1]
             self.client_names[client_name] = True
-            if not [item for item in self.required_subs if
+            if not self.required_subs:
+                count = 0
+                while not websocket.closed:
+                    task = await self.redisc.lpop('packages')
+                    if task:
+                        try:
+                            await asyncio.wait([client.send(task) for client in self.clients])
+                            count += 1
+                        except:
+                            return
+                    else:
+                        await asyncio.sleep(0.5)
+                    
+                self.logging.info("Sent %s tasks.", count)
+
+            elif not [item for item in self.required_subs if
                            item not in self.client_names.keys()]:
                 self.logging.info("Dumping data.")
                 while not [item for item in self.required_subs if
-                       item not in self.client_names.keys()]:
+                       item not in self.client_names.keys()] and not websocket.closed:
                     task = await self.redisc.lpop('packages')
                     if task:
-                        self.logging.info(task)
                         try:
                             await asyncio.wait([client.send(task) for client in self.clients])
                         except:
                             return
                     else:
                         await asyncio.sleep(0.5)
+
             while websocket.open:
                 await asyncio.sleep(0.2)
         except BaseException as err:  # pylint: disable=broad-except

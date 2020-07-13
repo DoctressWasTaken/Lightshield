@@ -71,6 +71,9 @@ class Subscriber(threading.Thread):
                 try:
                     message = await asyncio.wait_for(ws.receive(), timeout=2)
                     try:
+                        if not message.data:
+                            await asyncio.sleep(1)
+                            continue
                         content = json.loads(message.data)
                     except:
                         self.logging.info(message.data)
