@@ -1,4 +1,5 @@
 version: '2.3'
+env_file
 services:
 
   proxy:
@@ -18,6 +19,7 @@ services:
 ### Services
 
   league_rankings:
+    hostname: league_rankings
     mem_limit: 150m
     cpus: 0.25
     build:
@@ -25,18 +27,19 @@ services:
       context: services/league_rankings
     environment:
       - SERVER=${SERVER}
-      - UPDATE_INTERVAL=${LR_UPDATE_INTERVAL}
-      - WORKER=${LR_WORKER}
-      - REQUIRED_SUBSCRIBER=${LR_REQUIRED_SUBSCRIBER}
+      - UPDATE_INTERVAL=5
+      - WORKER=5
+      - REQUIRED_SUBSCRIBER=SI
     links:
       - proxy:proxy
       - league_rankings_redis:redis
     restart: always
     volumes:
-      - ./sqlite/${SERVER}_league_rankings.db:/project/sqlite3.db
+      - ./sqlite/:/project/sqlite/
       - ./configs/:/project/configs/
 
-  summoner_ids:
+  summoner_ids:  # SI
+    hostname: summoner_ids
     mem_limit: 150m
     cpus: 0.25
     build:
@@ -44,18 +47,19 @@ services:
       context: services/summoner_ids
     environment:
       - SERVER=${SERVER}
-      - WORKER=${SI_WORKER}
-      - REQUIRED_SUBSCRIBER=${SI_REQUIRED_SUBSCRIBER}
-      - MAX_TASK_BUFFER=${SI_MAX_TASK_BUFFER}
+      - WORKER=35
+      - REQUIRED_SUBSCRIBER=MH
+      - MAX_TASK_BUFFER=5000
     volumes:
-      - ./sqlite/${SERVER}_summoner_ids.db:/project/sqlite3.db
+      - ./sqlite/:/project/sqlite/
     links:
       - summoner_ids_redis:redis
       - proxy:proxy
       - league_rankings:provider
     restart: always
 
-  match_history:
+  match_history:  # MH
+    hostname: match_history
     mem_limit: 150m
     cpus: 0.25
     build:
@@ -63,20 +67,21 @@ services:
       context: services/match_history
     environment:
       - SERVER=${SERVER}
-      - WORKER=${MH_WORKER}
-      - MATCHES_TO_UPDATE=${MH_MATCHES_TO_UPDATE}
-      - TIME_LIMIT=${TIME_LIMIT}
-      - MAX_TASK_BUFFER=${MH_MAX_TASK_BUFFER}
-      - REQUIRED_SUBSCRIBER=${MH_REQUIRED_SUBSCRIBER}
+      - WORKER=10
+      - MATCHES_TO_UPDATE=10
+      - TIME_LIMIT=1590969600
+      - MAX_TASK_BUFFER=5000
+      - REQUIRED_SUBSCRIBER=MD
     volumes:
-      - ./sqlite/${SERVER}_match_history.db:/project/sqlite3.db
+      - ./sqlite/:/project/sqlite/
     links:
       - match_history_redis:redis
       - proxy:proxy
       - summoner_ids:provider
     restart: always
 
-  match_details:
+  match_details:  # MD
+    hostname: match_details
     mem_limit: 150m
     cpus: 0.25
     build:
@@ -84,11 +89,10 @@ services:
       context: services/match_details
     environment:
       - SERVER=${SERVER}
-      - WORKER=${MD_WORKER}
-      - MAX_TASK_BUFFER=${MD_MAX_TASK_BUFFER}
-      - REQUIRED_SUBSCRIBER=${MD_REQUIRED_SUBSCRIBER}
+      - WORKER=45
+      - MAX_TASK_BUFFER=5000
     volumes:
-      - ./sqlite/${SERVER}_match_details.db:/project/sqlite3.db
+      - ./sqlite/:/project/sqlite/
     links:
       - match_details_redis:redis
       - proxy:proxy
@@ -100,6 +104,7 @@ services:
 ### Database Connector
 
   database_connector_summoner:
+    hostname: database_connector_summoner
     mem_limit: 250m
     cpus: 0.25
     build:
@@ -107,10 +112,10 @@ services:
       context: services/database_connector_summoner/
     environment:
       - SERVER=${SERVER}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - MAX_TASK_BUFFER=500  # TODO: Move to ENV file
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=db_worker
+      - MAX_TASK_BUFFER=5000
     external_links:
       - lightshield_postgres:postres
     links:
@@ -119,6 +124,7 @@ services:
     restart: always
 
   database_connector_match_details:
+    hostname: database_connector_match_details
     mem_limit: 250m
     cpus: 0.25
     build:
@@ -126,10 +132,10 @@ services:
       context: services/database_connector_match_details/
     environment:
       - SERVER=${SERVER}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - MAX_TASK_BUFFER=500  # TODO: Move to ENV file
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=db_worker
+      - MAX_TASK_BUFFER=1000
     external_links:
       - lightshield_postgres:postres
     links:
@@ -202,7 +208,7 @@ services:
 
 volumes:
   league_rankings:
-    name: ${SERVER}_league_rankins
+    name: ${SERVER}_league_rankings
   summoner_ids:
     name: ${SERVER}_summoner_ids
   match_history:

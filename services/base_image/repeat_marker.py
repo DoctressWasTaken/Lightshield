@@ -7,7 +7,7 @@ import aiosqlite
 import logging
 import asyncio
 import os
-
+import socket
 
 class RepeatMarker:
     """Marker class."""
@@ -27,9 +27,6 @@ class RepeatMarker:
         self.connection = None
         self.connections = []
         self.write_connection = None
-        if not os.path.exists('sqlite3.db'):
-            self.logging.info("No 'sqlite3.db' file found. Check your bindings.")
-            exit()
 
     async def execute_read(self, query):
         """Execute a read query passed on by the client.
@@ -58,8 +55,11 @@ class RepeatMarker:
 
     async def build(self, query):
         """Try to create SQL tables."""
-        async with aiosqlite.connect('sqlite3.db') as db:
-            await db.execute(query)
-            await db.commit()
+        dbname = "sqlite/%s_%s.db" % (os.environ['SERVER'], socket.gethostname())
+        if not os.path.exists(dbname):
+            self.logging.info("No DB File found. Creating.")
+            async with aiosqlite.connect(dbname) as db:
+                await db.execute(query)
+                await db.commit()
 
 
