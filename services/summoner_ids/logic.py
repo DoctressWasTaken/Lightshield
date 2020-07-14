@@ -5,6 +5,12 @@ Import is done directly.
 """
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from worker import WorkerClass
+from service import ServiceClass
+
+class Service(ServiceClass):
+
+    async def init(self):
+        await self.marker.connect()
 
 
 class Worker(WorkerClass):
@@ -13,8 +19,10 @@ class Worker(WorkerClass):
     async def process_task(self, session, task):
         """Create only a new call if the summoner is not yet in the db."""
         identifier = task['summonerId']
-        if redis_entry := await self.service.redisc.hgetall(f"user:{identifier}"):
-            package = {**task, **redis_entry}
+        if data := await self.service.marker.execute_read(
+                'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
+            package = {**task, 'accountId': data[0][0], 'puuid': data[0][1]}
+
             await self.service.add_package(package)
             return
         if identifier in self.service.buffered_elements:
@@ -23,10 +31,11 @@ class Worker(WorkerClass):
         url = self.service.url % identifier
         try:
             response = await self.service.fetch(session, url)
-            await self.service.redisc.hmset_dict(
-                f"user:{identifier}",
-                {'puuid': response['puuid'],
-                 'accountId': response['accountId']})
+            await self.service.marker.execute_write(
+                'INSERT INTO summoner_ids (summonerId, accountId, puuid) '
+                'VALUES ("%s", "%s", "%s");' % (
+                identifier, response['accountId'], response['puuid']))
+
             await self.service.add_package({**task, **response})
         except (RatelimitException, NotFoundException, Non200Exception):
             return

@@ -10,6 +10,7 @@ import asyncio
 import threading
 import aioredis
 import websockets
+from aiohttp import web
 
 
 class Publisher(threading.Thread):
@@ -32,6 +33,8 @@ class Publisher(threading.Thread):
         self.clients = set()
         self.client_names = {}
 
+        self.runner = None  # Async server runner
+
         self.logging = logging.getLogger("Publisher")
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
@@ -47,8 +50,11 @@ class Publisher(threading.Thread):
 
     def run(self) -> None:
         """Initiate the async loop/websocket server."""
+        
         loop = asyncio.new_event_loop()
-        loop.run_until_complete(self.async_run())
+        asyncio.set_event_loop(loop)
+        
+        asyncio.run(self.async_run())
 
     async def init(self) -> None:
         """Initiate redis connection."""
@@ -57,48 +63,75 @@ class Publisher(threading.Thread):
 
     async def async_run(self) -> None:
         """Run async initiation and start websocket server."""
+        app = web.Application()
+        app.add_routes([web.get('', self.handler)])
         await self.init()
-        await asyncio.gather(
-            self.worker(),
-            websockets.serve(self.server, *self.connection_params))
+        self.runner = web.AppRunner(app)
+        await self.runner.setup()
+        site = web.TCPSite(self.runner, *self.connection_params)
 
-    async def worker(self) -> None:
-        """Handle sending out tasks to clients."""
+        shutdown_handler = asyncio.create_task(self.shutdown_handler())
+        await site.start()
+        self.logging.info("Started server.")
+        await shutdown_handler
+        self.logging.info("Shutdown server.")
+
+    async def shutdown_handler(self):
+        """Set server to exit on shutdown signal."""
         while not self.stopped:
-            if self.required_subs:
-                if missing := [item for item in self.required_subs if
-                               item not in self.client_names.keys()]:
-                    self.logging.info("Following required subs still missing: %s", missing)
-                    while [item for item in self.required_subs if
-                           item not in self.client_names.keys()]:
-                        await asyncio.sleep(1)
-                    self.logging.info("Connection to all required subs established.")
-                    continue
+            await asyncio.sleep(1)
+        await self.runner.cleanup()
 
-            if not all([self.client_names[name] for name in self.client_names]):
-                while not all([self.client_names[name] for name in self.client_names]):
-                    await asyncio.sleep(0.2)
-                continue
-            if (task := await self.redisc.lpop('packages')) and self.clients:
-                await asyncio.wait([client.send(task) for client in self.clients])
-
-    async def server(self, websocket, _) -> None:
+    async def handler(self, request) -> None:
         """Handle the websocket client connection."""
-        self.clients.add(websocket)
         client_name = None
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        self.clients.add(ws)
+        count = 0
         try:
-            msg = await websocket.recv()
-            if not msg.startswith('ACK'):
-                return
-            client_name = msg.split("_")[1]
+            message = await asyncio.wait_for(ws.receive(), timeout=2)
+            if not (content := message.data).startswith('ACK'):
+                self.logging.info("Received non ACK message: %s", content)
+                return ws
+            client_name = content.split("_")[1]
             self.client_names[client_name] = True
-            async for message in websocket:
-                if message == "PAUSE":
-                    self.client_names[client_name] = False
-                if message == "UNPAUSE":
-                    self.client_names[client_name] = True
-        except Exception as err:  # pylint: disable=broad-except
-            self.logging.info("Websocket lost connection. [%s]", err.__class__.__name__)
+            
+            if not self.required_subs:
+                while not ws.closed:
+                    task = await self.redisc.lpop('packages')
+                    if task:
+                        try:
+                            await asyncio.wait([client.send_str(task) for client in self.clients])
+                            count += 1
+                        except BaseException as err:
+                            self.logging.info("Exception %s received.", err.__class__.__name__)
+                            return ws
+                    else:
+                        return ws
+            
+            elif not [item for item in self.required_subs if
+                           item not in self.client_names.keys()]:
+                while not [item for item in self.required_subs if
+                       item not in self.client_names.keys()] and not ws.closed:
+                    task = await self.redisc.lpop('packages')
+                    if task:
+                        try:
+                            await asyncio.wait([client.send_str(task) for client in self.clients])
+                        except BaseException as err:
+                            self.logging.info("Exception %s received.", err.__class__.__name__)
+                            return ws
+                    else:
+                        return ws 
+            return ws
+        except asyncio.TimeoutError:
+            return ws
         finally:
+            if count > 5:
+                self.logging.info("Sent %s tasks.", count)
             del self.client_names[client_name]
-            self.clients.remove(websocket)
+            self.clients.remove(ws)
+            await ws.close()
+
+
+

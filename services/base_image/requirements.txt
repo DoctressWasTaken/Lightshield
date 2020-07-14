@@ -2,3 +2,4 @@ aioredis
 aiohttp
 websockets
 uvloop
+aiosqlite

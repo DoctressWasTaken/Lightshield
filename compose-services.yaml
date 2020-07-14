@@ -33,6 +33,7 @@ services:
       - league_rankings_redis:redis
     restart: always
     volumes:
+      - ./sqlite/${SERVER}_league_rankings.db:/project/sqlite3.db
       - ./configs/:/project/configs/
 
   summoner_ids:
@@ -46,6 +47,8 @@ services:
       - WORKER=${SI_WORKER}
       - REQUIRED_SUBSCRIBER=${SI_REQUIRED_SUBSCRIBER}
       - MAX_TASK_BUFFER=${SI_MAX_TASK_BUFFER}
+    volumes:
+      - ./sqlite/${SERVER}_summoner_ids.db:/project/sqlite3.db
     links:
       - summoner_ids_redis:redis
       - proxy:proxy
@@ -65,6 +68,8 @@ services:
       - TIME_LIMIT=${TIME_LIMIT}
       - MAX_TASK_BUFFER=${MH_MAX_TASK_BUFFER}
       - REQUIRED_SUBSCRIBER=${MH_REQUIRED_SUBSCRIBER}
+    volumes:
+      - ./sqlite/${SERVER}_match_history.db:/project/sqlite3.db
     links:
       - match_history_redis:redis
       - proxy:proxy
@@ -83,7 +88,7 @@ services:
       - MAX_TASK_BUFFER=${MD_MAX_TASK_BUFFER}
       - REQUIRED_SUBSCRIBER=${MD_REQUIRED_SUBSCRIBER}
     volumes:
-      - ./sqlite/{SERVER}_match_details.db:/project/sqlite3.db
+      - ./sqlite/${SERVER}_match_details.db:/project/sqlite3.db
     links:
       - match_details_redis:redis
       - proxy:proxy
@@ -154,7 +159,6 @@ services:
     volumes:
         - summoner_ids:/data/
     restart: always
-
 
   match_history_redis:
     mem_limit: 250m

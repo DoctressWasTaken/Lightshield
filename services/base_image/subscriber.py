@@ -10,7 +10,7 @@ import asyncio
 import logging
 import threading
 import aioredis
-import websockets
+import aiohttp
 
 
 class Subscriber(threading.Thread):
@@ -51,39 +51,47 @@ class Subscriber(threading.Thread):
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
 
-    async def pause_handler(self, websocket) -> None:
-        """Send the pause and unpause flags to the publishing services."""
-        await websocket.send("PAUSE")
-        while not self.stopped and await self.redisc.llen('tasks') > 0.8 * self.max_buffer:
-            await asyncio.sleep(0.5)
-        if self.stopped:
-            return
-        await websocket.send("UNPAUSE")
-
     async def async_run(self) -> None:
         """Initiate and Start the websocket client."""
         await self.init()
         while not self.stopped:
+            while not self.stopped and await self.redisc.llen('tasks') > 0.3 * self.max_buffer:
+                await asyncio.sleep(0.5)
+
+            async with aiohttp.ClientSession() as session:
+                await self.runner(session)
+            await asyncio.sleep(1)
+
+    async def runner(self, session) -> None:
+        async with session.ws_connect(self.uri) as ws:
+            count = 0
             try:
-                self.logging.info("Connecting to provider.")
+                await ws.send_str("ACK_" + self.service_name)
                 while not self.stopped:
-                    async with websockets.connect(self.uri) as websocket:
-                        await websocket.send("ACK_" + self.service_name)
-                        while not self.stopped:
-                            try:
-                                message = await asyncio.wait_for(websocket.recv(), timeout=10)
-                                content = json.loads(message)
-                            except asyncio.TimeoutError:
+                    message = await asyncio.wait_for(ws.receive(), timeout=2)
+
+                    if message.type == aiohttp.WSMsgType.TEXT:
+                        try:
+                            if not message.data:
+                                await asyncio.sleep(1)
                                 continue
-                            except json.JSONDecodeError:
-                                continue
-                            length = await self.redisc.lpush('tasks', json.dumps(content))
-                            if length >= self.max_buffer:
-                                await self.pause_handler(websocket=websocket)
-            except websockets.exceptions.InvalidHandshake:
-                self.logging.info("Could not establish connection, handshake failed.")
-                await asyncio.sleep(1)
-            except Exception as err:  # pylint: disable=broad-except
-                self.logging.info("Connection broke. Resetting. [%s]", err.__class__.__name__)
-                #raise err
-                await asyncio.sleep(1)
+                            content = json.loads(message.data)
+                            count += 1
+                        except:
+                            self.logging.info(message.data)
+                            continue
+                        if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
+                            return
+                    elif message.type == aiohttp.WSMsgType.CLOSED:
+                        return
+                    elif message.type == aiohttp.WSMsgType.CLOSE:
+                        return
+                    else:
+                        print(message.type)
+            except asyncio.TimeoutError:
+                return
+            finally:
+                await ws.close()
+                if count > 5:
+                    self.logging.info("Received %s tasks", count)
+

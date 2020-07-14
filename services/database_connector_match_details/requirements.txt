@@ -1,4 +1,2 @@
-aiohttp
-pika
 psycopg2-binary
 sqlalchemy
