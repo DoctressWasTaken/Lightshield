@@ -60,30 +60,38 @@ class Subscriber(threading.Thread):
 
             async with aiohttp.ClientSession() as session:
                 await self.runner(session)
+            await asyncio.sleep(1)
 
     async def runner(self, session) -> None:
         async with session.ws_connect(self.uri) as ws:
-            self.logging.info("Connected to provider.")
-            await ws.send_str("ACK_" + self.service_name)
-
             count = 0
-            while not self.stopped:
-                try:
+            try:
+                await ws.send_str("ACK_" + self.service_name)
+                while not self.stopped:
                     message = await asyncio.wait_for(ws.receive(), timeout=2)
-                    try:
-                        if not message.data:
-                            await asyncio.sleep(1)
-                            continue
-                        content = json.loads(message.data)
-                    except:
-                        self.logging.info(message.data)
-                        continue
-                    count += 1
-                    if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
-                        await ws.close()
-                        break
-                except asyncio.TimeoutError:
-                    self.logging.info("Failed to get message.")
-                    await asyncio.sleep(1)
 
-            self.logging.info("Received %s tasks", count)
+                    if message.type == aiohttp.WSMsgType.TEXT:
+                        try:
+                            if not message.data:
+                                await asyncio.sleep(1)
+                                continue
+                            content = json.loads(message.data)
+                            count += 1
+                        except:
+                            self.logging.info(message.data)
+                            continue
+                        if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
+                            return
+                    elif message.type == aiohttp.WSMsgType.CLOSED:
+                        return
+                    elif message.type == aiohttp.WSMsgType.CLOSE:
+                        return
+                    else:
+                        print(message.type)
+            except asyncio.TimeoutError:
+                return
+            finally:
+                await ws.close()
+                if count > 5:
+                    self.logging.info("Received %s tasks", count)
+
