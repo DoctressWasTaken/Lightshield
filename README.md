@@ -26,7 +26,7 @@ The Service Class handles pulls and pushes to either buffer.
 - Tasks are published to subscribed services using a websocket server. 
 
 ## Requirements
-LS runs on docker-compose meaning that outside of the container system no data is needed.
+Lightshield runs on docker-compose meaning that outside of the container system no data is needed.
 
 ## Setup
 
