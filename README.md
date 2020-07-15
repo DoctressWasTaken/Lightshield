@@ -10,10 +10,9 @@ The setup is meant for tasks using alot of match data while not wanting to set u
 Lightshield is optimized to not repeat calls unecessarily. This comes at cost of having data added in a real time fashion.
 *While unlikely services can drop singular datasets on restarts/shutdowns that will not be repeated unless manually forced.*
  
-
-[Image Link]
-
 ## Structure in Short
+
+![Service](https://raw.githubusercontent.com/LightshieldDotDev/Lightshield/master/Service.png)
 
 Services rely on a standardized structure:
 - Services take input from other services using a Websocket Client that connects to the publishing service.
