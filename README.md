@@ -1,43 +1,30 @@
-## **There have been a bunch of changes not added to the readme yet.**
-## Will be updated in the coming days, or just send me a message.
-
-
 
 # Lightshield (LS)
 
-* [Requirements](#requirements)
-* [Setup](#setup)
-  + [I. API Key](#i-api-key)
-  + [II. Base Image and Network](#ii-base-image-and-network)
-  + [III. Centralized Elements](#iii-centralized-elements)
-  + [IV. Server Specific Structure](#iv-server-specific-structure)
-  + [Container](#container)
-    - [RabbitMQ](#rabbitmq)
-    - [PostgreSQL](#postgresql)
-    - [Proxy](#proxy)
-    - [League Updater](#league-updater)
-    - [Summoner ID Updater](#summoner-id-updater)
-    - [Match History Updater](#match-history-updater)
-    - [Match Updater](#match-updater)
-    - [DB Worker](#db-worker)
-* [Database-Structure](#database-structure)
-  + [Summoners](#summoners)
-  + [Matches](#matches)
-
 This tool provides a fully automated system to permanently mirror the official Riot APIs content
- with your local system. It uses a number of Microservices to pull currently ranked players as well
- as all matches on the server into a local database and keeps it updated.
+ with your local system. It uses a number of microservices to split requests done to different endpoints
+ across separated processes.
+
+The setup is meant for tasks using alot of match data while not wanting to set up their own data polling.
+
+Lightshield is optimized to not repeat calls unecessarily. This comes at cost of having data added in a real time fashion.
+*While unlikely services can drop singular datasets on restarts/shutdowns that will not be repeated unless manually forced.*
  
-This is an ideal setup for someone interested only in frontend or data analysis work not wanting to 
-deal with setting up routines and regular calls to the api nor caching of results.
 
-LS is optimized to not repeat calls unless necessary. All data is made available in a final postgres
-database using only a single table style for both match and summoner details. 
+[Image Link]
 
-**This system is not structured to return realtime or necessarily 100% complete content. (yet)**
-- Matchhistories are, by default, only updated after 10 new matches played for efficiency reasons (Its likely that someone else that has played in that match will trigger a pull anyway).
-- There is a minor issue that matches, after being called but before being added to the DB, will not be repeated if the service is killed during that time. While it should properly flush the data this is not implemented fully reliable yes.
-- Its currently only pulling soloQ matches, It's currently also only pulling match-details (not timelines)
+## Structure in Short
+
+Services rely on a standardized structure:
+- Services take input from other services using a Websocket Client that connects to the publishing service.
+- Services each rely on their own redis database for buffering of incoming as well as outgoing tasks. Buffer are limited
+as not to build a major overhead at any point of the service chain.
+- Services use a local SQLite database to hold details on already performed calls/ latest stats. This data is not 
+kept in the Redis database as the in-memory cost would be too high.
+- Services use a centralized Service Class/Worker Class System to perform calls to the API in an asynchronous manner.
+The Service Class handles pulls and pushes to either buffer.
+- All calls are issued through a centralized proxy service, tasked with ratelimiting the requests on client side. 
+- Tasks are published to subscribed services using a websocket server. 
 
 ## Requirements
 LS runs on docker-compose meaning that outside of the container system no data is needed.
@@ -45,167 +32,63 @@ LS runs on docker-compose meaning that outside of the container system no data i
 ## Setup
 
 ### I. API Key
-Create a `secrets.env` file and add your API key. 
+Create a `secrets.env` file in the project folder and add your API key. 
 ```.env
 API_KEY=RGAPI-xxx
 ```
 
 ### II. Base image & Network
-3 services are based on a centralized base image included in the project. It has to be created 
-locally:
+Build the basic image used by all services:
 ```shell script
 docker build -t lightshield_service ./services/base_image/
 ```
-All services are connected to an external network. It has to be created before running the container with:
+Initialize the network used: 
 ```shell script
 docker network create lightshield
 ```
 
-### III. Centralized Elements
-Core of the system are the RabbitMQ messaging system to provide fail-proof communication between 
-services as well as the postgreSQL database holding the final output.
-Those services are contained in the `compose-persistent.yaml` file. Build and start both via:
+### III. Centralized Postgres
+Calls and services are initiated on a **per server** basis, meaning that server can be added and removed
+as interest in the data exists.
+
+Data collected across **all** services is centralized in a final postgres database.
+Settings for the postgres can be found in the `compose-persistent.yaml`.
+Data is saved in the `data` database.\
+Build and start the postgres db via:
 ```shell script
 docker-compose -f compose-persistent.yaml build
 docker-compose -f compose-persistent.yaml up -d
 ```
 
 ### IV. Server Specific Structure
-For each server scraped an individual chain of container has to be set up. They run on their own using only the central rabbitmq messaging queue service as well as the final postgresql server unitedly.
-
-Because docker-compose, by itself, wont let you run multiple instances of a container side by side (outside of scaling) the project has to be initiated with different `COMPOSE_PROJECT_NAME` values.
-
-In addition the server code has to be provided. It is used for generating the proper requests to the api, naming messaging queues and selecting/creating the appropriated volumes for the temporary databases.
-
+The project uses every container multiple times. For this to work a different `COMPOSE_PROJECT_NAME` has 
+to be set for each server. \
+In adition the currently selected `SERVER` code has to be passed into the command to be passed on into
+the services.\
+**While the `COMPOSE_PROJECT_NAME` can be chosen and changed at will while running the project, the 
+`SERVER` variable has to be kept consistent in spelling (always capital letters) as volumes used by 
+the Redis databases, naming for the SQLite databases and server names in the postgres db all rely on this variable.** \
+Initiate each server chain as follows:
 ```shell script
 SERVER=EUW1 COMPOSE_PROJECT_NAME=lightshield_euw1 docker-compose build
 SERVER=EUW1 COMPOSE_PROJECT_NAME=lightshield_euw1 docker-compose up -d
 ```
-The `SERVER` value has to contain a legit server code used by the riot API.
-
-**While the` COMPOSE_PROJECT_NAME` can contain any name desired and can be changed by shutting down and restarting the services, the volumes containing info on what elements have already been cached are linked to the `SERVER` value, meaning that this value can not change.** 
-Probably best to just use `lightshield_` + the current server.
- 
 <hr>
 
- ### Container
- 
-Explanation to the different container and their config options in the .env file.
- 
-#### RabbitMQ
-Messaging Queue service that handles all communication between the microservices allowing them to be shut down/started individually if needed.
-Queues are persistent, however only messages between the match_history_updater and the match_updater service are durable as they are created only a limited times (*10 times, 1 for each player that has the match in his matchhistory*)
-All services are limited to not pause once a queue size climbs above 2k messages to avoid overly overloading rabbitmq.
+## Config
+Each service takes a number of required arguments:
+#### Default
+`SERVER` contains the selected api server. For the proper codes please refer to the riot api dev website.\
+`WORKER` sets the number of parallel async worker started in the service.\
+`MAX_TASK_BUFFER` sets the maximum number of incoming tasks buffered. *Outgoing tasks are currently not set via env variables.*\
+`REQUIRED_SUBSCRIBER` [Optional] allows to set a number of services needed for the publisher to allow output. 
+Only once all services mentioned are connected the publisher is allowed to broadcast tasks to all connected services.
+*Service names are currently not set via environment variables.*
 
-#### PostgreSQL
-Postgres Database containing the finalized data on players and matches.
-This database is not set up for massive queries and should be used as a persistent buffer. 
-An option can be to export and purge matches from this database on a patch-cycle basis to move them into individual datapools.
-The data structure is shown [below](#database-structure).
- 
-#### Proxy
-The proxy manages rate limits across all services of the server-chain. 
-It is set up fairly conservatively prioritizing safety over *perfect* usage of the limit.
-
-#### League Updater
-Using the **league-exp** / **league** endpoint this services periodically scrapes all ranked user
-by division.
-A small redis database is running along the process to not pass on any summoner that do not have new matches played.
-
-```
-UPDATE_INTERVAL    Describes the minimum time between scrape cycles for the application.
-                   Going below 2-3 hours is not recommended nor will it change the speed at which
-                   the system works due to the number of calls/api limits that have to be executed.
-                   The initial setup should be set to multiple days to allow the following 
-                   services to initially register all user.
-
-LEAGUE_BUFFER      Describes the maximum parallel calls made to the API. !Consider the API method limit.
-```
-
-#### Summoner ID Updater
-Using the summoner endpoint this services pulls user IDs from the API. This is done only once for each user
-creating a large overhead when first starting the download but falling off over time.
-A small redis database is running along the process to track already requested IDs.
-
-```
-SUMMONER_ID_BUFFER Describes the maximum parallel calls made to the API. !Consider the API method limit.``
-```
- 
-#### Match History Updater
-Using the match endpoint this service pulls match histories from the API. This is done only after the player has 
-played a specified minimum number of new matches compared to the last update. As each call contains 100
-match Ids, multiple calls per user can be required but contain at least 100 matches that are passed on. 
-```
-MATCH_HISTORY_BUFFER   Describes the maximum parallel 'user' that are processed. Each user can 
-                        require multiple calls (especially when starting the system). This value
-                        can be increased, once the initial data is pulled.
- 
-MATCHES_TO_UPDATE      Describes the minimum new matches required to trigger the update of a user.
-                        10 being default means that on average 1 call per match is made
-                        (10 calls, one for each participant).
-                        
-TIME_LIMIT             Oldest timestamp (in seconds) to be pulled.
-```
-
-#### Match Updater
-Using the match endpoint this service pulls match details from the API. Match details are only pulled once.
-Matches pulled are marked in the local redis database and not updated again. Matches pulled are directly added to the postgres database.
- 
-```
-MATCH_BUFFER Describes the maximum parallel calls made to the API. !Consider the API method limit.
-```
-
-#### DB Worker
-The DB Worker takes datasets passed on from the Summoner ID Updater service and writes them into the postgres database.
-
+Services connecting to the postgres database can process host, port and user variables provided for the postgres db.
+The parameters shown below are default parameters used in the services.
 ```
 POSTGRES_HOST=postgres
 POSTGRES_PORT=5432
 POSTGRES_USER=db_worker
-```
-To be changed in case an already existing postgres container or external postgres DB was to be used.
-
-### Database-Structure
-All data is saved in a Postgres Database `data`. The postgres container, by default, has its internal port mapped to localhost:5432. In case another postgres db is running locally this has to be changed or the container wont start.
-
-Data can be accessed through psql or similar means from outside.
-
-#### Summoners
-Summoner are only inserted once and not updated. A new insert is triggered once the summoner is passed through the summoner_id_updater service.
-*(While shown in camelCase below all column names are lower letters only)*
-```python
-    summonerId = Column(String(50))
-    accountId = Column(String(56))
-    puuid = Column(String(78), primary_key=True)
-
-    summonerName = Column(String)
-    tier = Column(Enum(Tier))
-    rank = Column(Enum(Rank))
-
-    series = Column(String(4))
-
-    wins = Column(Integer)
-    losses = Column(Integer)
-
-    server = Column(Enum(Server))
-```
-
-#### Matches
-A new insert is triggered once the match is pulled by the match_updater service.
-*(While shown in camelCase below all column names are lower letters only)*
-sub-tables that are usually present in the match details are saved as json values and cramped into a JSON field. 
-```python
-    matchId = Column(BigInteger, primary_key=True)
-    queue = Column(Integer)
-    gameDuration = Column(Integer)
-    server = Column(Enum(Server), primary_key=True)
-    gameCreation = Column(BigInteger)
-    seasonId = Column(Integer)
-    gameVersion = Column(String(20))
-    mapId = Column(Integer)
-    gameMode = Column(String(15))
-
-    participantIdentities = Column(JSON)
-    teams = Column(JSON)
-    participants = Column(JSON)
 ```
