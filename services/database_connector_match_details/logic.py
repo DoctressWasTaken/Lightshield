@@ -78,12 +78,16 @@ class Worker(threading.Thread):
 
     def process_tasks(self, tasks):
         db_objects = []
+        ids = []
         while tasks:
             match = json.loads(tasks.pop())
             if not self.session.query(Match) \
                     .filter_by(matchId=match['gameId']) \
                     .filter_by(server=Server.get(self.server)) \
                     .first():
+                if match['gameId'] in ids:
+                    continue
+                ids.append(match['gameId'])
                 match = Match(
                     matchId=match['gameId'],
                     queue=match['queueId'],

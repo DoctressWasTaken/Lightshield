@@ -52,7 +52,8 @@ class RepeatMarker:
         Number of connections is determined by the connections parameter supplied in the
         __init__ method.
         """
-        self.connection = await aiosqlite.connect('sqlite3.db')
+        dbname = "sqlite/%s_%s.db" % (os.environ['SERVER'], socket.gethostname())
+        self.connection = await aiosqlite.connect(dbname)
 
     async def build(self, query):
         """Try to create SQL tables."""

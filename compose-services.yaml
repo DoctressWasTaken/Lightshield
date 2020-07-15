@@ -1,5 +1,4 @@
 version: '2.3'
-env_file
 services:
 
   proxy:
