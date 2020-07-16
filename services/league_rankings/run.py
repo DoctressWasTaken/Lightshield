@@ -10,7 +10,7 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 if __name__ == "__main__":
     marker = RepeatMarker()
     asyncio.run(marker.build(
-           "CREATE TABLE IF NOT EXISTS summoner("
+           "CREATE TABLE IF NOT EXISTS match_history("
            "summonerId TEXT PRIMARY KEY,"
            "matches INTEGER);"))
 
