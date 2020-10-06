@@ -84,9 +84,30 @@ class Publisher(threading.Thread):
             await asyncio.sleep(1)
         await self.runner.cleanup()
 
+    async def sender(self):
+        """Send data to clients as long as all clients are connected.
+
+        Initiated by the first connected client to avoid it running multiple times.
+        Once no more clients are connected this terminates itself.
+        """
+        count = 0
+        while all([True if item in self.client_names.keys() else False for item in self.required_subs]):
+            task = await self.redisc.lpop('packages')
+            if task:
+                try:
+                    await asyncio.wait([client.send_str(task) for client in self.clients])
+                    count += 1
+                except BaseException as err:
+                    self.logging.info("Exception %s received.", err.__class__.__name__)
+            else:
+                await asyncio.sleep(0.5)
+        if count > 5:
+            self.logging.info("Sent %s tasks.", count)
+
     async def handler(self, request) -> None:
         """Handle the websocket client connection."""
         client_name = None
+        sender_task = None
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         self.clients.add(ws)
@@ -98,42 +119,18 @@ class Publisher(threading.Thread):
                 return ws
             client_name = content.split("_")[1]
             self.client_names[client_name] = True
-            
-            if not self.required_subs:
-                while not ws.closed:
-                    task = await self.redisc.lpop('packages')
-                    if task:
-                        try:
-                            await asyncio.wait([client.send_str(task) for client in self.clients])
-                            count += 1
-                        except BaseException as err:
-                            self.logging.info("Exception %s received.", err.__class__.__name__)
-                            return ws
-                    else:
-                        return ws
-            
-            elif not [item for item in self.required_subs if
-                           item not in self.client_names.keys()]:
-                while not [item for item in self.required_subs if
-                       item not in self.client_names.keys()] and not ws.closed:
-                    task = await self.redisc.lpop('packages')
-                    if task:
-                        try:
-                            await asyncio.wait([client.send_str(task) for client in self.clients])
-                        except BaseException as err:
-                            self.logging.info("Exception %s received.", err.__class__.__name__)
-                            return ws
-                    else:
-                        return ws 
-            return ws
+
+            if all([True if item in self.client_names.keys() else False for item in self.required_subs]):
+                sender_task = asyncio.create_task(self.sender())
+
+            while not ws.closed:
+                await asyncio.sleep(0.5)
+
         except asyncio.TimeoutError:
             return ws
         finally:
-            if count > 5:
-                self.logging.info("Sent %s tasks.", count)
             del self.client_names[client_name]
+            if sender_task:
+                await sender_task
             self.clients.remove(ws)
             await ws.close()
-
-
-
