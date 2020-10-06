@@ -3,12 +3,31 @@ from exceptions import RatelimitException, NotFoundException, Non200Exception
 from worker import WorkerClass
 from service import ServiceClass
 import json
+import asyncio
 
 
 class Service(ServiceClass):
 
     async def init(self):
         await self.marker.connect()
+        self.limiter_task = asyncio.create_task(self.limiter())
+
+    async def limiter(self):
+        """Method to periodically break down the db size by removing a % of the lowest match Ids."""
+        retain_period_days = 60
+        removal = 100/retain_period_days
+        while True:
+            await asyncio.sleep(24*60*60)
+            count = await self.marker.execute_read(
+                'SELECT COUNT(*) FROM match_id'
+            )
+            to_delete = int(count * removal)
+            lowest_limit = await self.marker.execute_read(
+                'SELECT id FROM match_id ORDER BY id ASC LIMIT %s' % to_delete
+            )[-1]
+            await self.marker.execute_read(
+                'DELETE FROM match_id WHERE id <= %s' % to_delete
+            )
 
 
 class Worker(WorkerClass):

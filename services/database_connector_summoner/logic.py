@@ -83,18 +83,11 @@ class Worker(threading.Thread):
         if summoner_db and not all([summoner[key] == getattr(summoner_db, key) for key in to_check]):
             return
 
-        series = None
-        if "miniSeries" in summoner:
-            series = summoner['miniSeries']['progress'][:-1]
         db_entry = Summoner(
-            summonerId=summoner['summonerId'],
-            accountId=summoner['accountId'],
             puuid=summoner['puuid'],
-            summonerName=summoner['summonerName'],
             tier=Tier.get(summoner['tier']),
             rank=Rank.get(summoner['rank']),
             leaguePoints=summoner['leaguePoints'],
-            series=series,
             server=Server.get(self.server),
             wins=summoner['wins'],
             losses=summoner['losses'])
