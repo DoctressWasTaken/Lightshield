@@ -78,8 +78,11 @@ class Worker(threading.Thread):
         self.logging.info("Shutting down DB_Connector")
 
     def process_task(self, task):
-        summoner = json.loads(task)
-
+        try:
+            summoner = json.loads(task)
+        except Exception as err:
+            print(task)
+            raise err
         summoner_db = self.session.query(Summoner).filter_by(puuid=summoner['puuid']).first()
         to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints']
         if summoner_db and not all([summoner[key] == getattr(summoner_db, key) for key in to_check]):
