@@ -86,17 +86,23 @@ class Worker(threading.Thread):
         except Exception as err:
             print(task)
             raise err
-        summoner_db = self.session.query(Summoner).filter_by(puuid=summoner['puuid']).first()
-        to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints']
-        if summoner_db and not all([summoner[key] == getattr(summoner_db, key) for key in to_check]):
-            return
+        to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints', 'server']
+        if not (summoner_db := self.session.query(Summoner)
+                .filter_by(puuid=summoner['puuid'])
+                .first()):
+            return Summoner(
+                puuid=summoner['puuid'],
+                tier=Tier.get(summoner['tier']),
+                rank=Rank.get(summoner['rank']),
+                leaguePoints=summoner['leaguePoints'],
+                server=Server.get(self.server),
+                wins=summoner['wins'],
+                losses=summoner['losses'])
 
-        db_entry = Summoner(
-            puuid=summoner['puuid'],
-            tier=Tier.get(summoner['tier']),
-            rank=Rank.get(summoner['rank']),
-            leaguePoints=summoner['leaguePoints'],
-            server=Server.get(self.server),
-            wins=summoner['wins'],
-            losses=summoner['losses'])
-        return db_entry
+        if all([summoner[key] == getattr(summoner_db, key) for key in to_check]):
+            summoner_db.tier = Tier.get(summoner['tier'])
+            summoner_db.rank = Rank.get(summoner['rank'])
+            summoner_db.leaguePoints = summoner['leaguePoints']
+            summoner_db.server = Server.get(summoner['server'])
+            summoner_db.wins = summoner['wins']
+            summoner_db.losses = summoner['losses']
