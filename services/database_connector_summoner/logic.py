@@ -68,6 +68,8 @@ class Worker(threading.Thread):
             tasks = loop.run_until_complete(self.get_tasks())
             if not tasks:
                 continue
+            else:
+                print("Received %s tasks." % len(tasks))
             processed_tasks = [task for task in [self.process_task(task) for task in tasks] if task]
 
             self.logging.info("Inserting %s Summoners.", len(processed_tasks))

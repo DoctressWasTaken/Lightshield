@@ -25,7 +25,9 @@ class Publisher(threading.Thread):
         self.required_subs = None
         if 'REQUIRED_SUBSCRIBER' in os.environ and os.environ['REQUIRED_SUBSCRIBER'] != '':
             self.required_subs = os.environ['REQUIRED_SUBSCRIBER'].split(',')
-
+            print("Required subs: %s" % self.required_subs)
+        else:
+            print("No required subs.")
         self.connection_params = [host, port]
         self.stopped = False
         self.redisc = None
