@@ -55,8 +55,11 @@ class Worker(threading.Thread):
         if self.stopped:
             return
         tasks = []
-        while task := await self.redisc.lpop('tasks') and len(tasks) <= 200:
+        while task := await self.redisc.lpop('tasks'):
             tasks.append(task)
+            if tasks >= 200:
+                break
+
         return tasks
 
     def run(self):
