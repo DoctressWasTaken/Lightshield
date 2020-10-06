@@ -125,7 +125,10 @@ class Publisher(threading.Thread):
             client_name = content.split("_")[1]
             self.client_names[client_name] = True
 
-            if all([True if item in self.client_names.keys() else False for item in self.required_subs]):
+            if (self.required_subs and all(
+                [True if item in self.client_names.keys() else False for item in self.required_subs])) or \
+                    (not self.required_subs and len(self.client_names) == 1):
+
                 sender_task = asyncio.create_task(self.sender())
 
             while not ws.closed:
