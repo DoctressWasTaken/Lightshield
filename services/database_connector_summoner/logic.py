@@ -57,7 +57,7 @@ class Worker(threading.Thread):
         tasks = []
         while task := await self.redisc.lpop('tasks'):
             tasks.append(task)
-            if tasks >= 200:
+            if len(tasks) >= 200:
                 break
 
         return tasks
