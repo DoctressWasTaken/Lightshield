@@ -63,14 +63,14 @@ class Worker(threading.Thread):
 
         loop = asyncio.new_event_loop()
         loop.run_until_complete(self.init())
-        self.logging.info("Starting Match Worker..")
+        self.logging.info("Starting Summoner Worker..")
         while not self.stopped:
             tasks = loop.run_until_complete(self.get_tasks())
             if not tasks:
                 continue
             processed_tasks = [task for task in [self.process_task(task) for task in tasks] if task]
 
-            self.logging.info("Inserting %s Matches.", len(processed_tasks))
+            self.logging.info("Inserting %s Summoners.", len(processed_tasks))
             self.session.bulk_save_objects(processed_tasks)
             self.session.commit()
         self.logging.info("Shutting down DB_Connector")
