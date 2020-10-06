@@ -68,7 +68,7 @@ services:
       - SERVER=${SERVER}
       - WORKER=10
       - MATCHES_TO_UPDATE=10
-      - TIME_LIMIT=1590969600
+      - TIME_LIMIT=1595401200
       - MAX_TASK_BUFFER=5000
       - REQUIRED_SUBSCRIBER=MD
     volumes:
