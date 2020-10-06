@@ -91,7 +91,12 @@ class Publisher(threading.Thread):
         Once no more clients are connected this terminates itself.
         """
         count = 0
-        while (self.client_names and not self.required_subs) or all([True if item in self.client_names.keys() else False for item in self.required_subs]):
+        while True:
+            if not self.required_subs and not self.client_names:
+                break
+            if self.required_subs and not all([True if item in self.client_names.keys() else False for item in self.required_subs]):
+                break
+
             task = await self.redisc.lpop('packages')
             if task:
                 try:
