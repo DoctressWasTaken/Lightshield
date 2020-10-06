@@ -81,7 +81,7 @@ class Worker(threading.Thread):
         summoner = json.loads(task)
 
         summoner_db = self.session.query(Summoner).filter_by(puuid=summoner['puuid']).first()
-        to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints', 'summonerName']
+        to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints']
         if summoner_db and not all([summoner[key] == getattr(summoner_db, key) for key in to_check]):
             return
 

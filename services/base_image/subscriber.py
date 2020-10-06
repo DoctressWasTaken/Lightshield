@@ -92,6 +92,5 @@ class Subscriber(threading.Thread):
                 return
             finally:
                 await ws.close()
-                if count > 5:
-                    self.logging.info("Received %s tasks", count)
+                self.logging.info("Received %s tasks", count)
 

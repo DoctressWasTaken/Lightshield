@@ -99,10 +99,10 @@ class Publisher(threading.Thread):
                     count += 1
                 except BaseException as err:
                     self.logging.info("Exception %s received.", err.__class__.__name__)
+                await asyncio.sleep(0.05)
             else:
                 await asyncio.sleep(0.5)
-        if count > 5:
-            self.logging.info("Sent %s tasks.", count)
+        self.logging.info("Sent %s tasks.", count)
 
     async def handler(self, request) -> None:
         """Handle the websocket client connection."""
