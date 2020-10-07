@@ -36,6 +36,11 @@ class Service:  # pylint: disable=R0902
         self.retry_after = datetime.now()
         self.manager = BufferManager()
 
+        asyncio.run(self.marker.build(
+               "CREATE TABLE IF NOT EXISTS match_history("
+               "summonerId TEXT PRIMARY KEY,"
+               "matches INTEGER);"))
+
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
