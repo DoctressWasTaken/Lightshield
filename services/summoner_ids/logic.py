@@ -49,6 +49,9 @@ class Service:
         """Create only a new call if the summoner is not yet in the db."""
         while not self.stopped:
             task = await self.manager.get_task()
+            if not task:
+                await asyncio.sleep(3)
+                continue
             identifier = task['summonerId']
 
             if data := await self.marker.execute_read(
@@ -56,9 +59,9 @@ class Service:
                 package = {**task, 'accountId': data[0][0], 'puuid': data[0][1]}
 
                 await self.manager.add_package(package)
-                return
+                continue
             if identifier in self.buffered_elements:
-                return
+                continue
             self.buffered_elements[identifier] = True
             url = self.url % identifier
             try:
@@ -73,7 +76,7 @@ class Service:
 
                 await self.manager.add_package({**task, **response})
             except (RatelimitException, NotFoundException, Non200Exception):
-                return
+                continue
             finally:
                 del self.buffered_elements[identifier]
 
