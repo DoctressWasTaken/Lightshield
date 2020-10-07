@@ -47,7 +47,7 @@ services:
     environment:
       - SERVER=${SERVER}
       - WORKER=35
-      - REQUIRED_SUBSCRIBER=MH
+      - REQUIRED_SUBSCRIBER=MH,SD
       - MAX_TASK_BUFFER=5000
     volumes:
       - ./sqlite/:/project/sqlite/
