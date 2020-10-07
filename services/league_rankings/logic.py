@@ -3,6 +3,7 @@ import asyncio
 from datetime import datetime, timedelta
 import os
 import aiohttp
+import logging
 from repeat_marker import RepeatMarker
 from rank_manager import RankManager
 from buffer_manager import BufferManager
