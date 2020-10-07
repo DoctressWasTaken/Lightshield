@@ -1,7 +1,6 @@
 from publisher import Publisher
 from subscriber import Subscriber
-from logic import Worker, Service
-from repeat_marker import RepeatMarker
+from logic import Service
 
 import signal
 import asyncio
