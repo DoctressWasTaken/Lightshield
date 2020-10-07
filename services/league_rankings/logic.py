@@ -8,8 +8,6 @@ from repeat_marker import RepeatMarker
 from rank_manager import RankManager
 from buffer_manager import BufferManager
 
-from service import ServiceClass
-from worker import WorkerClass
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 
 
