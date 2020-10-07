@@ -91,7 +91,11 @@ class Worker(threading.Thread):
         summoner_db = self.session.query(Summoner)\
             .filter_by(puuid=summoner['puuid'])\
             .first()
-        if not summoner_db and summoner['puuid'] not in to_add:
+
+        if summoner['puuid'] in to_add:
+            return
+
+        if not summoner_db:
             to_add.append(summoner['puuid'])
             return Summoner(
                 puuid=summoner['puuid'],
@@ -102,7 +106,7 @@ class Worker(threading.Thread):
                 wins=summoner['wins'],
                 losses=summoner['losses'])
 
-        if summoner_db and not all([summoner[key] == getattr(summoner_db, key) for key in to_check]) or \
+        if not all([summoner[key] == getattr(summoner_db, key) for key in to_check]) or \
                 summoner_db.server != Server.get(self.server):
             summoner_db.tier = Tier.get(summoner['tier'])
             summoner_db.rank = Rank.get(summoner['rank'])
