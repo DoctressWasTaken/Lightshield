@@ -63,7 +63,7 @@ class Service:
             if matches < self.required_matches:
                 continue
             if identifier in self.buffered_elements:
-                return None
+                continue
             self.buffered_elements[identifier] = True
 
             matches_to_call = matches + 3
