@@ -11,7 +11,7 @@ import asyncio
 import aioredis
 
 
-class Service(threading.Thread):
+class Worker(threading.Thread):
 
     def __init__(self, echo=False):
         super().__init__()
