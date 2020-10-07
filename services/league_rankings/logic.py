@@ -112,19 +112,6 @@ class Service:  # pylint: disable=R0902
             raise Non200Exception()
         return await response.json(content_type=None)
 
-    async def run(self):
-        """Override the default run method due to special case.
-
-        Worker are started and stopped after each tier/rank combination.
-        """
-        await self.init()
-        while not self.stopped:
-            tier, division = await self.rankmanager.get_next()
-            self.empty = False
-            self.next_page = 1
-            await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
-            await self.rankmanager.update(key=(tier, division))
-
     async def process_task(self, content) -> None:
         """Process the received list of summoner.
 
@@ -145,3 +132,16 @@ class Service:  # pylint: disable=R0902
             entry['summonerId']))
 
             await self.manager.add_package(entry)
+
+    async def run(self):
+        """Override the default run method due to special case.
+
+        Worker are started and stopped after each tier/rank combination.
+        """
+        await self.init()
+        while not self.stopped:
+            tier, division = await self.rankmanager.get_next()
+            self.empty = False
+            self.next_page = 1
+            await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
+            await self.rankmanager.update(key=(tier, division))
