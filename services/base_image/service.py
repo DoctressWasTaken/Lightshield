@@ -64,32 +64,6 @@ class ServiceClass:  # pylint: disable=R0902
         """
         self.logging.info("Default async init. Service did not overwrite.")
 
-    async def run(self, Worker):  # pylint: disable=C0103
-        """Start the main service loop.
-
-        ::param Worker: Worker class that has been inherited from the basic WorkerClass.
-        """
-        self.redisc = await aioredis.create_redis_pool(
-            ('redis', 6379), db=0, encoding='utf-8')
-
-        await self.init()
-
-        workers = [Worker(self) for i in range(self.parallel_worker)]
-
-        await asyncio.gather(
-            self.check_local_buffer(),
-            *[worker.run() for worker in workers]
-        )
-
-    async def get_task(self):
-        """Return a task pulled from redis.
-
-        :return redis task or None.
-        """
-        if task := await self.redisc.lpop('tasks'):
-            task = json.loads(task)
-        return task
-
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
 
@@ -119,34 +93,3 @@ class ServiceClass:  # pylint: disable=R0902
         if response.status != 200:
             raise Non200Exception()
         return await response.json(content_type=None)
-
-    async def add_package(self, package):
-        """Add a new outgoing package to the local buffer.
-
-        :param package: A dict to be stored in redis (as stringified json).
-        :return the size of the local buffer.
-        """
-        return await self.redisc.lpush('packages', json.dumps(package))
-
-    async def check_local_buffer(self) -> None:
-        """Set local_buffer_full flag to pause local calls."""
-        count = 0
-        self.logging.info("Initiating buffer output.")
-        while not self.stopped:
-            count += 1
-            if await self.redisc.llen('packages') > self.max_local_buffer:
-                self.local_buffer_full = True
-            else:
-                self.local_buffer_full = False
-            await asyncio.sleep(1)
-            if count == 15:
-                self.logging.info(
-                    "Incoming Queue: %s, Outgoing Queue: %s/%s, Output since last: %s, Input since last: %s",
-                    await self.redisc.llen('tasks'),
-                    await self.redisc.llen('packages'),
-                    self.max_local_buffer,
-                    os.environ['OUTGOING'],
-                    os.environ['INCOMING'])
-                os.environ['OUTGOING'] = "0"
-                os.environ['INCOMING'] = "0"
-                count = 0

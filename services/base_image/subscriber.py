@@ -35,7 +35,10 @@ class Subscriber(threading.Thread):
         self.stopped = False
         self.redisc = None
         self.max_buffer = int(os.environ['MAX_TASK_BUFFER'])
-        os.environ['INCOMING'] = "0"
+
+        self.connected_to_publisher = False
+        self.received_packages = 0
+
         self.logging.info("Initiated subscriber.")
 
     def run(self) -> None:
@@ -56,20 +59,35 @@ class Subscriber(threading.Thread):
     async def async_run(self) -> None:
         """Initiate and Start the websocket client."""
         await self.init()
+        logger = asyncio.create_task(self.logger())
         while not self.stopped:
-            while not self.stopped and await self.redisc.llen('tasks') > 0.3 * self.max_buffer:
+            while not self.stopped \
+                    and await self.redisc.llen('tasks') > 0.3 * self.max_buffer \
+                    and await self.redisc.llen('packages') > 500:
                 await asyncio.sleep(0.5)
 
             async with aiohttp.ClientSession() as session:
                 await self.runner(session)
             await asyncio.sleep(1)
+        await logger
+
+    async def logger(self) -> None:
+        """Handle passive logging tasks."""
+        while not self.stopped:
+            await asyncio.sleep(15)
+            self.logging.info(
+                "Received packages: %s | Currently buffered input packages: %s/%s. Connection to publisher: %s",
+                self.received_packages,
+                await self.redisc.llen('tasks'),
+                self.max_buffer,
+                self.connected_to_publisher)
+            self.received_packages = 0
 
     async def runner(self, session) -> None:
         async with session.ws_connect(self.uri) as ws:
-            count = 0
             try:
                 await ws.send_str("ACK_" + self.service_name)
-                self.logging.info("Opened connection to publisher.")
+                self.connected_to_publisher = True
                 while not self.stopped:
                     message = await ws.receive()
 
@@ -79,12 +97,12 @@ class Subscriber(threading.Thread):
                                 await asyncio.sleep(1)
                                 continue
                             content = json.loads(message.data)
-                            count += 1
-                            os.environ['INCOMING'] = str(int(os.environ['INCOMING']) + 1)
+                            self.received_packages += 1
                         except:
                             self.logging.info(message.data)
                             continue
-                        if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer:
+                        if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer \
+                                or await self.redisc.llen('packages') > 500:
                             return
                     elif message.type == aiohttp.WSMsgType.CLOSED:
                         return
@@ -96,7 +114,3 @@ class Subscriber(threading.Thread):
                 return
             finally:
                 await ws.close()
-                self.logging.info("Closed connection to publisher.")
-                if count > 0:
-                    self.logging.info("Received %s packages.", count)
-

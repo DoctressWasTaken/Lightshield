@@ -1,115 +1,129 @@
 """League Updater Module."""
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import aiohttp
-import aioredis
+from repeat_marker import RepeatMarker
 from rank_manager import RankManager
+from buffer_manager import BufferManager
 
 from service import ServiceClass
 from worker import WorkerClass
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 
 
-class Service(ServiceClass):  # pylint: disable=R0902
+class Service:  # pylint: disable=R0902
     """Core service worker object."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self):
         """Initiate sync elements on creation."""
-        super().__init__(*args, **kwargs)
+        self.logging = logging.getLogger("LeagueRankings")
+        self.logging.setLevel(logging.INFO)
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(
+            logging.Formatter('%(asctime)s [Subscriber] %(message)s'))
+        self.logging.addHandler(handler)
 
+        self.server = os.environ['SERVER']
+        self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
+            "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         self.rankmanager = RankManager()
-
         self.empty = False
         self.next_page = 1
+        self.stopped = False
+        self.marker = RepeatMarker()
+        self.retry_after = datetime.now()
+        self.manager = BufferManager()
+
+    def shutdown(self):
+        """Called on shutdown init."""
+        self.stopped = True
 
     async def init(self):
         """Override of the default init function.
 
         Initiate the Rankmanager object.
         """
-        self.redisc = await aioredis.create_redis_pool(
-            ('redis', 6379), db=0, encoding='utf-8')
         await self.marker.connect()
         await self.rankmanager.init()
+        await self.manager.init()
 
-    async def run(self, Worker):
-        """Override the default run method due to special case.
+    async def async_worker(self, tier, division):
 
-        Worker are started and stopped after each tier/rank combination.
-        """
-        await self.init()
-        workers = [Worker(self) for i in range(self.parallel_worker)]
-        buffer_check = asyncio.create_task(self.check_local_buffer())
-        while not self.stopped:
-            tier, division = await self.rankmanager.get_next()
-
-            self.empty = False
-            self.next_page = 1
-
-            await asyncio.gather(
-                *[worker.run(tier=tier, division=division) for worker in workers]
-            )
-            await self.rankmanager.update(key=(tier, division))
-        await buffer_check
-
-    async def check_local_buffer(self) -> None:
-        """Set local_buffer_full flag to pause local calls."""
-        count = 0
-        self.logging.info("Initiating buffer output.")
-        while not self.stopped:
-            count += 1
-            if await self.redisc.llen('packages') > self.max_local_buffer:
-                self.local_buffer_full = True
-            else:
-                self.local_buffer_full = False
-            await asyncio.sleep(1)
-            if count == 15:
-                self.logging.info(
-                    "Outgoing Queue: %s/%s, Output since last: %s",
-                    await self.redisc.llen('packages'),
-                    self.max_local_buffer,
-                    os.environ['OUTGOING'])
-                os.environ['OUTGOING'] = "0"
-                count = 0
-
-
-class Worker(WorkerClass):
-
-    async def run(self, tier, division):
-        """Override of the default run method.
-
-        :param tier: Currently called tier.
-        :param division: Currently called division.
-        """
         failed = None
-        while (not self.service.empty or failed) and not self.service.stopped:
-            if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
+        while (not self.empty or failed) and not self.stopped:
+            if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
-            while not self.service.stopped and self.service.local_buffer_full:
-                await asyncio.sleep(0.5)
-            if self.service.stopped:
+
+            while await self.manager.get_total_packages() > 500 and not self.stopped:
+                await asyncio.sleep(1)
+
+            if self.stopped:
                 return
 
             if not failed:
-                page = self.service.next_page
-                self.service.next_page += 1
+                page = self.next_page
+                self.next_page += 1
             else:
                 page = failed
                 failed = None
             async with aiohttp.ClientSession() as session:
                 try:
-                    content = await self.service.fetch(session, url=self.service.url % (
+                    content = await self.fetch(session, url=self.url % (
                     tier, division, page))
                     if len(content) == 0:
                         self.logging.info("Page %s is empty.", page)
-                        self.service.empty = True
+                        self.empty = True
                         return
                     await self.process_task(content)
                 except (RatelimitException, Non200Exception):
                     failed = page
                 except NotFoundException:
-                    self.service.empty = True
+                    self.empty = True
+
+    async def fetch(self, session, url):
+        """Execute call to external target using the proxy server.
+
+        Receives aiohttp session as well as url to be called. Executes the request and returns
+        either the content of the response as json or raises an exeption depending on response.
+        :param session: The aiohttp Clientsession used to execute the call.
+        :param url: String url ready to be requested.
+
+        :returns: Request response as dict.
+
+        :raises RatelimitException: on 429 or 430 HTTP Code.
+        :raises NotFoundException: on 404 HTTP Code.
+        :raises Non200Exception: on any other non 200 HTTP Code.
+        """
+        try:
+            async with session.get(url, proxy="http://proxy:8000") as response:
+                await response.text()
+        except aiohttp.ClientConnectionError:
+            raise Non200Exception()
+        if response.status in [429, 430]:
+            if "Retry-After" in response.headers:
+                delay = int(response.headers['Retry-After'])
+                self.retry_after = datetime.now() + timedelta(seconds=delay)
+            raise RatelimitException()
+        if response.status == 404:
+            raise NotFoundException()
+        if response.status != 200:
+            raise Non200Exception()
+        return await response.json(content_type=None)
+
+    async def run(self):
+        """Override the default run method due to special case.
+
+        Worker are started and stopped after each tier/rank combination.
+        """
+        await self.init()
+        while not self.stopped:
+            tier, division = await self.rankmanager.get_next()
+            self.empty = False
+            self.next_page = 1
+            await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
+            await self.rankmanager.update(key=(tier, division))
 
     async def process_task(self, content) -> None:
         """Process the received list of summoner.
@@ -119,15 +133,15 @@ class Worker(WorkerClass):
         for entry in content:
             matches_local = entry['wins'] + entry['losses']
             matches = None
-            if prev := await self.service.marker.execute_read(
+            if prev := await self.marker.execute_read(
                     'SELECT matches FROM match_history WHERE summonerId = "%s";' % entry['summonerId']):
                 matches = int(prev[0][0])
                 
             if matches and matches == matches_local:
                 return
-            await self.service.marker.execute_write(
+            await self.marker.execute_write(
                 'UPDATE match_history SET matches = %s WHERE summonerId = "%s";' % (
                 matches_local,
             entry['summonerId']))
 
-            await self.service.add_package(entry)
+            await self.manager.add_package(entry)

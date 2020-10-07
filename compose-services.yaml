@@ -48,7 +48,7 @@ services:
       - SERVER=${SERVER}
       - WORKER=35
       - REQUIRED_SUBSCRIBER=MH,SD
-      - MAX_TASK_BUFFER=5000
+      - MAX_TASK_BUFFER=1000
     volumes:
       - ./sqlite/:/project/sqlite/
     links:
@@ -69,7 +69,7 @@ services:
       - WORKER=10
       - MATCHES_TO_UPDATE=10
       - TIME_LIMIT=1595401200
-      - MAX_TASK_BUFFER=5000
+      - MAX_TASK_BUFFER=1000
       - REQUIRED_SUBSCRIBER=MD
     volumes:
       - ./sqlite/:/project/sqlite/
@@ -89,7 +89,7 @@ services:
     environment:
       - SERVER=${SERVER}
       - WORKER=45
-      - MAX_TASK_BUFFER=5000
+      - MAX_TASK_BUFFER=1000
     volumes:
       - ./sqlite/:/project/sqlite/
     links:
@@ -114,7 +114,7 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=db_worker
-      - MAX_TASK_BUFFER=5000
+      - MAX_TASK_BUFFER=1000
     external_links:
       - lightshield_postgres:postres
     links:

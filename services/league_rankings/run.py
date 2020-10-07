@@ -1,6 +1,5 @@
 from publisher import Publisher
-from logic import Service, Worker
-from repeat_marker import RepeatMarker
+from logic import Service
 
 import signal
 import asyncio
@@ -15,18 +14,14 @@ if __name__ == "__main__":
            "matches INTEGER);"))
 
     publisher = Publisher()
-    service = Service(
-        url_snippet="league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s",
-        marker=marker,
-        max_local_buffer=500)
+    service = Service()
 
     def shutdown_handler():
         publisher.shutdown()
         service.shutdown()
-
     signal.signal(signal.SIGTERM, shutdown_handler)
 
     publisher.start()
-    asyncio.run(service.run(Worker))
+    asyncio.run(service.run())
 
     publisher.join()

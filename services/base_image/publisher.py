@@ -43,6 +43,7 @@ class Publisher(threading.Thread):
         self.clients = set()
         self.client_names = {}
         self.runner = None  # Async server runner
+        self.sent_packages = 0
 
     def stop(self) -> None:
         """Initiate shutdown."""
@@ -64,6 +65,7 @@ class Publisher(threading.Thread):
 
     async def async_run(self) -> None:
         """Run async initiation and start websocket server."""
+        logger = asyncio.create_task(self.logger())
         app = web.Application()
         app.add_routes([web.get('', self.handler)])
         await self.init()
@@ -76,6 +78,18 @@ class Publisher(threading.Thread):
         self.logging.info("Started server.")
         await shutdown_handler
         self.logging.info("Shutdown server.")
+        await logger
+
+    async def logger(self) -> None:
+        """Handle passive logging tasks."""
+        while not self.stopped:
+            await asyncio.sleep(15)
+            self.logging.info(
+                "Sent packages: %s | Currently buffered output packages: %s/500. Connections to subs: %s",
+                self.sent_packages,
+                await self.redisc.llen('packages'),
+                list(self.client_names.keys()))
+            self.sent_packages = 0
 
     async def shutdown_handler(self):
         """Set server to exit on shutdown signal."""
@@ -89,7 +103,6 @@ class Publisher(threading.Thread):
         Initiated by the first connected client to avoid it running multiple times.
         Once no more clients are connected this terminates itself.
         """
-        count = 0
         self.logging.info("Distributing packages.")
         while True:
             if not self.client_names:
@@ -101,15 +114,12 @@ class Publisher(threading.Thread):
             if task:
                 try:
                     await asyncio.wait([client.send_str(task) for client in self.clients])
-                    count += 1
-                    os.environ['OUTGOING'] = str(int(os.environ['OUTGOING']) + 1)
+                    self.sent_packages += 1
                 except BaseException as err:
                     self.logging.info("Exception %s received.", err.__class__.__name__)
                 await asyncio.sleep(0.05)
             else:
                 await asyncio.sleep(0.5)
-        if count > 0:
-            self.logging.info("Distributed %s packages.", count)
 
     async def handler(self, request) -> None:
         """Handle the websocket client connection."""
@@ -125,7 +135,6 @@ class Publisher(threading.Thread):
                 self.logging.info("Received non ACK message: %s", content)
                 return ws
             client_name = content.split("_")[1]
-            self.logging.info("Opened connection from %s." % client_name)
             self.client_names[client_name] = True
 
             if (self.required_subs and all(
@@ -144,5 +153,4 @@ class Publisher(threading.Thread):
             if sender_task:
                 await sender_task
             self.clients.remove(ws)
-            self.logging.info("Closed connection from %s." % client_name)
             await ws.close()
