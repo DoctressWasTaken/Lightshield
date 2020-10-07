@@ -14,7 +14,7 @@ class Service:
 
     def __init__(self):
         """Initiate sync elements on creation."""
-        self.logging = logging.getLogger("LeagueRankings")
+        self.logging = logging.getLogger("MatchDetails")
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
