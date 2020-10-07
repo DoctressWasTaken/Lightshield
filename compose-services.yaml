@@ -26,7 +26,7 @@ services:
       context: services/league_rankings
     environment:
       - SERVER=${SERVER}
-      - UPDATE_INTERVAL=5
+      - UPDATE_INTERVAL=1
       - WORKER=5
       - REQUIRED_SUBSCRIBER=SI
     links:

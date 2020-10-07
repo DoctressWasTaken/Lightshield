@@ -138,7 +138,7 @@ class ServiceClass:  # pylint: disable=R0902
             else:
                 self.local_buffer_full = False
             await asyncio.sleep(1)
-            if count == 60:
+            if count == 15:
                 self.logging.info(
                     "Incoming Queue: %s, Outgoing Queue: %s/%s, Output since last: %s, Input since last: %s",
                     await self.redisc.llen('tasks'),
