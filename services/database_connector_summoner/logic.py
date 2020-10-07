@@ -87,9 +87,10 @@ class Worker(threading.Thread):
             print(task)
             raise err
         to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints']
-        if not (summoner_db := self.session.query(Summoner)
-                .filter_by(puuid=summoner['puuid'])
-                .first()):
+        summoner_db = self.session.query(Summoner)\
+            .filter_by(puuid=summoner['puuid'])\
+            .first()
+        if not summoner_db:
             return Summoner(
                 puuid=summoner['puuid'],
                 tier=Tier.get(summoner['tier']),
