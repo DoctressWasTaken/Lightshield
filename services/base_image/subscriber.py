@@ -62,9 +62,12 @@ class Subscriber(threading.Thread):
         logger = asyncio.create_task(self.logger())
         while not self.stopped:
             while not self.stopped \
-                    and await self.redisc.llen('tasks') > 0.3 * self.max_buffer \
-                    and await self.redisc.llen('packages') > 500:
+                    and (
+                        await self.redisc.llen('tasks') > 0.3 * self.max_buffer
+                        or await self.redisc.llen('packages') > 500):
                 await asyncio.sleep(0.5)
+            if self.stopped:
+                break
 
             async with aiohttp.ClientSession() as session:
                 await self.runner(session)
