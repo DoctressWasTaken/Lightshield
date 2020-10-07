@@ -10,13 +10,11 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 if __name__ == "__main__":
     marker = RepeatMarker()
-    asyncio.run(marker.build(
-           "CREATE TABLE IF NOT EXISTS match_id("
-           "id BIGINT PRIMARY KEY);"))
+
 
     publisher = Publisher()
     subscriber = Subscriber(service_name="MD")
-    service = Service(url_snippet="match/v4/matches/%s", marker=marker, max_local_buffer=80)
+    service = Service()
 
     def shutdown_handler():
         publisher.shutdown()

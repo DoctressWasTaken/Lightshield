@@ -52,6 +52,9 @@ class Service:
 
         while not self.stopped:
             task = await self.manager.get_task()
+            if not task:
+                await asyncio.sleep(3)
+                continue
             identifier = task['summonerId']
             matches = task['wins'] + task['losses']
             if prev := await self.marker.execute_read(
