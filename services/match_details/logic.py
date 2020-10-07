@@ -73,9 +73,9 @@ class Service:
             identifier = task['match_id']
             if await self.marker.execute_read(
                     'SELECT * FROM match_id WHERE id = %s;' % identifier):
-                return
+                continue
             if identifier in self.buffered_elements:
-                return
+                continue
             self.buffered_elements[identifier] = True
             url = self.url % identifier
             try:
