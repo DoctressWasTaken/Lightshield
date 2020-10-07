@@ -114,3 +114,4 @@ class Subscriber(threading.Thread):
                 return
             finally:
                 await ws.close()
+                self.connected_to_publisher = False
