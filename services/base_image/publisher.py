@@ -22,21 +22,6 @@ class Publisher(threading.Thread):
     def __init__(self, host='0.0.0.0', port=9999):
         """Initiate logging and global variables."""
         super().__init__()
-        self.required_subs = None
-        if 'REQUIRED_SUBSCRIBER' in os.environ and os.environ['REQUIRED_SUBSCRIBER'] != '':
-            self.required_subs = os.environ['REQUIRED_SUBSCRIBER'].split(',')
-            print("Required subs: %s" % self.required_subs)
-        else:
-            print("No required subs.")
-        self.connection_params = [host, port]
-        self.stopped = False
-        self.redisc = None
-
-        self.clients = set()
-        self.client_names = {}
-
-        self.runner = None  # Async server runner
-
         self.logging = logging.getLogger("Publisher")
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
@@ -44,6 +29,20 @@ class Publisher(threading.Thread):
         handler.setFormatter(
             logging.Formatter('%(asctime)s [Publisher] %(message)s'))
         self.logging.addHandler(handler)
+        os.environ['OUTGOING'] = "0"
+        self.logging.info("Initiating publisher service.")
+        if 'REQUIRED_SUBSCRIBER' in os.environ and os.environ['REQUIRED_SUBSCRIBER'] != '':
+            self.required_subs = os.environ['REQUIRED_SUBSCRIBER'].split(',')
+            self.logging.info("Required subs: %s" % self.required_subs)
+        else:
+            self.required_subs = []
+            self.logging.info("No required subs.")
+        self.connection_params = [host, port]
+        self.stopped = False
+        self.redisc = None
+        self.clients = set()
+        self.client_names = {}
+        self.runner = None  # Async server runner
 
     def stop(self) -> None:
         """Initiate shutdown."""
@@ -91,6 +90,7 @@ class Publisher(threading.Thread):
         Once no more clients are connected this terminates itself.
         """
         count = 0
+        self.logging.info("Distributing packages.")
         while True:
             if not self.client_names:
                 break
@@ -102,12 +102,14 @@ class Publisher(threading.Thread):
                 try:
                     await asyncio.wait([client.send_str(task) for client in self.clients])
                     count += 1
+                    os.environ['OUTGOING'] = str(int(os.environ['OUTGOING']) + 1)
                 except BaseException as err:
                     self.logging.info("Exception %s received.", err.__class__.__name__)
                 await asyncio.sleep(0.05)
             else:
                 await asyncio.sleep(0.5)
-        self.logging.info("Sent %s tasks.", count)
+        if count > 0:
+            self.logging.info("Distributed %s packages.", count)
 
     async def handler(self, request) -> None:
         """Handle the websocket client connection."""
@@ -123,6 +125,7 @@ class Publisher(threading.Thread):
                 self.logging.info("Received non ACK message: %s", content)
                 return ws
             client_name = content.split("_")[1]
+            self.logging.info("Opened connection from %s." % client_name)
             self.client_names[client_name] = True
 
             if (self.required_subs and all(
@@ -141,4 +144,5 @@ class Publisher(threading.Thread):
             if sender_task:
                 await sender_task
             self.clients.remove(ws)
+            self.logging.info("Closed connection from %s." % client_name)
             await ws.close()

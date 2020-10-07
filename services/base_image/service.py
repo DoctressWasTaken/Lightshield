@@ -139,8 +139,13 @@ class ServiceClass:  # pylint: disable=R0902
                 self.local_buffer_full = False
             await asyncio.sleep(1)
             if count == 60:
-                self.logging.info("Incoming Queue: %s, Outgoing Queue: %s/%s",
-                                  await self.redisc.llen('tasks'),
-                                  await self.redisc.llen('packages'),
-                                  self.max_local_buffer)
+                self.logging.info(
+                    "Incoming Queue: %s, Outgoing Queue: %s/%s, Output since last: %s, Input since last: %s",
+                    await self.redisc.llen('tasks'),
+                    await self.redisc.llen('packages'),
+                    self.max_local_buffer,
+                    os.environ['OUTGOING'],
+                    os.environ['INCOMING'])
+                os.environ['OUTGOING'] = "0"
+                os.environ['INCOMING'] = "0"
                 count = 0

@@ -22,12 +22,6 @@ class Subscriber(threading.Thread):
     def __init__(self, service_name, host='provider', port=9999):
         """Initiate logging and global variables."""
         super().__init__()
-        self.uri = "ws://%s:%s" % (host, port)
-        self.service_name = service_name
-        self.stopped = False
-        self.redisc = None
-        self.max_buffer = int(os.environ['MAX_TASK_BUFFER'])
-
         self.logging = logging.getLogger("Subscriber")
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
@@ -35,6 +29,14 @@ class Subscriber(threading.Thread):
         handler.setFormatter(
             logging.Formatter('%(asctime)s [Subscriber] %(message)s'))
         self.logging.addHandler(handler)
+
+        self.uri = "ws://%s:%s" % (host, port)
+        self.service_name = service_name
+        self.stopped = False
+        self.redisc = None
+        self.max_buffer = int(os.environ['MAX_TASK_BUFFER'])
+        os.environ['INCOMING'] = "0"
+        self.logging.info("Initiated subscriber.")
 
     def run(self) -> None:
         """Initiate the async loop."""
@@ -67,8 +69,9 @@ class Subscriber(threading.Thread):
             count = 0
             try:
                 await ws.send_str("ACK_" + self.service_name)
+                self.logging.info("Opened connection to publisher.")
                 while not self.stopped:
-                    message = await asyncio.wait_for(ws.receive(), timeout=2)
+                    message = await ws.receive()
 
                     if message.type == aiohttp.WSMsgType.TEXT:
                         try:
@@ -77,6 +80,7 @@ class Subscriber(threading.Thread):
                                 continue
                             content = json.loads(message.data)
                             count += 1
+                            os.environ['INCOMING'] = str(int(os.environ['INCOMING']) + 1)
                         except:
                             self.logging.info(message.data)
                             continue
@@ -92,5 +96,7 @@ class Subscriber(threading.Thread):
                 return
             finally:
                 await ws.close()
-                self.logging.info("Received %s tasks", count)
+                self.logging.info("Closed connection to publisher.")
+                if count > 0:
+                    self.logging.info("Received %s packages.", count)
 
