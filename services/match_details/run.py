@@ -1,7 +1,6 @@
 from publisher import Publisher
 from subscriber import Subscriber
-from logic import Worker, Service
-from repeat_marker import RepeatMarker
+from logic import Service
 
 import signal
 import asyncio
@@ -9,8 +8,6 @@ import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 if __name__ == "__main__":
-    marker = RepeatMarker()
-
 
     publisher = Publisher()
     subscriber = Subscriber(service_name="MD")
@@ -25,7 +22,7 @@ if __name__ == "__main__":
 
     publisher.start()
     subscriber.start()
-    asyncio.run(service.run(Worker))
+    asyncio.run(service.run())
 
     publisher.join()
     subscriber.join()
