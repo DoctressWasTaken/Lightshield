@@ -73,14 +73,15 @@ class Worker(threading.Thread):
                 continue
             else:
                 print("Received %s tasks." % len(tasks))
-            processed_tasks = [task for task in [self.process_task(task) for task in tasks] if task]
+            to_add = []
+            processed_tasks = [task for task in [self.process_task(task, to_add) for task in tasks] if task]
 
             self.logging.info("Inserting %s Summoners.", len(processed_tasks))
             self.session.bulk_save_objects(processed_tasks)
             self.session.commit()
         self.logging.info("Shutting down DB_Connector")
 
-    def process_task(self, task):
+    def process_task(self, task, to_add):
         try:
             summoner = json.loads(task)
         except Exception as err:
@@ -90,7 +91,8 @@ class Worker(threading.Thread):
         summoner_db = self.session.query(Summoner)\
             .filter_by(puuid=summoner['puuid'])\
             .first()
-        if not summoner_db:
+        if not summoner_db and summoner['puuid'] not in to_add:
+            to_add.append(summoner['puuid'])
             return Summoner(
                 puuid=summoner['puuid'],
                 tier=Tier.get(summoner['tier']),
