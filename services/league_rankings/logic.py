@@ -1,6 +1,7 @@
 """League Updater Module."""
 import asyncio
 from datetime import datetime
+import os
 import aiohttp
 import aioredis
 from rank_manager import RankManager
@@ -46,9 +47,31 @@ class Service(ServiceClass):  # pylint: disable=R0902
             self.empty = False
             self.next_page = 1
 
-            await asyncio.gather(*[worker.run(tier=tier, division=division) for worker in workers])
+            await asyncio.gather(
+                *[worker.run(tier=tier, division=division) for worker in workers]
+            )
             await self.rankmanager.update(key=(tier, division))
         await buffer_check
+
+    async def check_local_buffer(self) -> None:
+        """Set local_buffer_full flag to pause local calls."""
+        count = 0
+        self.logging.info("Initiating buffer output.")
+        while not self.stopped:
+            count += 1
+            if await self.redisc.llen('packages') > self.max_local_buffer:
+                self.local_buffer_full = True
+            else:
+                self.local_buffer_full = False
+            await asyncio.sleep(1)
+            if count == 15:
+                self.logging.info(
+                    "Outgoing Queue: %s/%s, Output since last: %s",
+                    await self.redisc.llen('packages'),
+                    self.max_local_buffer,
+                    os.environ['OUTGOING'])
+                os.environ['OUTGOING'] = "0"
+                count = 0
 
 
 class Worker(WorkerClass):

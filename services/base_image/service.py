@@ -131,6 +131,7 @@ class ServiceClass:  # pylint: disable=R0902
     async def check_local_buffer(self) -> None:
         """Set local_buffer_full flag to pause local calls."""
         count = 0
+        self.logging.info("Initiating buffer output.")
         while not self.stopped:
             count += 1
             if await self.redisc.llen('packages') > self.max_local_buffer:
