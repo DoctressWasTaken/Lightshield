@@ -13,7 +13,6 @@ if __name__ == "__main__":
     subscriber = Subscriber(service_name="MH")
     service = Service()
 
-
     def shutdown_handler():
         publisher.shutdown()
         subscriber.shutdown()

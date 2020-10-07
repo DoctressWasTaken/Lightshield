@@ -10,7 +10,7 @@ from repeat_marker import RepeatMarker
 from buffer_manager import BufferManager
 
 
-class Service():
+class Service:
     """Core service worker object."""
 
     def __init__(self):
@@ -139,3 +139,8 @@ class Service():
                 rate_flag = True
             except Non200Exception:
                 await asyncio.sleep(0.1)
+
+    async def run(self):
+        """Runner."""
+        await self.init()
+        await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
