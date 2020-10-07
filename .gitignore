@@ -15,3 +15,5 @@ db.sqlite3
 *.egg-info/
 /temp/
 logs/
+configs/
+*.db
