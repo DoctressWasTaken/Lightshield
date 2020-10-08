@@ -94,7 +94,7 @@ class Subscriber(threading.Thread):
                     message = await asyncio.wait_for(websocket.recv(), timeout=1)
                 except asyncio.TimeoutError:
                     continue
-                await self.redisc.lpush('tasks', message.data)
+                await self.redisc.lpush('tasks', message)
                 self.received_packages += 1
                 if await self.redisc.llen('tasks') > self.max_buffer \
                         or await self.redisc.llen('packages') > 500:
