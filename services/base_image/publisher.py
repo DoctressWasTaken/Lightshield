@@ -141,6 +141,10 @@ class Publisher(threading.Thread):
                 while not self.stopped:
                     await asyncio.sleep(0.5)
                 break
+        except Exception as err:
+            self.logging.info(err)
+            return
+
         finally:
             del self.client_names[client_name]
             self.clients.remove(websocket)
