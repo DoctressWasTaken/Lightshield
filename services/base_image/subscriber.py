@@ -11,6 +11,7 @@ import logging
 import threading
 import aioredis
 import aiohttp
+import websockets
 
 
 class Subscriber(threading.Thread):
@@ -68,12 +69,7 @@ class Subscriber(threading.Thread):
             if self.stopped:
                 break
 
-            try:
-                async with aiohttp.ClientSession() as session:
-                    await self.runner(session)
-            except Exception as err:
-                self.logging.info(err)
-                await asyncio.sleep(5)
+            await self.runner()
         await logger
 
     async def logger(self) -> None:
@@ -88,32 +84,20 @@ class Subscriber(threading.Thread):
                 self.connected_to_publisher)
             self.received_packages = 0
 
-    async def runner(self, session) -> None:
+    async def runner(self) -> None:
         self.logging.info("Establishing connection to publisher.")
-        try:
-            async with session.ws_connect(self.uri) as ws:
-                await ws.send_str("ACK_" + self.service_name)
-                self.connected_to_publisher = True
-                while not self.stopped:
-
-                    try:
-                        message = await asyncio.wait_for(ws.receive(), timeout=1)
-                    except asyncio.TimeoutError:
-                        continue
-                    if message.type == aiohttp.WSMsgType.TEXT:
-                        await self.redisc.lpush('tasks', message.data)
-                        self.received_packages += 1
-                    elif message.type == aiohttp.WSMsgType.CLOSED:
-                        return
-                    elif message.type == aiohttp.WSMsgType.CLOSE:
-                        return
-                    else:
-                        print(message.type)
-                    if await self.redisc.llen('tasks') > self.max_buffer \
-                            or await self.redisc.llen('packages') > 500:
-                        return
-        except asyncio.TimeoutError:
-            return
-        finally:
-            self.connected_to_publisher = False
-            self.logging.info("Closed connection to publisher.")
+        async with websockets.connect(self.uri) as websocket:
+            await websocket.send("ACK_" + self.service_name)
+            self.connected_to_publisher = True
+            while not self.stopped:
+                try:
+                    message = await asyncio.wait_for(websocket.recv(), timeout=1)
+                except asyncio.TimeoutError:
+                    continue
+                await self.redisc.lpush('tasks', message.data)
+                self.received_packages += 1
+                if await self.redisc.llen('tasks') > self.max_buffer \
+                        or await self.redisc.llen('packages') > 500:
+                    return
+        self.connected_to_publisher = False
+        self.logging.info("Closed connection to publisher.")
