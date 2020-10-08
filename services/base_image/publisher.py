@@ -44,7 +44,6 @@ class Publisher(threading.Thread):
         self.client_names = {}
         self.runner = None  # Async server runner
         self.sent_packages = 0
-        self.sender_task = None
 
     def stop(self) -> None:
         """Initiate shutdown."""
@@ -63,10 +62,11 @@ class Publisher(threading.Thread):
         """Initiate redis connection."""
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
-        self.sender_task = asyncio.create_task(self.sender())
+
 
     async def async_run(self) -> None:
         """Run async initiation and start websocket server."""
+        sender_task = asyncio.create_task(self.sender())
         logger = asyncio.create_task(self.logger())
         app = web.Application()
         app.add_routes([web.get('', self.handler)])
@@ -79,6 +79,7 @@ class Publisher(threading.Thread):
         await site.start()
         self.logging.info("Started server.")
         await shutdown_handler
+        await sender_task
         self.logging.info("Shutdown server.")
         await logger
 
@@ -98,7 +99,6 @@ class Publisher(threading.Thread):
         while not self.stopped:
             await asyncio.sleep(1)
         await self.runner.cleanup()
-        await self.sender_task()
 
     async def sender(self):
         """Send data to clients as long as all clients are connected.
@@ -106,11 +106,9 @@ class Publisher(threading.Thread):
         Initiated by the first connected client to avoid it running multiple times.
         Once no more clients are connected this terminates itself.
         """
-        self.logging.info("Distributing packages.")
         while True:
             if not self.client_names:
                 continue
-
             missing = False
             for sub in self.required_subs:
                 if sub not in self.client_names.keys():
