@@ -90,10 +90,10 @@ class Subscriber(threading.Thread):
         async with session.ws_connect(self.uri) as ws:
             try:
                 await ws.send_str("ACK_" + self.service_name)
+                await ws.send_str("START")
                 self.connected_to_publisher = True
-                while not self.stopped \
-                        and await self.redisc.llen('tasks') < self.max_buffer \
-                        and await self.redisc.llen('packages') <= 500:
+                while not self.stopped:
+
                     try:
                         message = await asyncio.wait_for(ws.receive(), timeout=1)
                     except asyncio.TimeoutError:
@@ -107,6 +107,17 @@ class Subscriber(threading.Thread):
                         return
                     else:
                         print(message.type)
+
+                    if await self.redisc.llen('tasks') > self.max_buffer \
+                            or await self.redisc.llen('packages') > 500:
+                        await ws.send_str("STOP")
+                        self.connected_to_publisher = False
+                        while not self.stopped and (
+                                await self.redisc.llen('tasks') > self.max_buffer
+                                or await self.redisc.llen('packages') > 500):
+                            await asyncio.sleep(1)
+                        await ws.send_str("START")
+
             except asyncio.TimeoutError:
                 return
             finally:

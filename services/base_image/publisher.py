@@ -44,6 +44,7 @@ class Publisher(threading.Thread):
         self.client_names = {}
         self.runner = None  # Async server runner
         self.sent_packages = 0
+        self.sender_task = None
 
     def stop(self) -> None:
         """Initiate shutdown."""
@@ -62,6 +63,7 @@ class Publisher(threading.Thread):
         """Initiate redis connection."""
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
+        self.sender_task = asyncio.create_task(self.sender())
 
     async def async_run(self) -> None:
         """Run async initiation and start websocket server."""
@@ -96,6 +98,7 @@ class Publisher(threading.Thread):
         while not self.stopped:
             await asyncio.sleep(1)
         await self.runner.cleanup()
+        await self.sender_task()
 
     async def sender(self):
         """Send data to clients as long as all clients are connected.
@@ -124,7 +127,6 @@ class Publisher(threading.Thread):
     async def handler(self, request) -> None:
         """Handle the websocket client connection."""
         client_name = None
-        sender_task = None
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         self.clients.add(ws)
@@ -135,15 +137,17 @@ class Publisher(threading.Thread):
                 return ws
             client_name = content.split("_")[1]
             self.logging.info("Client %s opened connection." % client_name)
-            self.client_names[client_name] = True
+            self.client_names[client_name] = False
 
-            if (self.required_subs and all(
-                [True if item in self.client_names.keys() else False for item in self.required_subs])) or \
-                    (not self.required_subs and len(self.client_names) == 1):
-
-                sender_task = asyncio.create_task(self.sender())
-
-            while not ws.closed:
+            while not ws.closed or self.stopped:
+                try:
+                    message = await asyncio.wait_for(ws.receive(), timeout=2)
+                    if message.data == "STOP":
+                        self.client_names[client_name] = False
+                    elif message.data == "START":
+                        self.client_names[client_name] = True
+                except asyncio.TimeoutError:
+                    pass
                 await asyncio.sleep(0.5)
 
         except asyncio.TimeoutError:
@@ -151,7 +155,5 @@ class Publisher(threading.Thread):
         finally:
             self.logging.info("Client %s closed connection." % client_name)
             del self.client_names[client_name]
-            if sender_task:
-                await sender_task
             self.clients.remove(ws)
             await ws.close()
