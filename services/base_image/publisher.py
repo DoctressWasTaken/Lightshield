@@ -131,10 +131,10 @@ class Publisher(threading.Thread):
         client_name = None
         try:
             async for msg in websocket:
-                if not (content := msg.data).startswith('ACK'):
-                    self.logging.info("Received non ACK message: %s", content)
+                if not msg.startswith('ACK'):
+                    self.logging.info("Received non ACK message: %s", msg)
                     return
-                client_name = content.split("_")[1]
+                client_name = msg.split("_")[1]
                 self.logging.info("Client %s opened connection." % client_name)
                 self.clients.add(websocket)
                 self.client_names[client_name] = True
