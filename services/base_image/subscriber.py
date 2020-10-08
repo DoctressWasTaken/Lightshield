@@ -97,14 +97,13 @@ class Subscriber(threading.Thread):
                 while not self.stopped:
                     try:
                         message = await asyncio.wait_for(websocket.recv(), timeout=3)
-                        self.logging.info("Received message % " % message)
+                        self.logging.info("Received message %s ", message)
                     except asyncio.TimeoutError:
                         self.logging.info("Receive timed out.")
                         continue
                     self.logging.info("Open, waiting.")
                     await asyncio.sleep(5)
                     continue
-
 
                     await self.redisc.lpush('tasks', message)
                     self.received_packages += 1
