@@ -108,6 +108,7 @@ class Publisher(threading.Thread):
         """
         while True:
             if not self.client_names:
+                await asyncio.sleep(5)
                 continue
             missing = False
             for sub in self.required_subs:
