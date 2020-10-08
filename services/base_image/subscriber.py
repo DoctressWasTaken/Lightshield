@@ -116,4 +116,4 @@ class Subscriber(threading.Thread):
                 return
             finally:
                 self.connected_to_publisher = False
-        self.logging.info("Closed connection to publisher.")
+                self.logging.info("Closed connection to publisher.")

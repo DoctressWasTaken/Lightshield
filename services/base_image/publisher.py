@@ -113,7 +113,6 @@ class Publisher(threading.Thread):
             missing = False
             for sub in self.required_subs:
                 if sub not in self.client_names.keys():
-                    self.logging.info("Required sub %s not connected." % sub)
                     missing = True
                     await asyncio.sleep(1)
             if missing:
