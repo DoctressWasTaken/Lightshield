@@ -121,7 +121,8 @@ class Publisher(threading.Thread):
             task = await self.redisc.lpop('packages')
             if task:
                 try:
-                    await asyncio.gather(*[client.send_str(task) for client in self.clients])
+                    for client in self.clients:
+                        await client.send_str(task)
                     self.sent_packages += 1
                     if self.sent_packages == 1:
                         self.logging.info("Sent first package.")
