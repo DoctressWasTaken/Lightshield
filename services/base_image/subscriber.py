@@ -89,19 +89,25 @@ class Subscriber(threading.Thread):
             self.received_packages = 0
 
     async def runner(self) -> None:
-        self.logging.info("Establishing connection to publisher.")
-        async with websockets.connect(self.uri) as websocket:
-            await websocket.send("ACK_" + self.service_name)
-            self.connected_to_publisher = True
-            while not self.stopped:
-                try:
-                    message = await asyncio.wait_for(websocket.recv(), timeout=1)
-                except asyncio.TimeoutError:
+        try:
+            async with websockets.connect(self.uri) as websocket:
+                self.logging.info("Establishing connection to publisher.")
+                await websocket.send("ACK_" + self.service_name)
+                self.connected_to_publisher = True
+                while not self.stopped:
+                    self.logging.info("Open, waiting.")
+                    await asyncio.sleep(5)
                     continue
-                await self.redisc.lpush('tasks', message)
-                self.received_packages += 1
-                if await self.redisc.llen('tasks') > self.max_buffer \
-                        or await self.redisc.llen('packages') > 500:
-                    return
-        self.connected_to_publisher = False
-        self.logging.info("Closed connection to publisher.")
+                    try:
+                        message = await asyncio.wait_for(websocket.recv(), timeout=1)
+                    except asyncio.TimeoutError:
+                        continue
+                    await self.redisc.lpush('tasks', message)
+                    self.received_packages += 1
+                    if await self.redisc.llen('tasks') > self.max_buffer \
+                            or await self.redisc.llen('packages') > 500:
+                        return
+            self.connected_to_publisher = False
+            self.logging.info("Closed connection to publisher.")
+        except Exception as err:
+            self.logging.info(err)

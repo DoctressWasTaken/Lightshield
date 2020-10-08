@@ -63,7 +63,6 @@ class Publisher(threading.Thread):
         self.redisc = await aioredis.create_redis_pool(
             ('redis', 6379), db=0, encoding='utf-8')
 
-
     async def async_run(self) -> None:
         """Run async initiation and start websocket server."""
         await self.init()
@@ -114,7 +113,7 @@ class Publisher(threading.Thread):
                     await asyncio.sleep(1)
             if missing:
                 continue
-
+            continue
             task = await self.redisc.lpop('packages')
             if task:
                 try:
@@ -139,11 +138,9 @@ class Publisher(threading.Thread):
                 self.clients.add(websocket)
                 self.client_names[client_name] = True
                 while not self.stopped:
-                    await asyncio.sleep(0.5)
+                    self.logging.info("Open, waiting.")
+                    await asyncio.sleep(5)
                 break
-        except Exception as err:
-            self.logging.info(err)
-            return
 
         finally:
             del self.client_names[client_name]
