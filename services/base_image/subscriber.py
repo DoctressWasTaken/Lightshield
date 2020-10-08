@@ -68,8 +68,12 @@ class Subscriber(threading.Thread):
                 await asyncio.sleep(0.5)
             if self.stopped:
                 break
+            try:
+                await self.runner()
+            except Exception as err:
+                self.logging.info(err)
+                await asyncio.sleep(5)
 
-            await self.runner()
         await logger
 
     async def logger(self) -> None:
