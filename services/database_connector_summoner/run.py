@@ -7,7 +7,7 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 if __name__ == "__main__":
-    subscriber = Subscriber(service_name="SD")
+    subscriber = Subscriber(service_name="DCS")
     dbworker = Worker()
 
     def shutdown_handler():

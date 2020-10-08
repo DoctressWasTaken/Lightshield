@@ -124,7 +124,9 @@ class Publisher(threading.Thread):
                     for client_name in self.client_names:
                         await self.client_names[client_name].send_str(task)
                         if self.sent_packages == 0:
-                            self.logging.info("Sent package to %s.", client_name)
+                            self.logging.info("Sent package to %s (Status: %s).",
+                                              client_name,
+                                              self.client_names[client_name].closed)
                     self.sent_packages += 1
                 except BaseException as err:
                     self.logging.info("Exception %s received.", err.__class__.__name__)
