@@ -113,10 +113,6 @@ class Publisher(threading.Thread):
                     await asyncio.sleep(1)
             if missing:
                 continue
-
-            await asyncio.wait([client.send("Stuff") for client in self.clients])
-            await asyncio.sleep(2)
-            continue
             task = await self.redisc.lpop('packages')
             if task:
                 try:
@@ -147,7 +143,6 @@ class Publisher(threading.Thread):
             self.client_names[client_name] = True
 
             while not self.stopped:
-                self.logging.info("Open, waiting.")
                 await asyncio.sleep(5)
 
         finally:

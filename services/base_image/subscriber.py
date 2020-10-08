@@ -101,9 +101,10 @@ class Subscriber(threading.Thread):
                     except asyncio.TimeoutError:
                         self.logging.info("Receive timed out.")
                         continue
-                    self.logging.info("Open, waiting.")
-                    await asyncio.sleep(5)
-                    continue
+                    except Exception as err:
+                        self.logging.info("Exception: %s" % err)
+                        await asyncio.sleep(2)
+                        continue
 
                     await self.redisc.lpush('tasks', message)
                     self.received_packages += 1
