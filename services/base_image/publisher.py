@@ -146,7 +146,7 @@ class Publisher(threading.Thread):
         except asyncio.TimeoutError:
             return ws
         finally:
-            self.logging.info("Client %s closed connection." % client_name)
             del self.client_names[client_name]
             self.clients.remove(ws)
             await ws.close()
+        self.logging.info("Client %s closed connection." % client_name)
