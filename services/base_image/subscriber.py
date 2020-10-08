@@ -113,3 +113,4 @@ class Subscriber(threading.Thread):
                 self.logging.info("Closing connection to publisher.")
                 await ws.close()
                 self.connected_to_publisher = False
+        self.logging.info(ws.closed)
