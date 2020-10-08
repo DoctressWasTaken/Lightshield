@@ -85,7 +85,7 @@ class Publisher(threading.Thread):
     async def logger(self) -> None:
         """Handle passive logging tasks."""
         while not self.stopped:
-            await asyncio.sleep(15)
+            await asyncio.sleep(60)
             self.logging.info(
                 "Sent packages: %s | Currently buffered output packages: %s/500. Connections to subs: %s",
                 self.sent_packages,
@@ -109,9 +109,15 @@ class Publisher(threading.Thread):
         self.logging.info("Distributing packages.")
         while True:
             if not self.client_names:
-                break
-            if self.required_subs and not all([True if item in self.client_names.keys() else False for item in self.required_subs]):
-                break
+                continue
+
+            missing = False
+            for sub in self.required_subs:
+                if sub not in self.client_names.keys():
+                    self.logging.info("Required sub %s not connected.")
+                    missing = True
+            if missing:
+                continue
 
             task = await self.redisc.lpop('packages')
             if task:
