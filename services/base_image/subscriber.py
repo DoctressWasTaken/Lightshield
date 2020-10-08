@@ -95,16 +95,11 @@ class Subscriber(threading.Thread):
                     message = await ws.receive()
 
                     if message.type == aiohttp.WSMsgType.TEXT:
-                        try:
-                            if not message.data:
-                                await asyncio.sleep(1)
-                                continue
-                            content = json.loads(message.data)
-                            self.received_packages += 1
-                        except:
-                            self.logging.info(message.data)
+                        if not message.data:
+                            await asyncio.sleep(1)
                             continue
-                        if await self.redisc.lpush('tasks', json.dumps(content)) >= self.max_buffer \
+                        self.received_packages += 1
+                        if await self.redisc.lpush('tasks', message.data) >= self.max_buffer \
                                 or await self.redisc.llen('packages') > 500:
                             return
                     elif message.type == aiohttp.WSMsgType.CLOSED:
@@ -116,5 +111,6 @@ class Subscriber(threading.Thread):
             except asyncio.TimeoutError:
                 return
             finally:
+                self.logging.info("Closing connection to publisher.")
                 await ws.close()
                 self.connected_to_publisher = False

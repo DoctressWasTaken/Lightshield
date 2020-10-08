@@ -113,7 +113,7 @@ class Publisher(threading.Thread):
             task = await self.redisc.lpop('packages')
             if task:
                 try:
-                    await asyncio.wait([client.send_str(task) for client in self.clients])
+                    await asyncio.gather(*[client.send_str(task) for client in self.clients])
                     self.sent_packages += 1
                 except BaseException as err:
                     self.logging.info("Exception %s received.", err.__class__.__name__)
