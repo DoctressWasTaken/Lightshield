@@ -90,8 +90,8 @@ class Subscriber(threading.Thread):
 
     async def runner(self, session) -> None:
         self.logging.info("Establishing connection to publisher.")
-        async with session.ws_connect(self.uri) as ws:
-            try:
+        try:
+            async with session.ws_connect(self.uri) as ws:
                 await ws.send_str("ACK_" + self.service_name)
                 self.connected_to_publisher = True
                 while not self.stopped:
@@ -112,8 +112,8 @@ class Subscriber(threading.Thread):
                     if await self.redisc.llen('tasks') > self.max_buffer \
                             or await self.redisc.llen('packages') > 500:
                         return
-            except asyncio.TimeoutError:
-                return
-            finally:
-                self.connected_to_publisher = False
-                self.logging.info("Closed connection to publisher.")
+        except asyncio.TimeoutError:
+            return
+        finally:
+            self.connected_to_publisher = False
+            self.logging.info("Closed connection to publisher.")
