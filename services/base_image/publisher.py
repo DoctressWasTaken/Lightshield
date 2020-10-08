@@ -153,4 +153,4 @@ class Publisher(threading.Thread):
         finally:
             del self.client_names[client_name]
             self.clients.remove(ws)
-        self.logging.info("Client %s closed connection." % client_name)
+            self.logging.info("Client %s closed connection." % client_name)
