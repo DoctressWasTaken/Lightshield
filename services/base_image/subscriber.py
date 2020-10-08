@@ -68,9 +68,12 @@ class Subscriber(threading.Thread):
             if self.stopped:
                 break
 
-            async with aiohttp.ClientSession() as session:
-                await self.runner(session)
-            await asyncio.sleep(1)
+            try:
+                async with aiohttp.ClientSession() as session:
+                    await self.runner(session)
+            except Exception as err:
+                self.logging.info(err)
+                await asyncio.sleep(5)
         await logger
 
     async def logger(self) -> None:
@@ -90,7 +93,6 @@ class Subscriber(threading.Thread):
         async with session.ws_connect(self.uri) as ws:
             try:
                 await ws.send_str("ACK_" + self.service_name)
-                await ws.send_str("START")
                 self.connected_to_publisher = True
                 while not self.stopped:
 
@@ -107,20 +109,11 @@ class Subscriber(threading.Thread):
                         return
                     else:
                         print(message.type)
-
                     if await self.redisc.llen('tasks') > self.max_buffer \
                             or await self.redisc.llen('packages') > 500:
-                        await ws.send_str("STOP")
-                        self.connected_to_publisher = False
-                        while not self.stopped and (
-                                await self.redisc.llen('tasks') > self.max_buffer
-                                or await self.redisc.llen('packages') > 500):
-                            await asyncio.sleep(1)
-                        await ws.send_str("START")
-
+                        return
             except asyncio.TimeoutError:
                 return
             finally:
-                self.logging.info("Closing connection to publisher.")
                 self.connected_to_publisher = False
-        self.logging.info(ws.closed)
+        self.logging.info("Closed connection to publisher.")

@@ -131,24 +131,17 @@ class Publisher(threading.Thread):
         await ws.prepare(request)
         self.clients.add(ws)
         try:
-            message = await asyncio.wait_for(ws.receive(), timeout=2)
-            if not (content := message.data).startswith('ACK'):
-                self.logging.info("Received non ACK message: %s", content)
-                return ws
-            client_name = content.split("_")[1]
-            self.logging.info("Client %s opened connection." % client_name)
-            self.client_names[client_name] = False
+            async for msg in ws:
+                if not (content := msg.data).startswith('ACK'):
+                    self.logging.info("Received non ACK message: %s", content)
+                    return ws
+                client_name = content.split("_")[1]
+                self.logging.info("Client %s opened connection." % client_name)
+                self.client_names[client_name] = True
 
-            while not ws.closed or self.stopped:
-                try:
-                    message = await asyncio.wait_for(ws.receive(), timeout=2)
-                    if message.data == "STOP":
-                        self.client_names[client_name] = False
-                    elif message.data == "START":
-                        self.client_names[client_name] = True
-                except asyncio.TimeoutError:
-                    pass
-                await asyncio.sleep(0.5)
+                while not ws.closed or self.stopped:
+                    await asyncio.sleep(0.5)
+                break
 
         except asyncio.TimeoutError:
             return ws
