@@ -92,14 +92,14 @@ class Subscriber(threading.Thread):
                 await ws.send_str("ACK_" + self.service_name)
                 self.connected_to_publisher = True
                 while not self.stopped \
-                        and self.redisc.llen('tasks') < self.max_buffer \
-                        and self.redisc.llen('packages') <= 500:
+                        and await self.redisc.llen('tasks') < self.max_buffer \
+                        and await self.redisc.llen('packages') <= 500:
                     try:
                         message = await asyncio.wait_for(ws.receive(), timeout=1)
                     except asyncio.TimeoutError:
                         continue
                     if message.type == aiohttp.WSMsgType.TEXT:
-                        self.redisc.lpush('tasks', message.data)
+                        await self.redisc.lpush('tasks', message.data)
                         self.received_packages += 1
                     elif message.type == aiohttp.WSMsgType.CLOSED:
                         return
