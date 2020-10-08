@@ -66,18 +66,15 @@ class Publisher(threading.Thread):
 
     async def async_run(self) -> None:
         """Run async initiation and start websocket server."""
+        await self.init()
         sender_task = asyncio.create_task(self.sender())
         logger = asyncio.create_task(self.logger())
-        app = web.Application()
-        app.add_routes([web.get('', self.handler)])
-        await self.init()
-        self.runner = web.AppRunner(app)
-        await self.runner.setup()
-        site = web.TCPSite(self.runner, *self.connection_params)
-
         shutdown_handler = asyncio.create_task(self.shutdown_handler())
-        await site.start()
-        self.logging.info("Started server.")
+
+        async with websockets.serve(self.handler, *self.connection_params):
+            while not self.stopped:
+                await asyncio.sleep(1)
+
         await shutdown_handler
         await sender_task
         self.logging.info("Shutdown server.")
@@ -121,12 +118,7 @@ class Publisher(threading.Thread):
             task = await self.redisc.lpop('packages')
             if task:
                 try:
-                    for client_name in self.client_names:
-                        await self.client_names[client_name].send_str(task)
-                        if self.sent_packages == 0:
-                            self.logging.info("Sent package to %s (Status: %s).",
-                                              client_name,
-                                              self.client_names[client_name].closed)
+                    await asyncio.wait([client.send(task) for client in self.clients])
                     self.sent_packages += 1
                 except BaseException as err:
                     self.logging.info("Exception %s received.", err.__class__.__name__)
@@ -134,26 +126,22 @@ class Publisher(threading.Thread):
             else:
                 await asyncio.sleep(0.5)
 
-    async def handler(self, request) -> None:
+    async def handler(self, websocket, path) -> None:
         """Handle the websocket client connection."""
         client_name = None
-        ws = web.WebSocketResponse()
-        await ws.prepare(request)
         try:
-            async for msg in ws:
+            async for msg in websocket:
                 if not (content := msg.data).startswith('ACK'):
                     self.logging.info("Received non ACK message: %s", content)
-                    return ws
+                    return
                 client_name = content.split("_")[1]
                 self.logging.info("Client %s opened connection." % client_name)
-                self.client_names[client_name] = ws
-
-                while not ws.closed or self.stopped:
+                self.clients.add(websocket)
+                self.client_names[client_name] = True
+                while not self.stopped:
                     await asyncio.sleep(0.5)
                 break
-
-        except asyncio.TimeoutError:
-            return ws
         finally:
             del self.client_names[client_name]
+            self.clients.remove(websocket)
             self.logging.info("Client %s closed connection." % client_name)
