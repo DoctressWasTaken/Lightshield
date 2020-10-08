@@ -123,6 +123,9 @@ class Publisher(threading.Thread):
                 try:
                     await asyncio.gather(*[client.send_str(task) for client in self.clients])
                     self.sent_packages += 1
+                    if self.sent_packages == 1:
+                        self.logging.info("Sent first package.")
+                        self.logging.info(self.clients)
                 except BaseException as err:
                     self.logging.info("Exception %s received.", err.__class__.__name__)
                 await asyncio.sleep(0.05)
