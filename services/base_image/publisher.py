@@ -114,7 +114,8 @@ class Publisher(threading.Thread):
             if missing:
                 continue
 
-            await asyncio.sleep(5)
+            await asyncio.wait([client.send("Stuff") for client in self.clients])
+            await asyncio.sleep(2)
             continue
             task = await self.redisc.lpop('packages')
             if task:
