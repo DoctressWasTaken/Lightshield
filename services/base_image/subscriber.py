@@ -95,13 +95,14 @@ class Subscriber(threading.Thread):
                 await websocket.send("ACK_" + self.service_name)
                 self.connected_to_publisher = True
                 while not self.stopped:
-                    self.logging.info("Open, waiting.")
-                    await asyncio.sleep(5)
-                    continue
                     try:
                         message = await asyncio.wait_for(websocket.recv(), timeout=1)
                     except asyncio.TimeoutError:
+                        self.logging.info("Receive timed out.")
                         continue
+                    self.logging.info("Open, waiting.")
+                    await asyncio.sleep(5)
+                    continue
                     await self.redisc.lpush('tasks', message)
                     self.received_packages += 1
                     if await self.redisc.llen('tasks') > self.max_buffer \
