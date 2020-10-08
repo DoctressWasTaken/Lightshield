@@ -113,6 +113,8 @@ class Publisher(threading.Thread):
                     await asyncio.sleep(1)
             if missing:
                 continue
+
+            await asyncio.sleep(5)
             continue
             task = await self.redisc.lpop('packages')
             if task:
