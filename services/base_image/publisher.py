@@ -135,6 +135,7 @@ class Publisher(threading.Thread):
                 self.logging.info("Received non ACK message: %s", content)
                 return ws
             client_name = content.split("_")[1]
+            self.logging.info("Client %s opened connection." % client_name)
             self.client_names[client_name] = True
 
             if (self.required_subs and all(
@@ -149,6 +150,7 @@ class Publisher(threading.Thread):
         except asyncio.TimeoutError:
             return ws
         finally:
+            self.logging.info("Client %s closed connection." % client_name)
             del self.client_names[client_name]
             if sender_task:
                 await sender_task

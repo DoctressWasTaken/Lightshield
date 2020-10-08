@@ -61,10 +61,9 @@ class Subscriber(threading.Thread):
         await self.init()
         logger = asyncio.create_task(self.logger())
         while not self.stopped:
-            while not self.stopped \
-                    and (
-                        await self.redisc.llen('tasks') > 0.3 * self.max_buffer
-                        or await self.redisc.llen('packages') > 500):
+            while not self.stopped and (
+                    await self.redisc.llen('tasks') > 0.3 * self.max_buffer
+                    or await self.redisc.llen('packages') > 500):
                 await asyncio.sleep(0.5)
             if self.stopped:
                 break
@@ -87,6 +86,7 @@ class Subscriber(threading.Thread):
             self.received_packages = 0
 
     async def runner(self, session) -> None:
+        self.logging.info("Establishing connection to publisher.")
         async with session.ws_connect(self.uri) as ws:
             try:
                 await ws.send_str("ACK_" + self.service_name)
