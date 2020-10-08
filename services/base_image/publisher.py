@@ -132,18 +132,23 @@ class Publisher(threading.Thread):
         """Handle the websocket client connection."""
         client_name = None
         try:
-            async for msg in websocket:
-                if not msg.startswith('ACK'):
-                    self.logging.info("Received non ACK message: %s", msg)
-                    return
-                client_name = msg.split("_")[1]
-                self.logging.info("Client %s opened connection." % client_name)
-                self.clients.add(websocket)
-                self.client_names[client_name] = True
-                while not self.stopped:
-                    self.logging.info("Open, waiting.")
-                    await asyncio.sleep(5)
-                break
+            try:
+                message = await asyncio.wait_for(websocket.recv(), timeout=3)
+            except asyncio.TimeoutError:
+                self.logging.info("Receive timed out.")
+                return
+
+            if not message.startswith('ACK'):
+                self.logging.info("Received non ACK message: %s", message)
+                return
+            client_name = message.split("_")[1]
+            self.logging.info("Client %s opened connection." % client_name)
+            self.clients.add(websocket)
+            self.client_names[client_name] = True
+
+            while not self.stopped:
+                self.logging.info("Open, waiting.")
+                await asyncio.sleep(5)
 
         finally:
             del self.client_names[client_name]
