@@ -103,8 +103,6 @@ class Subscriber(threading.Thread):
                     if message.type == aiohttp.WSMsgType.TEXT:
                         await self.redisc.lpush('tasks', message.data)
                         self.received_packages += 1
-                        if self.received_packages == 1:
-                            self.logging.info("Received first package.")
                     elif message.type == aiohttp.WSMsgType.CLOSED:
                         return
                     elif message.type == aiohttp.WSMsgType.CLOSE:

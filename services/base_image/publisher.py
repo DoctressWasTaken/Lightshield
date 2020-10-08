@@ -121,12 +121,11 @@ class Publisher(threading.Thread):
             task = await self.redisc.lpop('packages')
             if task:
                 try:
-                    for client in self.clients:
-                        await client.send_str(task)
+                    for client_name in self.client_names:
+                        await self.client_names[client_name].send_str(task)
+                        if self.sent_packages == 0:
+                            self.logging.info("Sent package to %s.", client_name)
                     self.sent_packages += 1
-                    if self.sent_packages == 1:
-                        self.logging.info("Sent first package.")
-                        self.logging.info(self.clients)
                 except BaseException as err:
                     self.logging.info("Exception %s received.", err.__class__.__name__)
                 await asyncio.sleep(0.05)
@@ -138,7 +137,6 @@ class Publisher(threading.Thread):
         client_name = None
         ws = web.WebSocketResponse()
         await ws.prepare(request)
-        self.clients.add(ws)
         try:
             async for msg in ws:
                 if not (content := msg.data).startswith('ACK'):
@@ -146,7 +144,7 @@ class Publisher(threading.Thread):
                     return ws
                 client_name = content.split("_")[1]
                 self.logging.info("Client %s opened connection." % client_name)
-                self.client_names[client_name] = True
+                self.client_names[client_name] = ws
 
                 while not ws.closed or self.stopped:
                     await asyncio.sleep(0.5)
@@ -156,5 +154,4 @@ class Publisher(threading.Thread):
             return ws
         finally:
             del self.client_names[client_name]
-            self.clients.remove(ws)
             self.logging.info("Client %s closed connection." % client_name)
