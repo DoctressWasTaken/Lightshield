@@ -128,7 +128,6 @@ class Publisher(threading.Thread):
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         self.clients.add(ws)
-        count = 0
         try:
             message = await asyncio.wait_for(ws.receive(), timeout=2)
             if not (content := message.data).startswith('ACK'):
@@ -145,6 +144,7 @@ class Publisher(threading.Thread):
                 sender_task = asyncio.create_task(self.sender())
 
             while not ws.closed:
+                self.logging.info(print(ws.closed))
                 await asyncio.sleep(0.5)
 
         except asyncio.TimeoutError:
