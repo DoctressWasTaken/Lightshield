@@ -96,6 +96,17 @@ class Publisher(threading.Thread):
             await asyncio.sleep(1)
         await self.runner.cleanup()
 
+    async def send(self, client, message):
+        try:
+            await client.send(message)
+            return True
+        except websockets.ConnectionClosed:
+            return False
+        except Exception as err:
+            self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
+            await asyncio.sleep(0.5)
+            return False
+
     async def sender(self):
         """Send data to clients as long as all clients are connected.
 
@@ -115,16 +126,10 @@ class Publisher(threading.Thread):
                 continue
             task = await self.redisc.lpop('packages')
             if task:
-                try:
-                    await asyncio.wait([client.send(task) for client in self.clients])
-                    self.sent_packages += 1
-                except websockets.ConnectionClosed:
-                    self.logging.info("Connection closed.")
-                    await asyncio.sleep(2)
-                except Exception as err:
-                    self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
-                    await asyncio.sleep(0.5)
-                    break
+                if not all(
+                        await asyncio.gather(*[self.send(client, task) for client in self.clients])):
+                    await asyncio.sleep(1)
+                self.sent_packages += 1
                 await asyncio.sleep(0.05)
             else:
                 await asyncio.sleep(0.5)
@@ -150,7 +155,7 @@ class Publisher(threading.Thread):
             self.logging.info("Client %s now ready to receive." % client_name)
 
             while not self.stopped and websocket.open:
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.2)
 
         except Exception as err:
             self.logging.info("%s: %s", err.__class__.__name__, err)
