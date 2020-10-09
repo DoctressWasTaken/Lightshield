@@ -90,19 +90,11 @@ class Subscriber(threading.Thread):
                 self.logging.info("Establishing connection to publisher.")
                 await websocket.send("ACK_" + self.service_name)
                 self.connected_to_publisher = True
-                while not self.stopped:
-                    try:
-                        message = await asyncio.wait_for(websocket.recv(), timeout=3)
-                    except asyncio.TimeoutError:
-                        self.logging.info("Receive timed out.")
-                        continue
-                    except Exception as err:
-                        self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
-                        await asyncio.sleep(2)
-                        continue
-
+                async for message in websocket:
                     await self.redisc.lpush('tasks', message)
                     self.received_packages += 1
+                    if self.stopped:
+                        return
                     if await self.redisc.llen('tasks') > self.max_buffer \
                             or await self.redisc.llen('packages') > 500:
                         return
