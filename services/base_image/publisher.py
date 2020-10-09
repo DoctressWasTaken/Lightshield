@@ -120,6 +120,8 @@ class Publisher(threading.Thread):
                         await client.send(task)
                     except Exception as err:
                         self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
+                        await asyncio.sleep(0.5)
+                        break
                 self.sent_packages += 1
 
                 await asyncio.sleep(0.05)
