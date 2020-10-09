@@ -92,7 +92,7 @@ class Subscriber(threading.Thread):
                 self.connected_to_publisher = True
                 while not self.stopped:
                     try:
-                        message = await asyncio.wait_for(websocket.recv, timeout=3)
+                        message = await asyncio.wait_for(websocket.recv(), timeout=3)
                     except asyncio.TimeoutError:
                         self.logging.info("Receive timed out.")
                         continue
