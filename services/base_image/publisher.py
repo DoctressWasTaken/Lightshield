@@ -155,7 +155,6 @@ class Publisher(threading.Thread):
             while not self.stopped and websocket.open:
                 await asyncio.sleep(1)
 
-
         except Exception as err:
             self.logging.info("%s: %s", err.__class__.__name__, err)
             return
