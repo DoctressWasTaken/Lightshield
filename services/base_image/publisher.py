@@ -84,7 +84,7 @@ class Publisher(threading.Thread):
         while not self.stopped:
             await asyncio.sleep(15)
             self.logging.info(
-                "Sent packages: %s | Currently buffered output packages: %s/500. Connections to subs: %s",
+                "Sent: %s | Buffered out: %s/500. Connections: %s",
                 self.sent_packages,
                 await self.redisc.llen('packages'),
                 list(self.client_names.keys()))
@@ -130,7 +130,6 @@ class Publisher(threading.Thread):
                         await asyncio.gather(*[self.send(client, task) for client in self.clients])):
                     await asyncio.sleep(1)
                 self.sent_packages += 1
-                await asyncio.sleep(0.05)
             else:
                 await asyncio.sleep(0.5)
 

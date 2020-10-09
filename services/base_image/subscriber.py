@@ -77,7 +77,7 @@ class Subscriber(threading.Thread):
         while not self.stopped:
             await asyncio.sleep(15)
             self.logging.info(
-                "Received packages: %s | Currently buffered input packages: %s/%s. Connection to publisher: %s",
+                "Received: %s | Buffered in: %s/%s. Connection: %s",
                 self.received_packages,
                 await self.redisc.llen('tasks'),
                 self.max_buffer,
