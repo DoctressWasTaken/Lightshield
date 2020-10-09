@@ -97,7 +97,7 @@ class Subscriber(threading.Thread):
                         self.logging.info("Receive timed out.")
                         continue
                     except Exception as err:
-                        self.logging.info("Exception: %s" % err)
+                        self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
                         await asyncio.sleep(2)
                         continue
 
@@ -109,4 +109,4 @@ class Subscriber(threading.Thread):
             self.connected_to_publisher = False
             self.logging.info("Closed connection to publisher.")
         except Exception as err:
-            self.logging.info(err)
+            self.logging.info("Exception %s received: %s", err.__class__.__name__, err)

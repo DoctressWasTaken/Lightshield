@@ -115,11 +115,13 @@ class Publisher(threading.Thread):
                 continue
             task = await self.redisc.lpop('packages')
             if task:
-                try:
-                    await asyncio.wait([client.send(task) for client in self.clients])
-                    self.sent_packages += 1
-                except Exception as err:
-                    self.logging.info("Exception %s received.", err.__class__.__name__)
+                for client in self.clients:
+                    try:
+                        await client.send(task)
+                    except Exception as err:
+                        self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
+                self.sent_packages += 1
+
                 await asyncio.sleep(0.05)
             else:
                 await asyncio.sleep(0.5)
@@ -139,11 +141,17 @@ class Publisher(threading.Thread):
                 return
             client_name = message.split("_")[1]
             self.logging.info("Client %s opened connection." % client_name)
+            await asyncio.sleep(0.1)
             self.clients.add(websocket)
             self.client_names[client_name] = True
+            self.logging.info("Client %s now ready to receive." % client_name)
 
             while not self.stopped:
                 await asyncio.sleep(5)
+
+        except Exception as err:
+            self.logging.info("%s: %s", err.__class__.__name__, err)
+            return
 
         finally:
             del self.client_names[client_name]
