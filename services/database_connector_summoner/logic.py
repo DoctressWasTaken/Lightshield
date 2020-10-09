@@ -109,7 +109,7 @@ class Worker(threading.Thread):
 
         if not all([summoner[key] == getattr(summoner_db, key) for key in to_check]) or \
                 summoner_db.server != Server.get(self.server):
-            summoner_db.accountId = summoner['summonerId']
+            summoner_db.accountId = summoner['accountId']
             summoner_db.tier = Tier.get(summoner['tier'])
             summoner_db.rank = Rank.get(summoner['rank'])
             summoner_db.leaguePoints = summoner['leaguePoints']

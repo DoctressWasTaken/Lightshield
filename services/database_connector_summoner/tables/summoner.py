@@ -16,5 +16,5 @@ class Summoner(Base):  # pylint: disable=R0903
 
     wins = Column(Integer)
     losses = Column(Integer)
-
+    accountId = Column(String(56), primary_key=True)
     server = Column(Enum(Server))
