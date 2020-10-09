@@ -118,7 +118,7 @@ class Publisher(threading.Thread):
                 try:
                     await asyncio.wait([client.send(task) for client in self.clients])
                     self.sent_packages += 1
-                except BaseException as err:
+                except Exception as err:
                     self.logging.info("Exception %s received.", err.__class__.__name__)
                 await asyncio.sleep(0.05)
             else:

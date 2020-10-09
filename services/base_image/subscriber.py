@@ -68,12 +68,8 @@ class Subscriber(threading.Thread):
                 await asyncio.sleep(0.5)
             if self.stopped:
                 break
-            try:
-                await self.runner()
-            except Exception as err:
-                self.logging.info(err)
-                await asyncio.sleep(5)
-
+            await self.runner()
+            await asyncio.sleep(2)
         await logger
 
     async def logger(self) -> None:
@@ -97,7 +93,6 @@ class Subscriber(threading.Thread):
                 while not self.stopped:
                     try:
                         message = await websocket.recv()
-                        self.logging.info("Received message %s ", message)
                     except asyncio.TimeoutError:
                         self.logging.info("Receive timed out.")
                         continue
