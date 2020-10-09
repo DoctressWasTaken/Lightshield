@@ -82,7 +82,7 @@ class Publisher(threading.Thread):
     async def logger(self) -> None:
         """Handle passive logging tasks."""
         while not self.stopped:
-            await asyncio.sleep(60)
+            await asyncio.sleep(15)
             self.logging.info(
                 "Sent packages: %s | Currently buffered output packages: %s/500. Connections to subs: %s",
                 self.sent_packages,
@@ -115,19 +115,16 @@ class Publisher(threading.Thread):
                 continue
             task = await self.redisc.lpop('packages')
             if task:
-                for client in self.clients:
-                    try:
-                        await client.send(task)
-                    except websockets.ConnectionClosed:
-                        self.logging.info("Connection closed.")
-                        await asyncio.sleep(2)
-
-                    except Exception as err:
-                        self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
-                        await asyncio.sleep(0.5)
-                        break
-                self.sent_packages += 1
-
+                try:
+                    await asyncio.wait([client.send(task) for client in self.clients])
+                    self.sent_packages += 1
+                except websockets.ConnectionClosed:
+                    self.logging.info("Connection closed.")
+                    await asyncio.sleep(2)
+                except Exception as err:
+                    self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
+                    await asyncio.sleep(0.5)
+                    break
                 await asyncio.sleep(0.05)
             else:
                 await asyncio.sleep(0.5)

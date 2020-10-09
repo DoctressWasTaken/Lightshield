@@ -75,7 +75,7 @@ class Subscriber(threading.Thread):
     async def logger(self) -> None:
         """Handle passive logging tasks."""
         while not self.stopped:
-            await asyncio.sleep(60)
+            await asyncio.sleep(15)
             self.logging.info(
                 "Received packages: %s | Currently buffered input packages: %s/%s. Connection to publisher: %s",
                 self.received_packages,
