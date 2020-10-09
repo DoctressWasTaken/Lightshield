@@ -151,9 +151,9 @@ class Publisher(threading.Thread):
             self.client_names[client_name] = True
             self.logging.info("Client %s now ready to receive." % client_name)
 
-            while not self.stopped:
-                self.logging.info("Eternal loop, not closed.")
-                await asyncio.sleep(5)
+            while not self.stopped and websocket.open:
+                await asyncio.sleep(1)
+
 
         except Exception as err:
             self.logging.info("%s: %s", err.__class__.__name__, err)
