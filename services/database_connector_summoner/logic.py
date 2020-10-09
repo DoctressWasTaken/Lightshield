@@ -87,7 +87,7 @@ class Worker(threading.Thread):
         except Exception as err:
             print(task)
             raise err
-        to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints']
+        to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints', 'accountId']
         summoner_db = self.session.query(Summoner)\
             .filter_by(puuid=summoner['puuid'])\
             .first()
@@ -103,11 +103,13 @@ class Worker(threading.Thread):
                 rank=Rank.get(summoner['rank']),
                 leaguePoints=summoner['leaguePoints'],
                 server=Server.get(self.server),
+                accountId=summoner['accountId'],
                 wins=summoner['wins'],
                 losses=summoner['losses'])
 
         if not all([summoner[key] == getattr(summoner_db, key) for key in to_check]) or \
                 summoner_db.server != Server.get(self.server):
+            summoner_db.accountId = summoner['summonerId']
             summoner_db.tier = Tier.get(summoner['tier'])
             summoner_db.rank = Rank.get(summoner['rank'])
             summoner_db.leaguePoints = summoner['leaguePoints']
