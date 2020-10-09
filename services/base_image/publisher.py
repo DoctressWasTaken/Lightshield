@@ -118,6 +118,9 @@ class Publisher(threading.Thread):
                 for client in self.clients:
                     try:
                         await client.send(task)
+                    except websockets.ConnectionClosed:
+                        self.logging.info("Connection closed.")
+
                     except Exception as err:
                         self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
                         await asyncio.sleep(0.5)
@@ -149,6 +152,7 @@ class Publisher(threading.Thread):
             self.logging.info("Client %s now ready to receive." % client_name)
 
             while not self.stopped:
+                self.logging.info("Eternal loop, not closed.")
                 await asyncio.sleep(5)
 
         except Exception as err:

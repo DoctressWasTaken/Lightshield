@@ -92,7 +92,7 @@ class Subscriber(threading.Thread):
                 self.connected_to_publisher = True
                 while not self.stopped:
                     try:
-                        message = await websocket.recv()
+                        message = await asyncio.wait_for(websocket.recv, timeout=3)
                     except asyncio.TimeoutError:
                         self.logging.info("Receive timed out.")
                         continue
@@ -106,7 +106,7 @@ class Subscriber(threading.Thread):
                     if await self.redisc.llen('tasks') > self.max_buffer \
                             or await self.redisc.llen('packages') > 500:
                         return
-            self.connected_to_publisher = False
-            self.logging.info("Closed connection to publisher.")
         except Exception as err:
             self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
+        self.connected_to_publisher = False
+        self.logging.info("Closed connection to publisher.")
