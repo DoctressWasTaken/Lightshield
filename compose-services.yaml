@@ -111,12 +111,12 @@ services:
       context: services/database_connector_summoner/
     environment:
       - SERVER=${SERVER}
-      - POSTGRES_HOST=postgres
+      - POSTGRES_HOST=buffer
       - POSTGRES_PORT=5432
       - POSTGRES_USER=db_worker
       - MAX_TASK_BUFFER=1000
     external_links:
-      - lightshield_postgres:postres
+      - lightshield_postgres:buffer
     links:
       - summoner_ids:provider
       - database_connector_summoner_redis:redis
@@ -131,12 +131,12 @@ services:
       context: services/database_connector_match_details/
     environment:
       - SERVER=${SERVER}
-      - POSTGRES_HOST=postgres
+      - POSTGRES_HOST=buffer
       - POSTGRES_PORT=5432
       - POSTGRES_USER=db_worker
       - MAX_TASK_BUFFER=1000
     external_links:
-      - lightshield_postgres:postres
+      - lightshield_postgres:buffer
     links:
       - match_details:provider
       - database_connector_match_details_redis:redis
