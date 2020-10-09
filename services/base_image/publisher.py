@@ -120,6 +120,7 @@ class Publisher(threading.Thread):
                         await client.send(task)
                     except websockets.ConnectionClosed:
                         self.logging.info("Connection closed.")
+                        await asyncio.sleep(2)
 
                     except Exception as err:
                         self.logging.info("Exception %s received: %s", err.__class__.__name__, err)
