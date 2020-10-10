@@ -106,7 +106,7 @@ class Worker(threading.Thread):
                     leaguePoints=summoner['leaguePoints'],
                     server=Server.get(self.server),
                     accountId=summoner['accountId'],
-                    summonerName=summoner['name'],
+                    summonerName=summoner['summonerName'],
                     wins=summoner['wins'],
                     losses=summoner['losses'])
 
@@ -115,7 +115,7 @@ class Worker(threading.Thread):
                 summoner_db.tier = Tier.get(summoner['tier'])
                 summoner_db.rank = Rank.get(summoner['rank'])
                 summoner_db.leaguePoints = summoner['leaguePoints']
-                summoner_db.summonerName = summoner['name']
+                summoner_db.summonerName = summoner['summonerName']
                 summoner_db.server = Server.get(self.server)
                 summoner_db.wins = summoner['wins']
                 summoner_db.losses = summoner['losses']
