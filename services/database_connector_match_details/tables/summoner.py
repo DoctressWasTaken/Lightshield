@@ -8,18 +8,13 @@ class Summoner(Base):  # pylint: disable=R0903
     """Summoner Details Merged from Summoner-V4 and League-V4."""
     __tablename__ = 'summoner'
 
-    summonerId = Column(String(50))
-    accountId = Column(String(56))
-    puuid = Column(String(78), primary_key=True)
-
-    summonerName = Column(String)
     tier = Column(Enum(Tier))
     rank = Column(Enum(Rank))
     leaguePoints = Column(Integer)
 
-    series = Column(String(4))
-
     wins = Column(Integer)
     losses = Column(Integer)
-
-    server = Column(Enum(Server))
+    summonerName = Column(String)
+    puuid = Column(String(78))
+    accountId = Column(String(56), primary_key=True)
+    server = Column(Enum(Server), primary_key=True)

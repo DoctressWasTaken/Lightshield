@@ -1,5 +1,5 @@
 """Tables related to Match Data."""
-from sqlalchemy import Column, Integer, String, Enum, BigInteger
+from sqlalchemy import Column, Integer, String, Enum, BigInteger, JSON
 from . import Base
 from .enums import Server
 
@@ -17,3 +17,7 @@ class Match(Base):  # pylint: disable=R0903
     gameVersion = Column(String(20))
     mapId = Column(Integer)
     gameMode = Column(String(15))
+
+    participantIdentities = Column(JSON)
+    teams = Column(JSON)
+    participants = Column(JSON)
