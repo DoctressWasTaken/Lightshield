@@ -87,34 +87,38 @@ class Worker(threading.Thread):
         except Exception as err:
             print(task)
             raise err
-        to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints', 'summonerName']
-        summoner_db = self.session.query(Summoner)\
-            .filter_by(accountId=summoner['accountId'])\
-            .filter_by(server=Server.get(self.server))\
-            .first()
+        try:
+            to_check = ['wins', 'losses', 'tier', 'rank', 'leaguePoints', 'summonerName']
+            summoner_db = self.session.query(Summoner)\
+                .filter_by(accountId=summoner['accountId'])\
+                .filter_by(server=Server.get(self.server))\
+                .first()
 
-        if summoner['puuid'] in to_add:
-            return
+            if summoner['puuid'] in to_add:
+                return
 
-        if not summoner_db:
-            to_add.append(summoner['puuid'])
-            return Summoner(
-                puuid=summoner['puuid'],
-                tier=Tier.get(summoner['tier']),
-                rank=Rank.get(summoner['rank']),
-                leaguePoints=summoner['leaguePoints'],
-                server=Server.get(self.server),
-                accountId=summoner['accountId'],
-                summonerName=summoner['name'],
-                wins=summoner['wins'],
-                losses=summoner['losses'])
+            if not summoner_db:
+                to_add.append(summoner['puuid'])
+                return Summoner(
+                    puuid=summoner['puuid'],
+                    tier=Tier.get(summoner['tier']),
+                    rank=Rank.get(summoner['rank']),
+                    leaguePoints=summoner['leaguePoints'],
+                    server=Server.get(self.server),
+                    accountId=summoner['accountId'],
+                    summonerName=summoner['name'],
+                    wins=summoner['wins'],
+                    losses=summoner['losses'])
 
-        if not all([summoner[key] == getattr(summoner_db, key) for key in to_check]):
-            summoner_db.accountId = summoner['accountId']
-            summoner_db.tier = Tier.get(summoner['tier'])
-            summoner_db.rank = Rank.get(summoner['rank'])
-            summoner_db.leaguePoints = summoner['leaguePoints']
-            summoner_db.summonerName = summoner['name']
-            summoner_db.server = Server.get(self.server)
-            summoner_db.wins = summoner['wins']
-            summoner_db.losses = summoner['losses']
+            if not all([summoner[key] == getattr(summoner_db, key) for key in to_check]):
+                summoner_db.accountId = summoner['accountId']
+                summoner_db.tier = Tier.get(summoner['tier'])
+                summoner_db.rank = Rank.get(summoner['rank'])
+                summoner_db.leaguePoints = summoner['leaguePoints']
+                summoner_db.summonerName = summoner['name']
+                summoner_db.server = Server.get(self.server)
+                summoner_db.wins = summoner['wins']
+                summoner_db.losses = summoner['losses']
+        except:
+            print(summoner)
+            raise
