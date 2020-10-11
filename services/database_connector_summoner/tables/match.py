@@ -13,7 +13,7 @@ class Match(Base):  # pylint: disable=R0903
     queue = Column(Integer)
     gameDuration = Column(Integer)
     server = Column(Enum(Server), primary_key=True)
-    gameCreation = Column(BigInteger)
+    gameCreation = Column(BigInteger, index=True)
     seasonId = Column(Integer)
     gameVersion = Column(String(20))
     mapId = Column(Integer)
