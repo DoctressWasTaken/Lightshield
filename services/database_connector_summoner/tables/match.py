@@ -1,7 +1,8 @@
 """Tables related to Match Data."""
-from sqlalchemy import Column, Integer, String, Enum, BigInteger, JSON
+from sqlalchemy import Column, Integer, String, Enum, BigInteger, JSON, DateTime
 from . import Base
 from .enums import Server
+import datetime
 
 
 class Match(Base):  # pylint: disable=R0903
@@ -21,3 +22,5 @@ class Match(Base):  # pylint: disable=R0903
     participantIdentities = Column(JSON)
     teams = Column(JSON)
     participants = Column(JSON)
+
+    matchAdded = Column(DateTime, default=datetime.datetime.utcnow, index=True)
