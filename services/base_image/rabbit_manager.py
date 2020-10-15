@@ -24,8 +24,8 @@ class RabbitManager:
 
         self.outgoing = outgoing
 
-        self.incoming = self.server + "_" + incoming
-
+        self.incoming = incoming
+        
         self.blocked = False
         self.stopped = False
         self.connection = None
@@ -41,7 +41,7 @@ class RabbitManager:
         await channel.set_qos(prefetch_count=100)
         if self.incoming:
             self.incoming = await channel.declare_queue(
-                name=self.incoming['name'],
+                name=self.server + "_" + self.incoming,
                 durable=True,
                 robust=True
             )
@@ -62,7 +62,7 @@ class RabbitManager:
                     queues = {entry['name']: entry for entry in resp}
                     missing = False
                     for queue in self.outgoing:
-                        if queue not in queues:
+                        if self.server + "_" + queue not in queues:
                             self.logging.info("Queue %s not initialized yet. Waiting.", queue)
                             missing = True
                             break

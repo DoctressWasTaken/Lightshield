@@ -37,13 +37,12 @@ services:
       - UPDATE_INTERVAL=1
       - WORKER=5
       - STREAM=RANK
+      - MAX_TASK_BUFFER=1000
     links:
       - proxy:proxy
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
-      - lightshield_rabbitmq
-      - summoner_ids
       - structural_creator
     restart: always
     volumes:
@@ -69,7 +68,6 @@ services:
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
-      - lightshield_rabbitmq
       - match_history
       - processor
       - structural_creator
@@ -96,7 +94,6 @@ services:
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
-      - lightshield_rabbitmq
       - match_details
       - structural_creator
     restart: always
@@ -120,7 +117,6 @@ services:
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
-      - lightshield_rabbitmq
       - processor
       - structural_creator
     restart: always
@@ -137,9 +133,9 @@ services:
       - STREAM=DETAILS
     external_links:
       - lightshield_rabbitmq:rabbitmq
-    depends_on:
-      - lightshield_rabbitmq
+    links:
       - persistant_db:postgres
+    depends_on:
       - structural_creator
     restart: always
 

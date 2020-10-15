@@ -3,3 +3,4 @@ aiohttp
 websockets
 uvloop
 aiosqlite
+aio-pika
