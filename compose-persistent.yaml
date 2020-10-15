@@ -1,23 +1,15 @@
 version: '2.3'
 services:
 
-  postgres:
-    cpus: 1
-    mem_limit: 1g
-    container_name: ${COMPOSE_PROJECT_NAME}_postgres
-    build:
-      dockerfile: Dockerfile
-      context: databases/postgres/
+  rabbitmq:
+    container_name: lightshield_rabbitmq
+    image: rabbitmq:management
     volumes:
-      - postgres:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_HOST_AUTH_METHOD=trust
-    ports:
-        - 127.0.0.1:5432:5432
+      - rabbitmq:/var/lib/rabbitmq
     restart: always
 
 volumes:
-  postgres:
+  rabbitmq:
 
 networks:
   default:

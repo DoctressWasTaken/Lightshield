@@ -6,9 +6,9 @@ import aiohttp
 import logging
 from repeat_marker import RepeatMarker
 from rank_manager import RankManager
-from buffer_manager import BufferManager
 
 from exceptions import RatelimitException, NotFoundException, Non200Exception
+from rabbit_manager import RabbitManager
 
 
 class Service:  # pylint: disable=R0902
@@ -33,7 +33,11 @@ class Service:  # pylint: disable=R0902
         self.stopped = False
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
-        self.manager = BufferManager()
+
+        self.rabbit = RabbitManager(
+            exchange="RANKED",
+            outgoing=['RANKED_TO_SUMMONER']
+        )
 
         asyncio.run(self.marker.build(
                "CREATE TABLE IF NOT EXISTS match_history("
@@ -43,6 +47,7 @@ class Service:  # pylint: disable=R0902
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
+        self.rabbit.shutdown()
 
     async def init(self):
         """Override of the default init function.
@@ -51,7 +56,7 @@ class Service:  # pylint: disable=R0902
         """
         await self.marker.connect()
         await self.rankmanager.init()
-        await self.manager.init()
+        await self.rabbit.init()
 
     async def async_worker(self, tier, division):
 
@@ -60,7 +65,7 @@ class Service:  # pylint: disable=R0902
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
 
-            while await self.manager.get_total_packages() > 500 and not self.stopped:
+            while self.rabbit.blocked and not self.stopped:
                 await asyncio.sleep(1)
 
             if self.stopped:
@@ -144,8 +149,10 @@ class Service:  # pylint: disable=R0902
         """
         await self.init()
         while not self.stopped:
+            buffer_manager = asyncio.create_task(self.rabbit.check_full())
             tier, division = await self.rankmanager.get_next()
             self.empty = False
             self.next_page = 1
             await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
             await self.rankmanager.update(key=(tier, division))
+        await buffer_manager
