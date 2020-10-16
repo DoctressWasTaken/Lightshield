@@ -10,12 +10,12 @@ from aio_pika import ExchangeType, Message, DeliveryMode
 class RabbitManager:
 
     def __init__(self, incoming=None, exchange=None, outgoing=()):
-        self.logging = logging.getLogger("LeagueRankings")
+        self.logging = logging.getLogger("RabbitMQ")
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
         handler.setFormatter(
-            logging.Formatter('%(asctime)s [Subscriber] %(message)s'))
+            logging.Formatter('%(asctime)s [RabbitMQ] %(message)s'))
         self.logging.addHandler(handler)
 
         self.server = os.environ['SERVER']
@@ -75,17 +75,32 @@ class RabbitManager:
         headers = {
             'content-type': 'application/json'
         }
-        while not self.stopped:
-            async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
+        self.logging.info("Initiating buffer checker")
+        async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
+            while not self.stopped:
                 async with session.get(
                         'http://rabbitmq:15672/api/queues', headers=headers) as response:
                     resp = await response.json()
-                    queues = {entry['name']: entry for entry in resp}
+                    queues = {entry['name']: entry['messages'] for entry in resp}
+                    was_blocked = self.blocked
                     self.blocked = False
+                    queue_identifier = self.server + "_" + self.streamID
                     for queue in queues:
-                        if queue.startswith(self.server + self.streamID):
-                            if int(queues[queue]['messages']) > self.max_buffer:
-                                self.blocked = True
+                        if queue.startswith(queue_identifier):
+                            try:
+                                
+                                if int(queues[queue]) > self.max_buffer:
+                                    if not was_blocked:
+                                        self.logging.info("Queue %s is too full [%s/%s]", 
+                                                queue, queues[queue], self.max_buffer)
+                                    self.blocked = True
+
+                            except Exception as err:
+                                print(err)
+                                raise err
+                    if was_blocked and not self.blocked:
+                        self.logging.info("Blocker released.")
+                await asyncio.sleep(1)
 
     async def get_task(self):
         pass
@@ -93,7 +108,6 @@ class RabbitManager:
     async def add_task(self, message) -> None:
 
         await self.exchange.publish(
-            Message(message),
-            routing_key="",
-            delivery_mode=DeliveryMode.PERSISTENT
-        )
+            Message(message.encode(),
+                delivery_mode=DeliveryMode.PERSISTENT),
+            routing_key="")

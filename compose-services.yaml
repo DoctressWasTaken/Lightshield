@@ -24,6 +24,8 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_structural_creator
     environment:
       - SERVER=${SERVER}
+    external_links:
+      - lightshield_rabbitmq:rabbitmq
 
   league_rankings:
     hostname: league_rankings
@@ -36,7 +38,7 @@ services:
       - SERVER=${SERVER}
       - UPDATE_INTERVAL=1
       - WORKER=5
-      - STREAM=RANK
+      - STREAM=RANKED
       - MAX_TASK_BUFFER=1000
     links:
       - proxy:proxy

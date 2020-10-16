@@ -139,8 +139,8 @@ class Service:  # pylint: disable=R0902
                 'UPDATE match_history SET matches = %s WHERE summonerId = "%s";' % (
                 matches_local,
             entry['summonerId']))
-
-            await self.manager.add_package(entry)
+            
+            await self.rabbit.add_task(entry['summonerId'] + "_" + str(matches_local))
 
     async def run(self):
         """Override the default run method due to special case.
