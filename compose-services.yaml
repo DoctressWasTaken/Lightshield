@@ -70,8 +70,6 @@ services:
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
-      - match_history
-      - processor
       - structural_creator
     restart: always
 

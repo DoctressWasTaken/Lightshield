@@ -45,7 +45,6 @@ class RabbitManager:
                 durable=True,
                 robust=True
             )
-            await self.incoming.bind()
         self.exchange = await channel.declare_exchange(
             name=self.exchange,
             durable=True,
@@ -103,7 +102,7 @@ class RabbitManager:
                 await asyncio.sleep(1)
 
     async def get_task(self):
-        return self.incoming.get(fail=False, timeout=1)
+        return await self.incoming.get(fail=False, timeout=1)
 
     async def add_task(self, message) -> None:
 

@@ -36,6 +36,7 @@ class Service:
 
         self.rabbit = RabbitManager(
             exchange="SUMMONER",
+            incoming="RANKED_TO_SUMMONER",
             outgoing=['SUMMONER_TO_HISTORY', 'SUMMONER_TO_PROCESSOR']
         )
 
@@ -58,7 +59,8 @@ class Service:
             if not task:
                 await asyncio.sleep(3)
                 continue
-            identifier, games, rank = task.split("_")
+            print(task.body.decode())
+            identifier, games, rank = task.body.decode().split(",")
 
             if data := await self.marker.execute_read(
                     'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
@@ -70,8 +72,10 @@ class Service:
                     games,
                     rank
                 ))
+                await task.ack()
                 continue
             if identifier in self.buffered_elements:
+                await task.ack()
                 continue
             self.buffered_elements[identifier] = True
             url = self.url % identifier
@@ -94,6 +98,7 @@ class Service:
             except (RatelimitException, NotFoundException, Non200Exception):
                 continue
             finally:
+                await task.ack()
                 del self.buffered_elements[identifier]
 
     async def fetch(self, session, url):
