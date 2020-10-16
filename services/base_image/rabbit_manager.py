@@ -1,11 +1,10 @@
 import asyncio
-import threading
 import os
 import aiohttp
 import logging
 import aio_pika
 from aio_pika import ExchangeType, Message, DeliveryMode
-
+import pickle
 
 class RabbitManager:
 
@@ -107,6 +106,6 @@ class RabbitManager:
     async def add_task(self, message) -> None:
 
         await self.exchange.publish(
-            Message(message.encode(),
+            Message(body=pickle.dumps(message),
                     delivery_mode=DeliveryMode.PERSISTENT),
             routing_key="")

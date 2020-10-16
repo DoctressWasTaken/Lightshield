@@ -7,7 +7,7 @@ from exceptions import RatelimitException, NotFoundException, Non200Exception
 from datetime import datetime, timedelta
 import asyncio
 import aiohttp
-
+import pickle
 import logging
 import os
 from repeat_marker import RepeatMarker
@@ -59,19 +59,18 @@ class Service:
             if not task:
                 await asyncio.sleep(3)
                 continue
-            print(task.body.decode())
-            identifier, games, rank = task.body.decode().split(",")
+            identifier, games, rank = pickle.loads(task.body)
 
             if data := await self.marker.execute_read(
                     'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
                 package = {'accountId': data[0][0], 'puuid': data[0][1]}
 
-                await self.rabbit("%s_%s_%s_%s" % (
+                await self.rabbit([
                     package['accountId'],
                     package['puuid'],
                     games,
                     rank
-                ))
+                ])
                 await task.ack()
                 continue
             if identifier in self.buffered_elements:
@@ -89,12 +88,12 @@ class Service:
                     'VALUES ("%s", "%s", "%s");' % (
                     identifier, response['accountId'], response['puuid']))
 
-                await self.rabbit("%s_%s_%s_%s" % (
+                await self.rabbit([
                     response['accountId'],
                     response['puuid'],
                     games,
                     rank
-                ))
+                ])
             except (RatelimitException, NotFoundException, Non200Exception):
                 continue
             finally:

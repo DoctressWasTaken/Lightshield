@@ -160,11 +160,11 @@ class Service:  # pylint: disable=R0902
 
             ranking = tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']
 
-            await self.rabbit.add_task("%s_%s_%s" % (
+            await self.rabbit.add_task([
                 entry['summonerId'],
                 ranking,
                 matches_local
-            ))
+            ])
 
     async def run(self):
         """Override the default run method due to special case.
