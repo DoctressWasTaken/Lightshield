@@ -103,11 +103,11 @@ class RabbitManager:
                 await asyncio.sleep(1)
 
     async def get_task(self):
-        pass
+        return self.incoming.get(fail=False, timeout=1)
 
     async def add_task(self, message) -> None:
 
         await self.exchange.publish(
             Message(message.encode(),
-                delivery_mode=DeliveryMode.PERSISTENT),
+                    delivery_mode=DeliveryMode.PERSISTENT),
             routing_key="")

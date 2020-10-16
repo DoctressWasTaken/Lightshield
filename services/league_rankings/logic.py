@@ -11,6 +11,24 @@ from exceptions import RatelimitException, NotFoundException, Non200Exception
 from rabbit_manager import RabbitManager
 
 
+tiers = {
+    "IRON": 0,
+    "BRONZE": 1,
+    "SILVER": 2,
+    "GOLD": 3,
+    "PLATINUM": 4,
+    "DIAMOND": 5,
+    "MASTER": 6,
+    "GRANDMASTER": 6,
+    "CHALLENGER": 6}
+
+rank = {
+    "IV": 0,
+    "III": 1,
+    "II": 2,
+    "I": 3}
+
+
 class Service:  # pylint: disable=R0902
     """Core service worker object."""
 
@@ -139,8 +157,14 @@ class Service:  # pylint: disable=R0902
                 'UPDATE match_history SET matches = %s WHERE summonerId = "%s";' % (
                 matches_local,
             entry['summonerId']))
-            
-            await self.rabbit.add_task(entry['summonerId'] + "_" + str(matches_local))
+
+            ranking = tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']
+
+            await self.rabbit.add_task("%s_%s_%s" % (
+                entry['summonerId'],
+                ranking,
+                matches_local
+            ))
 
     async def run(self):
         """Override the default run method due to special case.
@@ -148,8 +172,8 @@ class Service:  # pylint: disable=R0902
         Worker are started and stopped after each tier/rank combination.
         """
         await self.init()
+        buffer_manager = asyncio.create_task(self.rabbit.check_full())
         while not self.stopped:
-            buffer_manager = asyncio.create_task(self.rabbit.check_full())
             tier, division = await self.rankmanager.get_next()
             self.empty = False
             self.next_page = 1

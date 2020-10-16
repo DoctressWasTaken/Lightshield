@@ -11,7 +11,7 @@ import aiohttp
 import logging
 import os
 from repeat_marker import RepeatMarker
-from buffer_manager import BufferManager
+from rabbit_manager import RabbitManager
 
 
 class Service:
@@ -33,7 +33,12 @@ class Service:
         self.stopped = False
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
-        self.manager = BufferManager()
+
+        self.rabbit = RabbitManager(
+            exchange="SUMMONER",
+            outgoing=['SUMMONER_TO_HISTORY', 'SUMMONER_TO_PROCESSOR']
+        )
+
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
         asyncio.run(self.marker.build(
                "CREATE TABLE IF NOT EXISTS summoner_ids("
@@ -44,21 +49,27 @@ class Service:
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
+        self.rabbit.shutdown()
 
     async def async_worker(self):
         """Create only a new call if the summoner is not yet in the db."""
         while not self.stopped:
-            task = await self.manager.get_task()
+            task = await self.rabbit.get_task()
             if not task:
                 await asyncio.sleep(3)
                 continue
-            identifier = task['summonerId']
+            identifier, games, rank = task.split("_")
 
             if data := await self.marker.execute_read(
                     'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
-                package = {**task, 'accountId': data[0][0], 'puuid': data[0][1]}
+                package = {'accountId': data[0][0], 'puuid': data[0][1]}
 
-                await self.manager.add_package(package)
+                await self.rabbit("%s_%s_%s_%s" % (
+                    package['accountId'],
+                    package['puuid'],
+                    games,
+                    rank
+                ))
                 continue
             if identifier in self.buffered_elements:
                 continue
@@ -74,7 +85,12 @@ class Service:
                     'VALUES ("%s", "%s", "%s");' % (
                     identifier, response['accountId'], response['puuid']))
 
-                await self.manager.add_package({**task, **response})
+                await self.rabbit("%s_%s_%s_%s" % (
+                    response['accountId'],
+                    response['puuid'],
+                    games,
+                    rank
+                ))
             except (RatelimitException, NotFoundException, Non200Exception):
                 continue
             finally:
@@ -116,7 +132,7 @@ class Service:
         Initiate the Rankmanager object.
         """
         await self.marker.connect()
-        await self.manager.init()
+        await self.rabbit.init()
 
     async def run(self):
         """Runner."""
