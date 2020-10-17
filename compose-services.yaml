@@ -116,7 +116,6 @@ services:
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
-      - processor
       - structural_creator
     restart: always
 
