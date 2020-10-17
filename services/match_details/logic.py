@@ -1,13 +1,13 @@
 """Match History updater. Pulls matchlists for all player."""
 import asyncio
 import aiohttp
-import json
+import pickle
 import logging
 import os
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from datetime import datetime, timedelta
 from repeat_marker import RepeatMarker
-from buffer_manager import BufferManager
+from rabbit_manager import RabbitManager
 
 class Service:
     """Core service worker object."""
@@ -28,7 +28,12 @@ class Service:
         self.stopped = False
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
-        self.manager = BufferManager()
+        self.rabbit = RabbitManager(
+            exchange="DETAILS",
+            incoming="HISTORY_TO_DETAILS",
+            outgoing=["DETAILS_TO_PROCESSOR"]
+        )
+
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
         asyncio.run(self.marker.build(
             "CREATE TABLE IF NOT EXISTS match_id("
@@ -40,7 +45,7 @@ class Service:
         Initiate the Rankmanager object.
         """
         await self.marker.connect()
-        await self.manager.init()
+        await self.rabbit.init()
 
     async def limiter(self):
         """Method to periodically break down the db size by removing a % of the lowest match Ids."""
@@ -56,42 +61,44 @@ class Service:
                 'SELECT id FROM match_id ORDER BY id ASC LIMIT %s' % to_delete
             )[-1]
             await self.marker.execute_read(
-                'DELETE FROM match_id WHERE id <= %s' % to_delete
+                'DELETE FROM match_id WHERE id <= %s' % lowest_limit
             )
 
     async def async_worker(self):
         failed = None
         while not self.stopped:
             if not failed:
-                task = await self.manager.get_task()
+                if not (task := await self.rabbit.get_task()):
+                    await asyncio.sleep(1)
+                    continue
             else:
                 task = failed
                 failed = None
-            if not task:
-                await asyncio.sleep(3)
-                continue
-            identifier = task['match_id']
-            if await self.marker.execute_read(
-                    'SELECT * FROM match_id WHERE id = %s;' % identifier):
-                continue
-            if identifier in self.buffered_elements:
-                continue
-            self.buffered_elements[identifier] = True
-            url = self.url % identifier
+                matchId = pickle.loads(task.body)
             try:
+                if await self.marker.execute_read(
+                        'SELECT * FROM match_id WHERE id = %s;' % matchId):
+                    continue
+                if matchId in self.buffered_elements:
+                    continue
+                self.buffered_elements[matchId] = True
+                url = self.url % matchId
                 if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                     await asyncio.sleep(delay)
                 async with aiohttp.ClientSession() as session:
                     response = await self.fetch(session, url)
                     await self.marker.execute_write(
-                        'INSERT OR IGNORE INTO match_id (id) VALUES (%s);' % identifier)
-                    await self.manager.add_package(response)
+                        'INSERT OR IGNORE INTO match_id (id) VALUES (%s);' % matchId)
+
+                    await self.rabbit.add_task(response)
             except (RatelimitException, Non200Exception):
                 failed = task
             except NotFoundException:
                 pass
             finally:
-                del self.buffered_elements[identifier]
+                if not failed:
+                    await task.ack()
+                del self.buffered_elements[matchId]
 
     async def fetch(self, session, url):
             """Execute call to external target using the proxy server.
@@ -126,6 +133,8 @@ class Service:
     async def run(self):
         """Runner."""
         await self.init()
+        rabbit_check = asyncio.create_task(self.rabbit.check_full())
         limiter_task = asyncio.create_task(self.limiter())
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(45)])
         await limiter_task
+        await rabbit_check
