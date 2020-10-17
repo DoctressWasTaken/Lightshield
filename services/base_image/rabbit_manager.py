@@ -101,7 +101,7 @@ class RabbitManager:
                 await asyncio.sleep(1)
 
     async def get_task(self):
-        return await self.incoming.get(fail=False, timeout=1)
+        return await self.incoming.get(fail=False, timeout=3)
 
     async def add_task(self, message) -> None:
 

@@ -158,7 +158,7 @@ class Service:  # pylint: disable=R0902
 
             ranking = tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']
 
-            self.rabbit.add_task([
+            await self.rabbit.add_task([
                     entry['summonerId'],
                     ranking,
                     matches_local
