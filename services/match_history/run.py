@@ -6,24 +6,15 @@ import signal
 import asyncio
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-from rabbit_sync import RabbitManager
 
 if __name__ == "__main__":
 
     service = Service()
-
-    rabbit = RabbitManager(
-        exchange="HISTORY",
-        incoming="SUMMONER_TO_HISTORY",
-        outgoing=["HISTORY_TO_DETAILS"]
-    )
 
     def shutdown_handler():
         service.shutdown()
 
     signal.signal(signal.SIGTERM, shutdown_handler)
 
-    rabbit.start()
-    asyncio.run(service.run(rabbit))
+    asyncio.run(service.run())
 
-    rabbit.join()
