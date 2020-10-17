@@ -2,8 +2,9 @@ import pika
 import pickle
 import os
 import logging
+import threading
 
-class RabbitManager:
+class RabbitManager(threading.Thread):
 
     def __init__(self, incoming=None, exchange=None, outgoing=(), prefetch=50):
         self.logging = logging.getLogger("RabbitMQ")
