@@ -11,7 +11,6 @@ import pickle
 import logging
 import os
 from repeat_marker import RepeatMarker
-from rabbit_manager import RabbitManager
 
 
 class Service:
@@ -34,11 +33,7 @@ class Service:
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
 
-        self.rabbit = RabbitManager(
-            exchange="SUMMONER",
-            incoming="RANKED_TO_SUMMONER",
-            outgoing=['SUMMONER_TO_HISTORY', 'SUMMONER_TO_PROCESSOR']
-        )
+        self.rabbit = None
 
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
         asyncio.run(self.marker.build(
@@ -55,26 +50,28 @@ class Service:
     async def async_worker(self):
         """Create only a new call if the summoner is not yet in the db."""
         while not self.stopped:
-            task = await self.rabbit.get_task()
-            if not task:
+            if self.rabbit.tasks:
+                task = self.rabbit.tasks.pop()
+            else:
                 await asyncio.sleep(3)
                 continue
-            identifier, games, rank = pickle.loads(task.body)
+            identifier, games, rank = pickle.loads(task[2])
 
             if data := await self.marker.execute_read(
                     'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
                 package = {'accountId': data[0][0], 'puuid': data[0][1]}
 
-                await self.rabbit([
+                self.rabbit.packages.append({
+                    "body": [
                     package['accountId'],
                     package['puuid'],
                     games,
                     rank
-                ])
-                await task.ack()
+                        ],
+                    "message": task
+                })
                 continue
             if identifier in self.buffered_elements:
-                await task.ack()
                 continue
             self.buffered_elements[identifier] = True
             url = self.url % identifier
@@ -88,16 +85,18 @@ class Service:
                     'VALUES ("%s", "%s", "%s");' % (
                     identifier, response['accountId'], response['puuid']))
 
-                await self.rabbit([
+                self.rabbit.packages.append({
+                    "body": [
                     response['accountId'],
                     response['puuid'],
                     games,
                     rank
-                ])
+                        ],
+                    "message": task
+                })
             except (RatelimitException, NotFoundException, Non200Exception):
                 continue
             finally:
-                await task.ack()
                 del self.buffered_elements[identifier]
 
     async def fetch(self, session, url):
@@ -136,9 +135,9 @@ class Service:
         Initiate the Rankmanager object.
         """
         await self.marker.connect()
-        await self.rabbit.init()
 
-    async def run(self):
+    async def run(self, rabbit):
         """Runner."""
+        self.rabbit = rabbit
         await self.init()
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(35)])

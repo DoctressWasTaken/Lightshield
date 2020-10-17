@@ -77,7 +77,7 @@ class RabbitManager(threading.Thread):
     def process_outgoing(self):
         for element in self.packages:
             if "message" in element:
-                self.channel.basic_ack(delivery_tag=element['message'][1].delivery_tag)
+                self.channel.basic_ack(delivery_tag=element['message'][0].delivery_tag)
 
             body = pickle.dumps(element['body'])
             self.channel.basic_publish(
