@@ -57,6 +57,11 @@ class Service:
     async def async_worker(self):
         self.logging.info("Initiated worker.")
         while not self.stopped:
+            while self.rabbit.blocked:
+                await asyncio.sleep(1)
+                if self.stopped:
+                    return
+
             if not (task := await self.rabbit.get_task()):
                 await asyncio.sleep(1)
                 continue
