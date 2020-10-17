@@ -170,7 +170,7 @@ class Service:  # pylint: disable=R0902
         Worker are started and stopped after each tier/rank combination.
         """
         await self.init()
-        rabbit_check = await asyncio.create_task(self.rabbit.check_full())
+        rabbit_check = asyncio.create_task(self.rabbit.check_full())
         while not self.stopped:
             tier, division = await self.rankmanager.get_next()
             self.empty = False

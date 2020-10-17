@@ -62,7 +62,6 @@ class Service:
                 continue
             accountId, puuid, matches, rank = pickle.loads(task.body)
             try:
-
                 if prev := await self.marker.execute_read(
                     'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
                     matches = matches - int(prev[0][0])
@@ -154,6 +153,6 @@ class Service:
     async def run(self):
         """Runner."""
         await self.init()
-        rabbit_check = await asyncio.create_task(self.rabbit.check_full())
+        rabbit_check = asyncio.create_task(self.rabbit.check_full())
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
         await rabbit_check
