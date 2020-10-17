@@ -151,8 +151,9 @@ class Service:
             except Non200Exception:
                 await asyncio.sleep(0.1)
 
-    async def run(self, rabbit):
+    async def run(self):
         """Runner."""
-        self.rabbit = rabbit
+        rabbit_check = await asyncio.create_task(self.rabbit.check_full())
         await self.init()
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
+        await rabbit_check
