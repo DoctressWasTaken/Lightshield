@@ -50,7 +50,7 @@ class Service:
         self.rabbit.shutdown()
 
     async def async_worker(self):
-
+        self.logging.info("Initiated worker.")
         while not self.stopped:
             if self.rabbit.tasks:
                 task = self.rabbit.tasks.pop()
