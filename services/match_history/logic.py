@@ -81,7 +81,7 @@ class Service:
                         calls_in_progress.append(asyncio.create_task(
                             self.handler(
                                 session=session,
-                                url=self.url % (task['accountId'], id, id + 100)
+                                url=self.url % (accountId, id, id + 100)
                             )
                         ))
                         await asyncio.sleep(0.1)

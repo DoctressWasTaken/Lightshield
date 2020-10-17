@@ -25,7 +25,7 @@ class RabbitManager:
 
         self.incoming = incoming
         
-        self.blocked = False
+        self.blocked = True
         self.stopped = False
         self.connection = None
         self.exchange = self.server + "_" + exchange
