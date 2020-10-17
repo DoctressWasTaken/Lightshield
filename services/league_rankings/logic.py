@@ -6,7 +6,7 @@ import aiohttp
 import logging
 from repeat_marker import RepeatMarker
 from rank_manager import RankManager
-
+from rabbit_manager import RabbitManager
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 
 tiers = {
@@ -50,7 +50,10 @@ class Service:  # pylint: disable=R0902
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
 
-        self.rabbit = None
+        self.rabbit = RabbitManager(
+            exchange="RANKED",
+            outgoing=['RANKED_TO_SUMMONER']
+        )
 
         asyncio.run(self.marker.build(
             "CREATE TABLE IF NOT EXISTS match_history("
@@ -69,6 +72,7 @@ class Service:  # pylint: disable=R0902
         """
         await self.marker.connect()
         await self.rankmanager.init()
+        await self.rabbit.init()
 
     async def async_worker(self, tier, division):
 
@@ -154,19 +158,18 @@ class Service:  # pylint: disable=R0902
 
             ranking = tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']
 
-            self.rabbit.packages.append({
-                "body": [
+            self.rabbit.add_task([
                     entry['summonerId'],
                     ranking,
                     matches_local
-                ]})
+                ])
 
-    async def run(self, rabbit):
+    async def run(self):
         """Override the default run method due to special case.
 
         Worker are started and stopped after each tier/rank combination.
         """
-        self.rabbit = rabbit
+        rabbit_check = await asyncio.create_task(self.rabbit.check_full())
         await self.init()
         while not self.stopped:
             tier, division = await self.rankmanager.get_next()
@@ -174,3 +177,4 @@ class Service:  # pylint: disable=R0902
             self.next_page = 1
             await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
             await self.rankmanager.update(key=(tier, division))
+        await rabbit_check
