@@ -142,7 +142,8 @@ class Service:
 
     async def run(self):
         """Runner."""
-        rabbit_check = await asyncio.create_task(self.rabbit.check_full())
         await self.init()
+        rabbit_check = await asyncio.create_task(self.rabbit.check_full())
+
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(35)])
         await rabbit_check
