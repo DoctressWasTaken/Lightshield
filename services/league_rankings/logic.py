@@ -154,7 +154,7 @@ class Service:  # pylint: disable=R0902
 
             ranking = tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']
 
-            await self.rabbit.packages.append({
+            self.rabbit.packages.append({
                 "body": [
                     entry['summonerId'],
                     ranking,
