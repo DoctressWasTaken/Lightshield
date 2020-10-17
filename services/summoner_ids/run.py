@@ -15,11 +15,13 @@ if __name__ == "__main__":
     )
 
     service = Service()
-
+    rabbit.start()
     def shutdown_handler():
         """Shutdown."""
+        
         service.shutdown()
 
     signal.signal(signal.SIGTERM, shutdown_handler)
 
-    asyncio.run(service.run())
+    asyncio.run(service.run(rabbit))
+    rabbit.join()
