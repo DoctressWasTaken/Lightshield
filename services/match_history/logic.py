@@ -57,7 +57,7 @@ class Service:
     async def async_worker(self):
         self.logging.info("Initiated worker.")
         while not self.stopped:
-            if not (task := self.rabbit.get_task()):
+            if not (task := await self.rabbit.get_task()):
                 await asyncio.sleep(1)
                 continue
             accountId, puuid, matches, rank = pickle.loads(task.body)
