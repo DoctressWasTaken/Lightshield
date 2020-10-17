@@ -72,7 +72,7 @@ class RabbitManager(threading.Thread):
 
     def process_incoming(self):
         while len(self.tasks) < 10:
-            self.channel.basic_get(self.incoming)
+            self.tasks.append(self.channel.basic_get(self.incoming))
 
     def process_outgoing(self):
         for element in self.packages:
