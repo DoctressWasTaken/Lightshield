@@ -102,7 +102,8 @@ class Service:
             finally:
                 if not failed:
                     await task.ack()
-                del self.buffered_elements[matchId]
+                if matchId in self.buffered_elements:
+                    del self.buffered_elements[matchId]
 
     async def fetch(self, session, url):
             """Execute call to external target using the proxy server.
