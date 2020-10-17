@@ -7,6 +7,7 @@ import threading
 class RabbitManager(threading.Thread):
 
     def __init__(self, incoming=None, exchange=None, outgoing=(), prefetch=50):
+        super().__init__()
         self.logging = logging.getLogger("RabbitMQ")
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
