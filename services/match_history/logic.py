@@ -93,7 +93,7 @@ class Service:
                                                                                                  accountId))
                         while match_data:
                             id = match_data.pop()
-                            self.rabbit.add_task(id)
+                            await self.rabbit.add_task(id)
 
             except NotFoundException:
                 pass
