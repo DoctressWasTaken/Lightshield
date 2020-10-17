@@ -78,7 +78,7 @@ class Service:
             else:
                 task = failed
                 failed = None
-                matchId = pickle.loads(task.body)
+            matchId = pickle.loads(task.body)
             try:
                 if await self.marker.execute_read(
                         'SELECT * FROM match_id WHERE id = %s;' % matchId):
