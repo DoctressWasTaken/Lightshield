@@ -94,7 +94,6 @@ services:
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
-      - match_details
       - structural_creator
     restart: always
 

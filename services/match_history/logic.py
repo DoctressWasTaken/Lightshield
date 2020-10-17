@@ -7,7 +7,6 @@ import os
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from datetime import datetime, timedelta
 from repeat_marker import RepeatMarker
-from buffer_manager import BufferManager
 
 
 class Service:
@@ -29,12 +28,14 @@ class Service:
         self.stopped = False
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
-        self.manager = BufferManager()
+
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
         asyncio.run(self.marker.build(
             "CREATE TABLE IF NOT EXISTS match_history("
             "summonerId TEXT PRIMARY KEY,"
             "matches INTEGER);"))
+
+        self.rabbit = None
 
         self.timelimit = int(os.environ['TIME_LIMIT'])
         self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
@@ -42,17 +43,18 @@ class Service:
     async def init(self):
         """Initiate timelimit for pulled matches."""
         await self.marker.connect()
-        await self.manager.init()
 
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
+        self.rabbit.shutdown()
 
     async def async_worker(self):
 
         while not self.stopped:
-            task = await self.manager.get_task()
-            if not task:
+            if self.rabbit.tasks:
+                task = self.rabbit.tasks.pop()
+            else:
                 await asyncio.sleep(3)
                 continue
             identifier = task['summonerId']
@@ -88,7 +90,10 @@ class Service:
                                                                                              identifier))
                     while match_data:
                         id = match_data.pop()
-                        await self.manager.add_package({"match_id": id})
+                        self.rabbit.packages.append({
+                            "body": id,
+                            "message": task
+                        })
                 except NotFoundException:
                     pass
                 finally:
@@ -143,7 +148,8 @@ class Service:
             except Non200Exception:
                 await asyncio.sleep(0.1)
 
-    async def run(self):
+    async def run(self, rabbit):
         """Runner."""
+        self.rabbit = rabbit
         await self.init()
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
