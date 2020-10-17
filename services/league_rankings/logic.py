@@ -69,7 +69,6 @@ class Service:  # pylint: disable=R0902
         """
         await self.marker.connect()
         await self.rankmanager.init()
-        await self.rabbit.init()
 
     async def async_worker(self, tier, division):
 
