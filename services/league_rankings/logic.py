@@ -8,8 +8,6 @@ from repeat_marker import RepeatMarker
 from rank_manager import RankManager
 
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-from rabbit_manager import RabbitManager
-
 
 tiers = {
     "IRON": 0,
@@ -44,7 +42,7 @@ class Service:  # pylint: disable=R0902
 
         self.server = os.environ['SERVER']
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
-            "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+                   "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         self.rankmanager = RankManager()
         self.empty = False
         self.next_page = 1
@@ -52,15 +50,12 @@ class Service:  # pylint: disable=R0902
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
 
-        self.rabbit = RabbitManager(
-            exchange="RANKED",
-            outgoing=['RANKED_TO_SUMMONER']
-        )
+        self.rabbit = None
 
         asyncio.run(self.marker.build(
-               "CREATE TABLE IF NOT EXISTS match_history("
-               "summonerId TEXT PRIMARY KEY,"
-               "matches INTEGER);"))
+            "CREATE TABLE IF NOT EXISTS match_history("
+            "summonerId TEXT PRIMARY KEY,"
+            "matches INTEGER);"))
 
     def shutdown(self):
         """Called on shutdown init."""
@@ -98,7 +93,7 @@ class Service:  # pylint: disable=R0902
             async with aiohttp.ClientSession() as session:
                 try:
                     content = await self.fetch(session, url=self.url % (
-                    tier, division, page))
+                        tier, division, page))
                     if len(content) == 0:
                         self.logging.info("Page %s is empty.", page)
                         self.empty = True
@@ -150,33 +145,33 @@ class Service:  # pylint: disable=R0902
             if prev := await self.marker.execute_read(
                     'SELECT matches FROM match_history WHERE summonerId = "%s";' % entry['summonerId']):
                 matches = int(prev[0][0])
-                
+
             if matches and matches == matches_local:
                 return
             await self.marker.execute_write(
                 'UPDATE match_history SET matches = %s WHERE summonerId = "%s";' % (
-                matches_local,
-            entry['summonerId']))
+                    matches_local,
+                    entry['summonerId']))
 
             ranking = tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']
 
-            await self.rabbit.add_task([
-                entry['summonerId'],
-                ranking,
-                matches_local
-            ])
+            await self.rabbit.packages.append({
+                "body": [
+                    entry['summonerId'],
+                    ranking,
+                    matches_local
+                ]})
 
-    async def run(self):
+    async def run(self, rabbit):
         """Override the default run method due to special case.
 
         Worker are started and stopped after each tier/rank combination.
         """
+        self.rabbit = rabbit
         await self.init()
-        buffer_manager = asyncio.create_task(self.rabbit.check_full())
         while not self.stopped:
             tier, division = await self.rankmanager.get_next()
             self.empty = False
             self.next_page = 1
             await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
             await self.rankmanager.update(key=(tier, division))
-        await buffer_manager
