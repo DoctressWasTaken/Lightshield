@@ -27,7 +27,7 @@ class Team(Base):
     def create(cls, match, side):
         teamData = match['teams'][side]
         teamObject = cls(
-            matchId=match['matchId'],
+            matchId=match['gameId'],
             side=side,
             bans=teamData['bans']
         )

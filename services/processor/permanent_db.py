@@ -67,7 +67,7 @@ class PermanentDB:
         session.commit()
 
     def add_player_data(self, match):
-        matchId = match['matchId']
+        matchId = match['gameId']
         playerObjects = []
         runeObjects = []
         for i in range(1, 11):

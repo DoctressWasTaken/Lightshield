@@ -27,7 +27,7 @@ class Match(Base):
             start=match['gameCreation'] // 1000,
             duration=match['gameDuration'],
             gameVersion=match['gameVersion'],
-            matchId=match['matchId'],
+            matchId=match['gameId'],
         )
         if match['teams'][0]['win'] == 'Win':
             matchObject.win = False
