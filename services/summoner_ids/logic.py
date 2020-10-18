@@ -55,7 +55,7 @@ class Service:
     async def async_worker(self):
         """Create only a new call if the summoner is not yet in the db."""
         while not self.stopped:
-            if not (task := await self.rabbit.get_task()):
+            if not (task := await self.rabbit.get()):
                 await asyncio.sleep(1)
                 continue
             identifier, rank, wins, losses = pickle.loads(task.body)

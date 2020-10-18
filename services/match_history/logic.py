@@ -62,7 +62,7 @@ class Service:
                 if self.stopped:
                     return
 
-            if not (task := await self.rabbit.get_task()):
+            if not (task := await self.rabbit.get()):
                 await asyncio.sleep(1)
                 continue
             accountId, puuid, rank, wins, losses = pickle.loads(task.body)

@@ -73,7 +73,7 @@ class Service:
                 if self.stopped:
                     return
             if not failed:
-                if not (task := await self.rabbit.get_task()):
+                if not (task := await self.rabbit.get()):
                     await asyncio.sleep(1)
                     continue
             else:
