@@ -66,6 +66,7 @@ class PermanentDB:
         player, runes = self.add_player_data(match)
         session.bulk_save_objects(player)
         session.bulk_save_objects(runes)
+        session.close()
 
     def add_player_data(self, match):
         matchId = match['gameId']
