@@ -56,8 +56,8 @@ class PermanentDB:
         if patch not in self.engines:
             self.create_db(patch)
         session = self.engines[patch]['sessionmaker']()
+        session.add(Match.create(match))
         session.add_all([
-            Match.create(match),
             Team.create(match, side=0),
             Team.create(match, side=1)
         ])
