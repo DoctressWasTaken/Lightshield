@@ -101,7 +101,11 @@ class RabbitManager:
                 await asyncio.sleep(1)
 
     async def get_task(self):
-        return await self.incoming.get(fail=False, timeout=3)
+        try:
+            return await self.incoming.get(timeout=3)
+        except Exception as err:
+            print(err)
+            return None
 
     async def add_task(self, message) -> None:
 
