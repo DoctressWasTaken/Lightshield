@@ -60,7 +60,7 @@ class MatchProcessor(threading.Thread):
         for limit in sorted(self.patches):
             if (limit + self.offset) > matchTime:
                 self.permanent.add_match(
-                    self.patches[limit], match_details)
+                    self.patches[limit]['name'], match_details)
                 ch.basic_ack(delivery_tag=method.delivery_tag)
                 return
 
