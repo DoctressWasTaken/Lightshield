@@ -5,6 +5,7 @@ import logging
 import aio_pika
 from aio_pika import ExchangeType, Message, DeliveryMode
 import pickle
+import datetime
 
 class RabbitManager:
 
@@ -29,11 +30,13 @@ class RabbitManager:
         self.stopped = False
         self.connection = None
         self.exchange = self.server + "_" + exchange
+        self.empty_response = None
 
     def shutdown(self) -> None:
         self.stopped = True
 
     async def init(self):
+        self.empty_response = datetime.datetime.now()
         self.connection = await aio_pika.connect_robust(
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop())
         channel = await self.connection.channel()
@@ -102,8 +105,11 @@ class RabbitManager:
 
     async def get_task(self):
         try:
+            if (datetime.datetime.now() - self.empty_response).total_seconds() < 2:
+                return None
             return await self.incoming.get(timeout=3)
         except Exception as err:
+            self.empty_response = datetime.datetime.now()
             self.logging.info("Error received: %s: %s", err.__class__.__name__, err)
             return None
 
