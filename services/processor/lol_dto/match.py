@@ -24,12 +24,12 @@ class Match(Base):
     def create(cls, match):
         """Create the match object as well as sub elements"""
         matchObject = cls(
-            start=match.gameCreation // 1000,
-            duration=match.gameDuration,
-            gameVersion=match.gameVersion,
-            matchId=match.matchId,
+            start=match['gameCreation'] // 1000,
+            duration=match['gameDuration'],
+            gameVersion=match['gameVersion'],
+            matchId=match['matchId'],
         )
-        if match.teams[0]['win'] == 'Win':
+        if match['teams'][0]['win'] == 'Win':
             matchObject.win = False
         else:
             matchObject.win = True

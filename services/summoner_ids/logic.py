@@ -24,7 +24,7 @@ class Service:
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
         handler.setFormatter(
-            logging.Formatter('%(asctime)s [Subscriber] %(message)s'))
+            logging.Formatter('%(asctime)s [SummonerIDs] %(message)s'))
         self.logging.addHandler(handler)
 
         self.server = os.environ['SERVER']
@@ -58,7 +58,7 @@ class Service:
             if not (task := await self.rabbit.get_task()):
                 await asyncio.sleep(1)
                 continue
-            identifier, games, rank = pickle.loads(task.body)
+            identifier, rank, wins, losses = pickle.loads(task.body)
 
             if data := await self.marker.execute_read(
                     'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
@@ -67,8 +67,9 @@ class Service:
                 await self.rabbit.add_task([
                     package['accountId'],
                     package['puuid'],
-                    games,
-                    rank
+                    rank,
+                    wins,
+                    losses
                     ])
                 await task.ack()
 
@@ -91,8 +92,9 @@ class Service:
                 await self.rabbit.add_task([
                     response['accountId'],
                     response['puuid'],
-                    games,
-                    rank
+                    rank,
+                    wins,
+                    losses
                     ])
 
             except (RatelimitException, NotFoundException, Non200Exception):
@@ -100,7 +102,6 @@ class Service:
             finally:
                 del self.buffered_elements[identifier]
                 await task.ack()
-
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.

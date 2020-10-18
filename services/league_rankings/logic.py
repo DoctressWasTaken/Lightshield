@@ -161,7 +161,8 @@ class Service:  # pylint: disable=R0902
             await self.rabbit.add_task([
                     entry['summonerId'],
                     ranking,
-                    matches_local
+                    entry['wins'],
+                    entry['losses']
                 ])
 
     async def run(self):

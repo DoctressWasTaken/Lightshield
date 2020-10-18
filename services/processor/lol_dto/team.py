@@ -25,9 +25,9 @@ class Team(Base):
 
     @classmethod
     def create(cls, match, side):
-        teamData = match.teams[side]
+        teamData = match['teams'][side]
         teamObject = cls(
-            matchId=match.matchId,
+            matchId=match['matchId'],
             side=side,
             bans=teamData['bans']
         )
