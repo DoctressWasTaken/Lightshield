@@ -108,7 +108,8 @@ class RabbitManager:
             robust=True
         )
         while not self.stopped:
-            self.queue.put(await queue.get())
+            self.logging.info("Adding to queue")
+            await self.queue.put(await queue.get())
 
     async def get(self):
         return await self.queue.get()
