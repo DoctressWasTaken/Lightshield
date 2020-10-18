@@ -65,7 +65,8 @@ class Service:
             if not (task := await self.rabbit.get_task()):
                 await asyncio.sleep(1)
                 continue
-            accountId, puuid, matches, rank = pickle.loads(task.body)
+            accountId, puuid, rank, wins, losses = pickle.loads(task.body)
+            matches = wins + losses
             try:
                 if prev := await self.marker.execute_read(
                     'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
