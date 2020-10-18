@@ -8,7 +8,7 @@ import threading
 
 class PermanentDB:
 
-    base_url = "postgres://postgres@longterm/patch_%s"
+    base_url = "postgres://postgres@postgres/patch_%s"
 
     def __init__(self):
         self.engines = {}
