@@ -104,7 +104,7 @@ class RabbitManager:
         try:
             return await self.incoming.get(timeout=3)
         except Exception as err:
-            print(err)
+            self.logging.info("Error received: %s: %s", err.__class__.__name__, err)
             return None
 
     async def add_task(self, message) -> None:
