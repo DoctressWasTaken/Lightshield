@@ -61,10 +61,10 @@ class PermanentDB:
             Team.create(match, side=0),
             Team.create(match, side=1)
         ])
+        session.commit()
         player, runes = self.add_player_data(match)
         session.bulk_save_objects(player)
         session.bulk_save_objects(runes)
-        session.commit()
 
     def add_player_data(self, match):
         matchId = match['gameId']
