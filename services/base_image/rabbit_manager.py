@@ -106,7 +106,19 @@ class RabbitManager:
             robust=True
         )
         while not self.stopped:
-            await self.queue.put(await queue.get())
+            try:
+                task = await queue.get(timeout=3)
+                await self.queue.put(task)
+            except Exception as err:
+                self.logging.info("Received %s: %s", err.__class__.__name__, err)
+                channel.close()
+                channel = await self.connection.channel()
+                await channel.set_qos(prefetch_count=50)
+                queue = await channel.declare_queue(
+                    name=self.server + "_" + self.incoming,
+                    durable=True,
+                    robust=True
+                )
 
     async def get(self):
         return await self.queue.get()
