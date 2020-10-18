@@ -45,7 +45,6 @@ class RabbitManager:
     async def init(self, prefetch=50):
         self.queue = asyncio.Queue(maxsize=prefetch)
         self.empty_response = datetime.datetime.now()
-        self.fill_task = asyncio.create_task(self.fill_queue())
         await self.connect()
         headers = {
             'content-type': 'application/json'
@@ -97,7 +96,6 @@ class RabbitManager:
                     if was_blocked and not self.blocked:
                         self.logging.info("Blocker released.")
                 await asyncio.sleep(1)
-        await self.fill_task
 
     async def fill_queue(self):
         channel = await self.connection.channel()
