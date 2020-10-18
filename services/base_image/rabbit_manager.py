@@ -29,29 +29,20 @@ class RabbitManager:
         self.blocked = True
         self.stopped = False
         self.connection = None
+        self.channel = None
         self.exchange = self.server + "_" + exchange
         self.empty_response = None
 
     def shutdown(self) -> None:
         self.stopped = True
 
-    async def init(self, prefetch=50):
-        self.empty_response = datetime.datetime.now()
+    async def connect(self, prefetch):
         self.connection = await aio_pika.connect_robust(
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop())
-        channel = await self.connection.channel()
-        await channel.set_qos(prefetch_count=prefetch)
-        if self.incoming:
-            self.incoming = await channel.declare_queue(
-                name=self.server + "_" + self.incoming,
-                durable=True,
-                robust=True
-            )
-        self.exchange = await channel.declare_exchange(
-            name=self.exchange,
-            durable=True,
-            type=ExchangeType.TOPIC,
-            robust=True)
+
+    async def init(self, prefetch=50):
+        self.empty_response = datetime.datetime.now()
+        await self.connect(prefetch)
         headers = {
             'content-type': 'application/json'
         }
@@ -104,18 +95,35 @@ class RabbitManager:
                 await asyncio.sleep(1)
 
     async def get_task(self):
+        channel = await self.connection.channel()
+        await channel.set_qos(prefetch_count=50)
+        queue = await channel.declare_queue(
+            name=self.server + "_" + self.incoming,
+            durable=True,
+            robust=True
+        )
         try:
             if (datetime.datetime.now() - self.empty_response).total_seconds() < 2:
                 return None
-            return await self.incoming.get(timeout=3)
+            return await queue.get(timeout=3)
         except Exception as err:
             self.empty_response = datetime.datetime.now()
             self.logging.info("Error received: %s: %s", err.__class__.__name__, err)
             return None
+        finally:
+            channel.close()
 
     async def add_task(self, message) -> None:
-
-        await self.exchange.publish(
-            Message(body=pickle.dumps(message),
-                    delivery_mode=DeliveryMode.PERSISTENT),
-            routing_key="")
+        channel = await self.connection.channel()
+        exchange = await channel.declare_exchange(
+            name=self.exchange,
+            durable=True,
+            type=ExchangeType.TOPIC,
+            robust=True)
+        try:
+            await exchange.publish(
+                Message(body=pickle.dumps(message),
+                        delivery_mode=DeliveryMode.PERSISTENT),
+                routing_key="")
+        finally:
+            channel.close()
