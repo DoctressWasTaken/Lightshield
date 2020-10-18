@@ -35,12 +35,12 @@ class RabbitManager:
     def shutdown(self) -> None:
         self.stopped = True
 
-    async def init(self):
+    async def init(self, prefetch=50):
         self.empty_response = datetime.datetime.now()
         self.connection = await aio_pika.connect_robust(
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop())
         channel = await self.connection.channel()
-        await channel.set_qos(prefetch_count=100)
+        await channel.set_qos(prefetch_count=prefetch)
         if self.incoming:
             self.incoming = await channel.declare_queue(
                 name=self.server + "_" + self.incoming,

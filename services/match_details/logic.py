@@ -45,7 +45,7 @@ class Service:
         Initiate the Rankmanager object.
         """
         await self.marker.connect()
-        await self.rabbit.init()
+        await self.rabbit.init(prefetch=250)
 
     async def limiter(self):
         """Method to periodically break down the db size by removing a % of the lowest match Ids."""
@@ -64,7 +64,8 @@ class Service:
                 'DELETE FROM match_id WHERE id <= %s' % lowest_limit
             )
 
-    async def async_worker(self):
+    async def async_worker(self, delay):
+        await asyncio.sleep(delay/100)
         failed = None
         while not self.stopped:
             while self.rabbit.blocked:
@@ -140,6 +141,6 @@ class Service:
         await self.init()
         rabbit_check = asyncio.create_task(self.rabbit.check_full())
         limiter_task = asyncio.create_task(self.limiter())
-        await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(45)])
+        await asyncio.gather(*[asyncio.create_task(self.async_worker(_)) for _ in range(45)])
         await limiter_task
         await rabbit_check
