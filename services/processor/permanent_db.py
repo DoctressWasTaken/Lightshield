@@ -57,6 +57,7 @@ class PermanentDB:
             self.create_db(patch)
         session = self.engines[patch]['sessionmaker']()
         session.add(Match.create(match))
+        session.flush()
         session.add_all([
             Team.create(match, side=0),
             Team.create(match, side=1)
