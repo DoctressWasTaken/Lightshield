@@ -3,5 +3,6 @@ aiohttp
 websockets
 uvloop
 aiosqlite
+aiormq>=2.7
 aio-pika
 pika
