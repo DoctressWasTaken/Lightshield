@@ -25,24 +25,25 @@ class RabbitManager:
         self.outgoing = outgoing
 
         self.incoming = incoming
-        
+        self.exchange = self.server + "_" + exchange
+
+        self.queue = None
         self.blocked = True
         self.stopped = False
         self.connection = None
-        self.channel = None
-        self.exchange = self.server + "_" + exchange
         self.empty_response = None
 
     def shutdown(self) -> None:
         self.stopped = True
 
-    async def connect(self, prefetch):
+    async def connect(self):
         self.connection = await aio_pika.connect_robust(
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop())
 
     async def init(self, prefetch=50):
+        self.queue = asyncio.Queue(maxsize=prefetch)
         self.empty_response = datetime.datetime.now()
-        await self.connect(prefetch)
+        await self.connect()
         headers = {
             'content-type': 'application/json'
         }
@@ -94,7 +95,7 @@ class RabbitManager:
                         self.logging.info("Blocker released.")
                 await asyncio.sleep(1)
 
-    async def get_task(self):
+    async def fill_queue(self):
         channel = await self.connection.channel()
         await channel.set_qos(prefetch_count=50)
         queue = await channel.declare_queue(
@@ -102,16 +103,11 @@ class RabbitManager:
             durable=True,
             robust=True
         )
-        try:
-            if (datetime.datetime.now() - self.empty_response).total_seconds() < 2:
-                return None
-            return await queue.get(timeout=3)
-        except Exception as err:
-            self.empty_response = datetime.datetime.now()
-            self.logging.info("Error received: %s: %s", err.__class__.__name__, err)
-            return None
-        finally:
-            await channel.close()
+        while not self.stopped:
+            self.queue.put(await queue.get())
+
+    async def get(self):
+        return await self.queue.get()
 
     async def add_task(self, message) -> None:
         channel = await self.connection.channel()
