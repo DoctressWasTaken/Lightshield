@@ -111,7 +111,7 @@ class RabbitManager:
             self.logging.info("Error received: %s: %s", err.__class__.__name__, err)
             return None
         finally:
-            channel.close()
+            await channel.close()
 
     async def add_task(self, message) -> None:
         channel = await self.connection.channel()
@@ -126,4 +126,4 @@ class RabbitManager:
                         delivery_mode=DeliveryMode.PERSISTENT),
                 routing_key="")
         finally:
-            channel.close()
+            await channel.close()
