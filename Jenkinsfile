@@ -14,10 +14,10 @@ pipeline {
         }
         stage('Tox') {
             steps {
-                sh 'sudo python3.8 -m venv --clear .py3
-                    . .py3/bin/activate
-                    pip install tox
-                    tox'
+                sh 'sudo python3.8 -m venv --clear .py3'
+                sh '. .py3/bin/activate'
+                sh 'pip install tox'
+                sh 'tox'
             }
         }
         stage('Create Network') {
