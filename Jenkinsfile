@@ -25,17 +25,17 @@ pipeline {
         }
         stage('Create Network') {
             steps {
-                sh 'docker network create lightshield'
+                sh 'sudo docker network create lightshield || true'
             }
         }
         stage('Create Postgres') {
             steps {
-                sh 'docker-compose -f compose-persistent.yaml up -d'
+                sh 'sudo docker-compose -f compose-persistent.yaml up -d'
             }
         }
         stage('Build Base Image') {
             steps {
-                sh 'docker build -t lightshield_service services/base_image/'
+                sh 'sudo docker build -t lightshield_service services/base_image/'
             }
         }
         stage('Create NA') {
@@ -44,8 +44,8 @@ pipeline {
                 def COMPOSE_PROJECT_NAME='lightshield_na1'
                 }
             steps {
-                sh 'docker-compose build'
-                sh 'docker-compose up -d'
+                sh 'sudo docker-compose build'
+                sh 'sudo docker-compose up -d'
             }
         }
         stage('Create EUW') {
@@ -57,8 +57,8 @@ pipeline {
                 def COMPOSE_PROJECT_NAME='lightshield_euw1'
                 }
             steps {
-                sh 'docker-compose build'
-                sh 'docker-compose up -d'
+                sh 'sudo docker-compose build'
+                sh 'sudo docker-compose up -d'
             }
         }
         stage('Create KR') {
@@ -70,8 +70,8 @@ pipeline {
                 def COMPOSE_PROJECT_NAME='lightshield_kr'
                 }
             steps {
-                sh 'docker-compose build'
-                sh 'docker-compose up -d'
+                sh 'sudo docker-compose build'
+                sh 'sudo docker-compose up -d'
             }
         }
     }
