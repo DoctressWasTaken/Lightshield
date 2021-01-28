@@ -43,25 +43,26 @@ pipeline {
             }
         }
         stage('Create EUW') {
+            when {
+                expression { false }
+            }
             environment {
                 def SERVER='EUW1'
                 def COMPOSE_PROJECT_NAME='lightshield_euw1'
                 }
-            when {
-                expression { false == true }
-            }            steps {
+            steps {
                 sh 'docker-compose build'
                 sh 'docker-compose up -d'
             }
         }
         stage('Create KR') {
+            when {
+                expression { false }
+            }
             environment {
                 def SERVER='KR'
                 def COMPOSE_PROJECT_NAME='lightshield_kr'
                 }
-            when {
-                expression { false == true }
-            }
             steps {
                 sh 'docker-compose build'
                 sh 'docker-compose up -d'
