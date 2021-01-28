@@ -122,7 +122,7 @@ class Service:  # pylint: disable=R0902
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy="http://lightshield_%s_proxy:8000" % self.server.lower()) as response:
+            async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
                 await response.text()
                 self.logging.info("%s", response.status)
         except aiohttp.ClientConnectionError as err:

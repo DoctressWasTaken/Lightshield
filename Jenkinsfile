@@ -28,9 +28,12 @@ pipeline {
                 sh 'sudo docker network create lightshield || true'
             }
         }
-        stage('Create Postgres') {
+        stage('Create RabbitMQ') {
+            environment {
+                def COMPOSE_PROJECT_NAME='lightshield_persistent'
+            }
             steps {
-                sh 'sudo docker-compose -f compose-persistent.yaml up -d'
+                sh 'sudo -E docker-compose -f compose-persistent.yaml up -d'
             }
         }
         stage('Build Base Image') {
