@@ -108,7 +108,7 @@ class Service:
             :raises Non200Exception: on any other non 200 HTTP Code.
             """
             try:
-                async with session.get(url, proxy="http://proxy:8000") as response:
+                async with session.get(url, proxy="http://lightshield_%s_proxy:8000" % self.server.lower()) as response:
                     await response.text()
             except aiohttp.ClientConnectionError:
                 raise Non200Exception()
