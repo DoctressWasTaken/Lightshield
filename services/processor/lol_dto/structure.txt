@@ -1,0 +1,15 @@
+match: 1
+├── teams: 2
+|   ├── endOfGameStats: 1
+│   └── players: 5
+│       ├── endOfGameStats: 1
+│       ├── items: n
+│       ├── summonersSpells: 1
+│       ├── runes: n
+│       ├── deltas: n
+#│       ├── snapshots: list
+#│       ├── itemsEvents: list
+#│       ├── wardsEvents: list
+#│       └── skillsLevelUpEvents: list
+#├── kills: list
+#└── picksBans: list

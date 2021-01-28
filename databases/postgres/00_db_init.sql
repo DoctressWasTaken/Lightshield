@@ -1,4 +1,0 @@
-CREATE USER db_worker WITH LOGIN;
-
-
-CREATE DATABASE data WITH OWNER db_worker;

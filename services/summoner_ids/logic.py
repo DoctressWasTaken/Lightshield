@@ -7,11 +7,11 @@ from exceptions import RatelimitException, NotFoundException, Non200Exception
 from datetime import datetime, timedelta
 import asyncio
 import aiohttp
-
+import pickle
 import logging
 import os
 from repeat_marker import RepeatMarker
-from buffer_manager import BufferManager
+from rabbit_manager import RabbitManager
 
 
 class Service:
@@ -24,7 +24,7 @@ class Service:
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
         handler.setFormatter(
-            logging.Formatter('%(asctime)s [Subscriber] %(message)s'))
+            logging.Formatter('%(asctime)s [SummonerIDs] %(message)s'))
         self.logging.addHandler(handler)
 
         self.server = os.environ['SERVER']
@@ -33,7 +33,13 @@ class Service:
         self.stopped = False
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
-        self.manager = BufferManager()
+
+        self.rabbit = RabbitManager(
+            exchange="SUMMONER",
+            incoming="RANKED_TO_SUMMONER",
+            outgoing=['SUMMONER_TO_HISTORY', 'SUMMONER_TO_PROCESSOR']
+        )
+
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
         asyncio.run(self.marker.build(
                "CREATE TABLE IF NOT EXISTS summoner_ids("
@@ -44,23 +50,32 @@ class Service:
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
+        self.rabbit.shutdown()
 
     async def async_worker(self):
         """Create only a new call if the summoner is not yet in the db."""
         while not self.stopped:
-            task = await self.manager.get_task()
-            if not task:
-                await asyncio.sleep(3)
+            if not (task := await self.rabbit.get()):
+                await asyncio.sleep(1)
                 continue
-            identifier = task['summonerId']
+            identifier, rank, wins, losses = pickle.loads(task.body)
 
             if data := await self.marker.execute_read(
                     'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
-                package = {**task, 'accountId': data[0][0], 'puuid': data[0][1]}
+                package = {'accountId': data[0][0], 'puuid': data[0][1]}
 
-                await self.manager.add_package(package)
+                await self.rabbit.add_task([
+                    package['accountId'],
+                    package['puuid'],
+                    rank,
+                    wins,
+                    losses
+                    ])
+                await task.ack()
+
                 continue
             if identifier in self.buffered_elements:
+                await task.ack()
                 continue
             self.buffered_elements[identifier] = True
             url = self.url % identifier
@@ -74,11 +89,19 @@ class Service:
                     'VALUES ("%s", "%s", "%s");' % (
                     identifier, response['accountId'], response['puuid']))
 
-                await self.manager.add_package({**task, **response})
+                await self.rabbit.add_task([
+                    response['accountId'],
+                    response['puuid'],
+                    rank,
+                    wins,
+                    losses
+                    ])
+
             except (RatelimitException, NotFoundException, Non200Exception):
                 continue
             finally:
                 del self.buffered_elements[identifier]
+                await task.ack()
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
@@ -116,9 +139,14 @@ class Service:
         Initiate the Rankmanager object.
         """
         await self.marker.connect()
-        await self.manager.init()
+        await self.rabbit.init()
 
     async def run(self):
         """Runner."""
         await self.init()
+        rabbit_check = asyncio.create_task(self.rabbit.check_full())
+        fill_task = asyncio.create_task(self.rabbit.fill_queue())
+
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(35)])
+        await rabbit_check
+        await fill_task

@@ -6,9 +6,25 @@ import aiohttp
 import logging
 from repeat_marker import RepeatMarker
 from rank_manager import RankManager
-from buffer_manager import BufferManager
-
+from rabbit_manager import RabbitManager
 from exceptions import RatelimitException, NotFoundException, Non200Exception
+
+tiers = {
+    "IRON": 0,
+    "BRONZE": 1,
+    "SILVER": 2,
+    "GOLD": 3,
+    "PLATINUM": 4,
+    "DIAMOND": 5,
+    "MASTER": 6,
+    "GRANDMASTER": 6,
+    "CHALLENGER": 6}
+
+rank = {
+    "IV": 0,
+    "III": 1,
+    "II": 2,
+    "I": 3}
 
 
 class Service:  # pylint: disable=R0902
@@ -26,23 +42,28 @@ class Service:  # pylint: disable=R0902
 
         self.server = os.environ['SERVER']
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
-            "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+                   "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         self.rankmanager = RankManager()
         self.empty = False
         self.next_page = 1
         self.stopped = False
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
-        self.manager = BufferManager()
+
+        self.rabbit = RabbitManager(
+            exchange="RANKED",
+            outgoing=['RANKED_TO_SUMMONER']
+        )
 
         asyncio.run(self.marker.build(
-               "CREATE TABLE IF NOT EXISTS match_history("
-               "summonerId TEXT PRIMARY KEY,"
-               "matches INTEGER);"))
+            "CREATE TABLE IF NOT EXISTS match_history("
+            "summonerId TEXT PRIMARY KEY,"
+            "matches INTEGER);"))
 
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
+        self.rabbit.shutdown()
 
     async def init(self):
         """Override of the default init function.
@@ -51,7 +72,7 @@ class Service:  # pylint: disable=R0902
         """
         await self.marker.connect()
         await self.rankmanager.init()
-        await self.manager.init()
+        await self.rabbit.init()
 
     async def async_worker(self, tier, division):
 
@@ -60,7 +81,7 @@ class Service:  # pylint: disable=R0902
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
 
-            while await self.manager.get_total_packages() > 500 and not self.stopped:
+            while self.rabbit.blocked and not self.stopped:
                 await asyncio.sleep(1)
 
             if self.stopped:
@@ -75,7 +96,7 @@ class Service:  # pylint: disable=R0902
             async with aiohttp.ClientSession() as session:
                 try:
                     content = await self.fetch(session, url=self.url % (
-                    tier, division, page))
+                        tier, division, page))
                     if len(content) == 0:
                         self.logging.info("Page %s is empty.", page)
                         self.empty = True
@@ -128,15 +149,22 @@ class Service:  # pylint: disable=R0902
             if prev := await self.marker.execute_read(
                     'SELECT matches FROM match_history WHERE summonerId = "%s";' % entry['summonerId']):
                 matches = int(prev[0][0])
-                
+
             if matches and matches == matches_local:
                 return
             await self.marker.execute_write(
                 'UPDATE match_history SET matches = %s WHERE summonerId = "%s";' % (
-                matches_local,
-            entry['summonerId']))
+                    matches_local,
+                    entry['summonerId']))
 
-            await self.manager.add_package(entry)
+            ranking = tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']
+
+            await self.rabbit.add_task([
+                    entry['summonerId'],
+                    ranking,
+                    entry['wins'],
+                    entry['losses']
+                ])
 
     async def run(self):
         """Override the default run method due to special case.
@@ -144,9 +172,12 @@ class Service:  # pylint: disable=R0902
         Worker are started and stopped after each tier/rank combination.
         """
         await self.init()
+        rabbit_check = asyncio.create_task(self.rabbit.check_full())
         while not self.stopped:
             tier, division = await self.rankmanager.get_next()
             self.empty = False
             self.next_page = 1
             await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
             await self.rankmanager.update(key=(tier, division))
+        await rabbit_check
+

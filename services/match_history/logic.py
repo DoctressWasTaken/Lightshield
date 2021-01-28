@@ -1,14 +1,13 @@
 """Match History updater. Pulls matchlists for all player."""
 import asyncio
 import aiohttp
-
+import pickle
 import logging
 import os
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from datetime import datetime, timedelta
 from repeat_marker import RepeatMarker
-from buffer_manager import BufferManager
-
+from rabbit_manager import RabbitManager
 
 class Service:
     """Core service worker object."""
@@ -29,12 +28,18 @@ class Service:
         self.stopped = False
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
-        self.manager = BufferManager()
+
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
         asyncio.run(self.marker.build(
             "CREATE TABLE IF NOT EXISTS match_history("
-            "summonerId TEXT PRIMARY KEY,"
+            "accountId TEXT PRIMARY KEY,"
             "matches INTEGER);"))
+
+        self.rabbit = RabbitManager(
+            exchange="HISTORY",
+            incoming="SUMMONER_TO_HISTORY",
+            outgoing=["HISTORY_TO_DETAILS"]
+        )
 
         self.timelimit = int(os.environ['TIME_LIMIT'])
         self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
@@ -42,57 +47,65 @@ class Service:
     async def init(self):
         """Initiate timelimit for pulled matches."""
         await self.marker.connect()
-        await self.manager.init()
+        await self.rabbit.init()
 
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
+        self.rabbit.shutdown()
 
     async def async_worker(self):
-
+        self.logging.info("Initiated worker.")
         while not self.stopped:
-            task = await self.manager.get_task()
-            if not task:
-                await asyncio.sleep(3)
-                continue
-            identifier = task['summonerId']
-            matches = task['wins'] + task['losses']
-            if prev := await self.marker.execute_read(
-                'SELECT matches FROM match_history WHERE summonerId = "%s"' % identifier):
-                matches = matches - int(prev[0][0])
-            if matches < self.required_matches:
-                continue
-            if identifier in self.buffered_elements:
-                continue
-            self.buffered_elements[identifier] = True
+            while self.rabbit.blocked:
+                await asyncio.sleep(1)
+                if self.stopped:
+                    return
 
-            matches_to_call = matches + 3
-            calls = int(matches_to_call / 100) + 1
-            ids = [start_id * 100 for start_id in range(calls)]
-            calls_in_progress = []
-            async with aiohttp.ClientSession() as session:
-                while ids:
-                    id = ids.pop()
-                    calls_in_progress.append(asyncio.create_task(
-                        self.handler(
-                            session=session,
-                            url=self.url % (task['accountId'], id, id + 100)
-                        )
-                    ))
-                    await asyncio.sleep(0.1)
-                try:
-                    responses = await asyncio.gather(*calls_in_progress)
-                    match_data = list(set().union(*responses))
-                    await self.marker.execute_write(
-                        'UPDATE match_history SET matches = %s WHERE summonerId =  "%s";' % (matches,
-                                                                                             identifier))
-                    while match_data:
-                        id = match_data.pop()
-                        await self.manager.add_package({"match_id": id})
-                except NotFoundException:
-                    pass
-                finally:
-                    del self.buffered_elements[identifier]
+            if not (task := await self.rabbit.get()):
+                await asyncio.sleep(1)
+                continue
+            accountId, puuid, rank, wins, losses = pickle.loads(task.body)
+            matches = wins + losses
+            try:
+                if prev := await self.marker.execute_read(
+                    'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
+                    matches = matches - int(prev[0][0])
+                if matches < self.required_matches:
+                    continue
+                if accountId in self.buffered_elements:
+                    continue
+                self.buffered_elements[accountId] = True
+
+                matches_to_call = matches + 3
+                calls = int(matches_to_call / 100) + 1
+                ids = [start_id * 100 for start_id in range(calls)]
+                calls_in_progress = []
+                async with aiohttp.ClientSession() as session:
+                    while ids:
+                        id = ids.pop()
+                        calls_in_progress.append(asyncio.create_task(
+                            self.handler(
+                                session=session,
+                                url=self.url % (accountId, id, id + 100)
+                            )
+                        ))
+                        await asyncio.sleep(0.1)
+
+                        responses = await asyncio.gather(*calls_in_progress)
+                        match_data = list(set().union(*responses))
+                        await self.marker.execute_write(
+                            'UPDATE match_history SET matches = %s WHERE accountId =  "%s";' % (matches,
+                                                                                                 accountId))
+                        while match_data:
+                            id = match_data.pop()
+                            await self.rabbit.add_task(id)
+
+            except NotFoundException:
+                pass
+            finally:
+                await task.ack()
+                del self.buffered_elements[accountId]
 
     async def fetch(self, session, url):
             """Execute call to external target using the proxy server.
@@ -146,4 +159,9 @@ class Service:
     async def run(self):
         """Runner."""
         await self.init()
+        rabbit_check = asyncio.create_task(self.rabbit.check_full())
+        fill_task = asyncio.create_task(self.rabbit.fill_queue())
+
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
+        await rabbit_check
+        await fill_task

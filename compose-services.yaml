@@ -2,6 +2,16 @@ version: '2.3'
 services:
 ### Services
 
+  structural_creator:
+    build:
+      dockerfile: Dockerfile
+      context: services/structural_creator
+    container_name: ${COMPOSE_PROJECT_NAME}_structural_creator
+    environment:
+      - SERVER=${SERVER}
+    external_links:
+      - lightshield_rabbitmq:rabbitmq
+
   league_rankings:
     hostname: league_rankings
     mem_limit: 150m
@@ -13,13 +23,16 @@ services:
       - SERVER=${SERVER}
       - UPDATE_INTERVAL=1
       - WORKER=5
-      - REQUIRED_SUBSCRIBER=SI
-    links:
-      - league_rankings_redis:redis
+      - STREAM=RANKED
+      - MAX_TASK_BUFFER=1000
+    external_links:
+      - lightshield_rabbitmq:rabbitmq
+    depends_on:
+      - structural_creator
     restart: always
     volumes:
       - ./sqlite/:/project/sqlite/
-      - ./configs/:/project/configs/
+      - ranking_progress:/project/configs/
 
   summoner_ids:  # SI
     hostname: summoner_ids
@@ -31,13 +44,14 @@ services:
     environment:
       - SERVER=${SERVER}
       - WORKER=35
-      - REQUIRED_SUBSCRIBER=MH,DCS
       - MAX_TASK_BUFFER=1000
+      - STREAM=SUMMONER
     volumes:
       - ./sqlite/:/project/sqlite/
-    links:
-      - summoner_ids_redis:redis
-      - league_rankings:provider
+    external_links:
+      - lightshield_rabbitmq:rabbitmq
+    depends_on:
+      - structural_creator
     restart: always
 
   match_history:  # MH
@@ -52,13 +66,14 @@ services:
       - WORKER=10
       - MATCHES_TO_UPDATE=10
       - TIME_LIMIT=1595401200
-      - MAX_TASK_BUFFER=1000
-      - REQUIRED_SUBSCRIBER=MD
+      - MAX_TASK_BUFFER=2000
+      - STREAM=HISTORY
     volumes:
       - ./sqlite/:/project/sqlite/
-    links:
-      - match_history_redis:redis
-      - summoner_ids:provider
+    external_links:
+      - lightshield_rabbitmq:rabbitmq
+    depends_on:
+      - structural_creator
     restart: always
 
   match_details:  # MD
@@ -71,134 +86,44 @@ services:
     environment:
       - SERVER=${SERVER}
       - WORKER=45
-      - MAX_TASK_BUFFER=1000
+      - MAX_TASK_BUFFER=200
+      - STREAM=DETAILS
     volumes:
       - ./sqlite/:/project/sqlite/
-    links:
-      - match_details_redis:redis
-      - match_history:provider
     external_links:
-      - lightshield_postgres:postres
+      - lightshield_rabbitmq:rabbitmq
     restart: always
 
-### Database Connector
-
-  database_connector_summoner:
-    hostname: database_connector_summoner
-    mem_limit: 250m
-    cpus: 0.25
+  processor:
     build:
       dockerfile: Dockerfile
-      context: services/database_connector_summoner/
+      context: services/processor
     environment:
       - SERVER=${SERVER}
-      - POSTGRES_HOST=buffer
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=db_worker
-      - MAX_TASK_BUFFER=1000
     external_links:
-      - lightshield_postgres:buffer
+      - lightshield_rabbitmq:rabbitmq
     links:
-      - summoner_ids:provider
-      - database_connector_summoner_redis:redis
+      - persistant_db:postgres
+    depends_on:
+      - structural_creator
     restart: always
 
-  database_connector_match_details:
-    hostname: database_connector_match_details
-    mem_limit: 250m
-    cpus: 0.25
-    build:
-      dockerfile: Dockerfile
-      context: services/database_connector_match_details/
+  persistant_db:
+    container_name: ${COMPOSE_PROJECT_NAME}_persistant_db
+    image: postgres:alpine
+    volumes:
+      - postgres:/var/lib/postgresql/data
     environment:
-      - SERVER=${SERVER}
-      - POSTGRES_HOST=buffer
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=db_worker
-      - MAX_TASK_BUFFER=1000
-    external_links:
-      - lightshield_postgres:buffer
-    links:
-      - match_details:provider
-      - database_connector_match_details_redis:redis
+      - POSTGRES_HOST_AUTH_METHOD=trust
     restart: always
 
-
-### REDIS Databases
-
-  league_rankings_redis:
-    mem_limit: 250m
-    cpus: 0.25
-    build:
-      context: databases/redis
-      dockerfile: Dockerfile
-    volumes:
-      - league_rankings:/data/
-    restart: always
-
-  summoner_ids_redis:
-    mem_limit: 250m
-    cpus: 0.25
-    build:
-      context: databases/redis
-      dockerfile: Dockerfile
-    volumes:
-        - summoner_ids:/data/
-    restart: always
-
-  match_history_redis:
-    mem_limit: 250m
-    cpus: 0.25
-    build:
-      context: databases/redis
-      dockerfile: Dockerfile
-    volumes:
-        - match_history:/data/
-    restart: always
-
-  match_details_redis:
-    mem_limit: 250m
-    cpus: 0.25
-    build:
-      context: databases/redis
-      dockerfile: Dockerfile
-    volumes:
-        - match_details:/data/
-    restart: always
-
-  database_connector_summoner_redis:
-    mem_limit: 50m
-    cpus: 0.1
-    build:
-      context: databases/redis
-      dockerfile: Dockerfile
-    volumes:
-      - database_connector_summoner:/data/
-    restart: always
-
-  database_connector_match_details_redis:
-    mem_limit: 50m
-    cpus: 0.1
-    build:
-      context: databases/redis
-      dockerfile: Dockerfile
-    volumes:
-      - database_connector_match_details:/data/
-    restart: always
 
 volumes:
-  league_rankings:
-    name: ${SERVER}_league_rankings
-  summoner_ids:
-    name: ${SERVER}_summoner_ids
-  match_history:
-    name: ${SERVER}_match_history
-  match_details:
-    name: ${SERVER}_match_details
-  database_connector_summoner:
-    name: ${SERVER}_database_connector_summoner
-  database_connector_match_details:
-    name: ${SERVER}_database_connector_match_details
+  postgres:
+    name: ${SERVER}_lightshield
+  ranking_progress:
+    name: ${SERVER}_ranking_progress
+
 
 networks:
   default:

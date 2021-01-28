@@ -1,0 +1,5 @@
+aiohttp
+sqlalchemy
+sqlalchemy-utils
+psycopg2
+pika
