@@ -1,20 +1,5 @@
 version: '2.3'
 services:
-
-  proxy:
-    build:
-      dockerfile: Dockerfile
-      context: services/proxy
-    container_name: ${COMPOSE_PROJECT_NAME}_proxy
-    environment:
-      - SERVER=${SERVER}
-    env_file:
-      - secrets.env
-    restart: always
-    volumes:
-        - ./logs/:/project/logs/
-        - ./configs/:/project/configs/
-
 ### Services
 
   structural_creator:
@@ -40,8 +25,6 @@ services:
       - WORKER=5
       - STREAM=RANKED
       - MAX_TASK_BUFFER=1000
-    links:
-      - proxy:proxy
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
@@ -49,7 +32,7 @@ services:
     restart: always
     volumes:
       - ./sqlite/:/project/sqlite/
-      - ./configs/:/project/configs/
+      - ranking_progress:/project/configs/
 
   summoner_ids:  # SI
     hostname: summoner_ids
@@ -65,8 +48,6 @@ services:
       - STREAM=SUMMONER
     volumes:
       - ./sqlite/:/project/sqlite/
-    links:
-      - proxy:proxy
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
@@ -89,8 +70,6 @@ services:
       - STREAM=HISTORY
     volumes:
       - ./sqlite/:/project/sqlite/
-    links:
-      - proxy:proxy
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
@@ -111,12 +90,8 @@ services:
       - STREAM=DETAILS
     volumes:
       - ./sqlite/:/project/sqlite/
-    links:
-      - proxy:proxy
     external_links:
       - lightshield_rabbitmq:rabbitmq
-    depends_on:
-      - structural_creator
     restart: always
 
   processor:
@@ -146,6 +121,8 @@ services:
 volumes:
   postgres:
     name: ${SERVER}_lightshield
+  ranking_progress:
+    name: ${SERVER}_ranking_progress
 
 
 networks:

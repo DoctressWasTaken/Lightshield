@@ -122,9 +122,10 @@ class Service:  # pylint: disable=R0902
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy="http://proxy:8000") as response:
+            async with session.get(url, proxy="http://lightshield_%s_proxy:8000" % self.server.lower()) as response:
                 await response.text()
-        except aiohttp.ClientConnectionError:
+        except aiohttp.ClientConnectionError as err:
+            self.logging.info("Error %s", err)
             raise Non200Exception()
         if response.status in [429, 430]:
             if "Retry-After" in response.headers:
@@ -179,3 +180,4 @@ class Service:  # pylint: disable=R0902
             await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
             await self.rankmanager.update(key=(tier, division))
         await rabbit_check
+
