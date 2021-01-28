@@ -13,6 +13,9 @@ pipeline {
             }
         }
         stage('Tox') {
+            when {
+                expression { false }
+            }
             steps {
                 sh 'sudo python3.8 -m venv --clear .py3'
                 sh '. .py3/bin/activate'
