@@ -47,7 +47,9 @@ pipeline {
                 def SERVER=EUW1
                 def COMPOSE_PROJECT_NAME=lightshield_euw1
                 }
-            steps {
+            when {
+                expression { false == true }
+            }            steps {
                 sh 'docker-compose build'
                 sh 'docker-compose up -d'
             }
@@ -57,6 +59,9 @@ pipeline {
                 def SERVER=KR
                 def COMPOSE_PROJECT_NAME=lightshield_kr
                 }
+            when {
+                expression { false == true }
+            }
             steps {
                 sh 'docker-compose build'
                 sh 'docker-compose up -d'

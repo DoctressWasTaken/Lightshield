@@ -1,20 +1,5 @@
 version: '2.3'
 services:
-
-  proxy:
-    build:
-      dockerfile: Dockerfile
-      context: services/proxy
-    container_name: ${COMPOSE_PROJECT_NAME}_proxy
-    environment:
-      - SERVER=${SERVER}
-    env_file:
-      - secrets.env
-    restart: always
-    volumes:
-        - ./logs/:/project/logs/
-        - ./configs/:/project/configs/
-
 ### Services
 
   league_rankings:
@@ -30,7 +15,6 @@ services:
       - WORKER=5
       - REQUIRED_SUBSCRIBER=SI
     links:
-      - proxy:proxy
       - league_rankings_redis:redis
     restart: always
     volumes:
@@ -53,7 +37,6 @@ services:
       - ./sqlite/:/project/sqlite/
     links:
       - summoner_ids_redis:redis
-      - proxy:proxy
       - league_rankings:provider
     restart: always
 
@@ -75,7 +58,6 @@ services:
       - ./sqlite/:/project/sqlite/
     links:
       - match_history_redis:redis
-      - proxy:proxy
       - summoner_ids:provider
     restart: always
 
@@ -94,7 +76,6 @@ services:
       - ./sqlite/:/project/sqlite/
     links:
       - match_details_redis:redis
-      - proxy:proxy
       - match_history:provider
     external_links:
       - lightshield_postgres:postres
