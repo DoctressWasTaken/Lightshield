@@ -124,6 +124,7 @@ class Service:  # pylint: disable=R0902
         try:
             async with session.get(url, proxy="http://lightshield_%s_proxy:8000" % self.server.lower()) as response:
                 await response.text()
+                self.logging.info("%s", response.status)
         except aiohttp.ClientConnectionError as err:
             self.logging.info("Error %s", err)
             raise Non200Exception()
