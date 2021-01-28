@@ -34,8 +34,8 @@ pipeline {
         }
         stage('Create NA') {
             environment {
-                def SERVER=NA1
-                def COMPOSE_PROJECT_NAME=lightshield_na1
+                def SERVER='NA1'
+                def COMPOSE_PROJECT_NAME='lightshield_na1'
                 }
             steps {
                 sh 'docker-compose build'
@@ -44,8 +44,8 @@ pipeline {
         }
         stage('Create EUW') {
             environment {
-                def SERVER=EUW1
-                def COMPOSE_PROJECT_NAME=lightshield_euw1
+                def SERVER='EUW1'
+                def COMPOSE_PROJECT_NAME='lightshield_euw1'
                 }
             when {
                 expression { false == true }
@@ -56,8 +56,8 @@ pipeline {
         }
         stage('Create KR') {
             environment {
-                def SERVER=KR
-                def COMPOSE_PROJECT_NAME=lightshield_kr
+                def SERVER='KR'
+                def COMPOSE_PROJECT_NAME='lightshield_kr'
                 }
             when {
                 expression { false == true }
