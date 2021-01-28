@@ -44,8 +44,9 @@ pipeline {
                 def COMPOSE_PROJECT_NAME='lightshield_na1'
                 }
             steps {
-                sh 'sudo docker-compose build'
-                sh 'sudo docker-compose up -d'
+                sh 'sudo docker-compose down'
+                sh 'sudo -E docker-compose build'
+                sh 'sudo -E docker-compose up -d'
             }
         }
         stage('Create EUW') {
@@ -57,8 +58,8 @@ pipeline {
                 def COMPOSE_PROJECT_NAME='lightshield_euw1'
                 }
             steps {
-                sh 'sudo docker-compose build'
-                sh 'sudo docker-compose up -d'
+                sh 'sudo -E docker-compose build'
+                sh 'sudo -E docker-compose up -d'
             }
         }
         stage('Create KR') {
