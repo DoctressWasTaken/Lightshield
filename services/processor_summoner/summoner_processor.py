@@ -33,20 +33,21 @@ class SummonerProcessor(threading.Thread):
             robust=True
         )
         while not self.stopped:
-            tasks = []
+            tasks = {}
             try:
                 while len(tasks) < 50 and not self.stopped:
                     async with queue.iterator() as queue_iter:
                         async for message in queue_iter:
                             async with message.process():
-                                tasks.append(pickle.loads(message.body))
+                                elements = pickle.loads(message.body)
+                                tasks[elements[0]] = elements
                             if len(tasks) >= 50 or self.stopped:
                                 break
 
                     if len(tasks) < 50 and not self.stopped:
                         await asyncio.sleep(2)
                 self.logging.info("Inserting %s summoner.", len(tasks))
-                value_lists = ["('%s', '%s', %s, %s, %s)" % tuple(task) for task in tasks]
+                value_lists = ["('%s', '%s', %s, %s, %s)" % tuple(task) for task in tasks.values()]
                 values = ",".join(value_lists)
                 query = """
                     INSERT INTO summoner 
