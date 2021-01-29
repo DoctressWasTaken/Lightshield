@@ -32,19 +32,19 @@ class SummonerProcessor(threading.Thread):
             durable=True,
             robust=True
         )
+        tasks = {}
         while not self.stopped:
-            tasks = {}
             try:
-                while len(tasks) < 250 and not self.stopped:
+                while len(tasks) < 100 and not self.stopped:
                     async with queue.iterator() as queue_iter:
                         async for message in queue_iter:
                             async with message.process():
                                 elements = pickle.loads(message.body)
                                 tasks[elements[0]] = elements
-                            if len(tasks) >= 250 or self.stopped:
+                            if len(tasks) >= 100 or self.stopped:
                                 break
 
-                    if len(tasks) < 250 and not self.stopped:
+                    if len(tasks) < 100 and not self.stopped:
                         await asyncio.sleep(2)
                 self.logging.info("Inserting %s summoner.", len(tasks))
                 value_lists = ["('%s', '%s', %s, %s, %s)" % tuple(task) for task in tasks.values()]
@@ -63,6 +63,7 @@ class SummonerProcessor(threading.Thread):
                 conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
                 await conn.execute(query)
                 await conn.close()
+                tasks = {}
 
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
