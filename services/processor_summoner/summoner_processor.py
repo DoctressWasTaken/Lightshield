@@ -2,7 +2,6 @@ import threading
 import logging
 import asyncio
 import pickle
-from sqlalchemy.ext.asyncio import AsyncSession
 import aio_pika
 import traceback
 import asyncpg
