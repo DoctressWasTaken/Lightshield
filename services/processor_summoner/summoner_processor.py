@@ -47,10 +47,9 @@ class SummonerProcessor(threading.Thread):
                 self.logging.info("Inserting %s summoner.", len(tasks))
                 value_lists = ["('%s', '%s', %s, %s, %s)" % tuple(task) for task in tasks]
                 values = ",".join(value_lists)
-                async with AsyncSession(await self.db.get_engine()) as session:
+                async with AsyncSession(self.db.engine) as session:
                     async with session.begin():
-                        await session.execute(
-                            """
+                        query = """
                             INSERT INTO summoner 
                             (accountId, puuid, rank, wins, losses)
                             VALUES %s
@@ -61,7 +60,8 @@ class SummonerProcessor(threading.Thread):
                                            losses = EXCLUDED.losses
                             ;
                             """ % values
-                        )
+                        print(query)
+                        await session.execute(query)
                     await session.commit()
 
             except Exception as err:

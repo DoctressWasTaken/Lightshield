@@ -15,9 +15,6 @@ class PermanentDB:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-    async def get_engine(self):
-        return self.engine
-
     def commit_db(self, patch):
         if patch in self.engines:
             self.engines[patch]['session'].commit()

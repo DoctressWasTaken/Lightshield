@@ -1,4 +1,3 @@
-import patch_updater
 import asyncio
 import datetime
 import os
@@ -7,7 +6,6 @@ import time
 import threading
 import signal
 
-from match_processor import MatchProcessor
 from summoner_processor import SummonerProcessor
 
 
