@@ -110,6 +110,20 @@ services:
       - structural_creator
     restart: always
 
+  processor_summoner:
+    build:
+      dockerfile: Dockerfile
+      context: services/processor_summoner
+    environment:
+      - SERVER=${SERVER}
+    external_links:
+      - lightshield_rabbitmq:rabbitmq
+    links:
+      - persistant_db:postgres
+    depends_on:
+      - structural_creator
+    restart: always
+
   persistant_db:
     container_name: ${COMPOSE_PROJECT_NAME}_persistant_db
     image: postgres:alpine

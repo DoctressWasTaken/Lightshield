@@ -1,0 +1,5 @@
+aiohttp
+sqlalchemy==1.4.0b1
+sqlalchemy-utils
+pika
+asyncpg
