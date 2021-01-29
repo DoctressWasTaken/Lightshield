@@ -1,7 +1,7 @@
 from lol_dto import (
     Base, Summoner, Match, Team, Player, Runes)
 from sqlalchemy.ext.asyncio import create_async_engine
-
+from sqlalchemy_utils import create_database, database_exists
 
 class PermanentDB:
 
@@ -9,6 +9,8 @@ class PermanentDB:
 
     def __init__(self):
         self.engine = None
+        if not database_exists(self.base_url):
+            create_database(self.base_url)
 
     async def create_db(self):
         self.engine = create_async_engine(self.base_url, echo=True)
