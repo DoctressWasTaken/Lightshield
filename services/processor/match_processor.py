@@ -6,6 +6,7 @@ from rabbit_manager import RabbitManager
 from sqlalchemy.ext.asyncio import AsyncSession
 from lol_dto import Match
 import traceback
+import aio_pika
 
 class MatchProcessor(threading.Thread):
 
@@ -31,32 +32,36 @@ class MatchProcessor(threading.Thread):
 
     async def async_worker(self):
         self.logging.info("Initiated Worker.")
+        connection = await aio_pika.connect_robust(
+            "amqp://guest:guest@127.0.0.1/", loop=asyncio.get_running_loop()
+        )
+        channel = await connection.channel()
+        await channel.set_qos(prefetch_count=100)
+        queue = await channel.declare_queue(
+            name=self.server + "_DETAILS_TO_PROCESSOR",
+            durable=True,
+            robust=True
+        )
+
         while not self.stopped:
             tasks = []
-            while len(tasks) < 50 and not self.stopped:
-                await asyncio.sleep(1)
-                self.logging.info("Getting task")
-                self.logging.info(self.rabbit.queue.qsize())
-                try:
-                    task = self.rabbit.queue.get_nowait()
-                except Exception as err:
-                    self.logging.info(err)
-                    await asyncio.sleep(1)
-                    self.logging.info("No task found")
-                    continue
-                self.logging.info(self.rabbit.queue.qsize())
-                try:
-                    message = pickle.loads(task.body)
-                    self.logging.info(message)
-                    items = await Match.create(message)
-                    self.logging(items)
-                    self.logging(items['match'].__dict__)
-                    self.logging(list(items['match']))
-                except Exception as err:
-                    traceback.print_tb(err.__traceback__)
-                    print(err)
-                await asyncio.sleep(15)
-                return
+            try:
+                async with queue.iterator() as queue_iter:
+                    async for message in queue_iter:
+                        async with message.process():
+                            task = pickle.loads(message.body)
+                            items = await Match.create(task)
+                            self.logging(items)
+                            self.logging(items['match'].__dict__)
+                            self.logging(list(items['match']))
+
+                        if len(tasks) >= 50 or self.stopped:
+                            break
+            except Exception as err:
+                traceback.print_tb(err.__traceback__)
+                print(err)
+            await asyncio.sleep(15)
+            return
                 #tasks.append(pickle.loads(task.body))
 
                 #task.ack()

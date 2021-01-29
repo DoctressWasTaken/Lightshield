@@ -59,7 +59,9 @@ class SummonerProcessor(threading.Thread):
 
     async def run(self):
         await self.rabbit.init()
+        fill_task = asyncio.create_task(self.rabbit.fill_queue())
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
+        await fill_task
 
     def shutdown(self):
         self.stopped = True
