@@ -21,7 +21,7 @@ async def main(loop):
             name="%s_RANKED" % server,
             durable=True,
             type=ExchangeType.TOPIC)
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
         # Summoner IDs
         summoner_in = await channel.declare_queue(
             name='%s_RANKED_TO_SUMMONER' % server,
@@ -32,7 +32,7 @@ async def main(loop):
             name="%s_SUMMONER" % server,
             durable=True,
             type=ExchangeType.TOPIC)
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
 
         # Match History
         history_in = await channel.declare_queue(
@@ -43,7 +43,7 @@ async def main(loop):
             name="%s_HISTORY" % server,
             durable=True,
             type=ExchangeType.TOPIC)
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
 
         # Match Details
         details_in = await channel.declare_queue(
@@ -54,7 +54,7 @@ async def main(loop):
             name="%s_DETAILS" % server,
             durable=True,
             type=ExchangeType.TOPIC)
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
 
         # Processor
         processor_summoner_in = await channel.declare_queue(

@@ -17,11 +17,9 @@ class Summoner(Base):
 
     __tablename__ = 'summoner'
 
-    id = Column(Integer, primary_key=True)
+    puuid = Column(String(78), primary_key=True)
     rank = Column("rank", ARRAY(SmallInteger))  # Calculated summed LP from lowest rank
     wins = Column("wins", SmallInteger)
     losses = Column("losses", SmallInteger)
 
-    puuid = Column(String(78))
-
-    accountId = Column(String(56))
+    account_id = Column(String(56))

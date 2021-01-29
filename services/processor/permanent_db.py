@@ -4,53 +4,27 @@ from sqlalchemy_utils import database_exists, create_database
 from lol_dto import (
     Base, Summoner, Match, Team, Player, Runes)
 import threading
+from sqlalchemy.ext.asyncio import create_async_engine
 
 
 class PermanentDB:
 
-    base_url = "postgres://postgres@postgres/patch_%s"
+    base_url = "postgresql+asyncpg://postgres@postgres/raw"
 
     def __init__(self):
-        self.engines = {}
+        self.engine = None
 
-    def create_db(self, patch):
-        engine = create_engine(self.base_url % patch)
-        if not database_exists(engine.url):
-            print("Created db for patch %s" % patch)
-            create_database(engine.url)
-        Base.metadata.create_all(engine)
-        self.engines[patch] = {
-            "engine": engine,
-            "sessionmaker": sessionmaker(bind=engine),
-            "session": sessionmaker(bind=engine)()
-        }
+    async def create_db(self, patch):
+        self.engine = create_async_engine(self.base_url, echo=True)
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    async def get_engine(self):
+        return self.engine
 
     def commit_db(self, patch):
         if patch in self.engines:
             self.engines[patch]['session'].commit()
-
-    def add_summoner(self, patch, accountId, puuid, rank, wins, losses):
-        if patch not in self.engines:
-            self.create_db(patch)
-        session = self.engines[patch]['session']
-
-        dBSummoner = session.query(Summoner) \
-            .filter_by(accountId=accountId) \
-            .first()
-        if dBSummoner:
-            dBSummoner.rank.append(rank)
-            dBSummoner.wins = wins
-            dBSummoner.losses = losses
-        else:
-            new_summoner = Summoner(
-                rank=rank,
-                wins=wins,
-                losses=losses,
-                puuid=puuid,
-                accountId=accountId,
-            )
-            session.add(new_summoner)
-        session.flush()
 
     def add_match(self, patch, match):
         if patch not in self.engines:
