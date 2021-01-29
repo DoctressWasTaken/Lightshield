@@ -3,3 +3,4 @@ sqlalchemy
 sqlalchemy-utils
 pika
 asyncpg
+aio-pika
