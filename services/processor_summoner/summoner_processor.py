@@ -60,8 +60,9 @@ class SummonerProcessor(threading.Thread):
                     ;
                     """ % values
                 print(query)
-                await self.db.execute(query)
-                await self.db.close()
+                conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+                await conn.execute(query)
+                await conn.close()
 
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
@@ -71,7 +72,6 @@ class SummonerProcessor(threading.Thread):
         self.connection = await aio_pika.connect_robust(
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
         )
-        self.db = await asyncpg.connect("postgresql://postgres@postgres/raw")
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
 
     def shutdown(self):
