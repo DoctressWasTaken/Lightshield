@@ -53,7 +53,7 @@ class SummonerProcessor(threading.Thread):
                             INSERT INTO summoner 
                             (account_id, puuid, rank, wins, losses)
                             VALUES %s
-                            ON COMFLICT (puuid)
+                            ON CONFLICT (puuid)
                             DO
                                 UPDATE SET rank = EXCLUDED.rank,
                                            wins = EXCLUDED.wins,
