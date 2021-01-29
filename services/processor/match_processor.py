@@ -1,13 +1,14 @@
 import threading
 import logging
-from permanent_db import PermanentDB
-import pika
+import asyncio
 import pickle
-
+from rabbit_manager import RabbitManager
+from sqlalchemy.ext.asyncio import AsyncSession
+from lol_dto import Match
 
 class MatchProcessor(threading.Thread):
 
-    def __init__(self, server, offset, patches, permanent):
+    def __init__(self, server, permanent):
         super().__init__()
         self.logging = logging.getLogger("MatchProcessor")
         self.logging.setLevel(logging.INFO)
@@ -19,50 +20,54 @@ class MatchProcessor(threading.Thread):
 
         self.stopped = False
         self.server = server
-        self.offset = offset
-        self.patches = patches
         self.permanent = permanent
-        self.current_patch = sorted(self.patches.keys(), reverse=False)[0]
 
-        self.channel = None
-        self.consumer = None
+        self.rabbit = RabbitManager(
+            exchange='temp',
+            incoming="SUMMONER_TO_PROCESSOR"
+        )
+
+    async def async_worker(self):
+        while not self.stopped:
+            tasks = []
+            while len(tasks) < 50 and not self.stopped:
+                if not (task := await self.rabbit.get()):
+                    await asyncio.sleep(1)
+                    continue
+                items = await Match.create(pickle.loads(task.body))
+                self.logging(items)
+                self.logging(items['match'].__dict__)
+                self.logging(list(items['match']))
+                return
+                #tasks.append(pickle.loads(task.body))
+
+                #task.ack()
+            if len(tasks) == 0 and self.stopped:
+                return
+            self.logging.info("Inserting %s summoner.", len(tasks))
+            value_lists = ["('%s', '%s', %s, %s, %s)" % tuple(task) for task in tasks]
+            values = ",".join(value_lists)
+            async with AsyncSession(await self.permanent.get_engine()) as session:
+                async with session.begin():
+                    await session.execute(
+                        """
+                        INSERT INTO summoner 
+                        (accountId, puuid, rank, wins, losses)
+                        VALUES %s
+                        ON COMFLICT (puuid)
+                        DO
+                            UPDATE SET rank = EXCLUDED.rank,
+                                       wins = EXCLUDED.wins,
+                                       losses = EXCLUDED.losses
+                        ;
+                        """ % values
+                    )
+                await session.commit()
 
     def run(self):
-        connection = pika.BlockingConnection(
-            pika.ConnectionParameters('rabbitmq')
-        )
-        channel = connection.channel()
-        channel.queue_declare(
-            queue=self.server + '_DETAILS_TO_PROCESSOR',
-            durable=True)
-        self.consumer = channel.basic_consume(
-            queue=self.server + '_DETAILS_TO_PROCESSOR',
-            on_message_callback=self.on_message,
-            auto_ack=False)
-        self.channel = channel
-        channel.start_consuming()
+        await self.rabbit.init()
+        await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(1)])
+
 
     def shutdown(self):
         self.stopped = True
-        self.channel.basic_cancel(self.consumer)
-
-    def update_patches(self, patches):
-        if patches.keys() != self.patches.keys():
-            self.logging.info("Updating patches")
-            self.patches = patches
-
-    def on_message(self, ch, method, properties, body):
-        match_details = pickle.loads(body)
-        matchTime = match_details['gameCreation'] // 1000
-        if sorted(self.patches)[0] + self.offset < matchTime:
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-            return
-        for limit in sorted(self.patches):
-            if (limit + self.offset) > matchTime:
-                self.permanent.add_match(
-                    self.patches[limit]['name'], match_details)
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-                return
-
-        self.logging.info("ReQing match.")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)

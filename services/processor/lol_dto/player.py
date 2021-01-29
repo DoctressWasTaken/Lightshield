@@ -75,29 +75,31 @@ class Player(Base):
     goldPerMinDeltas = Column(ARRAY(SmallInteger))
 
     @classmethod
-    def create(cls, id, data, matchId, participantId):
+    async def create(cls, match, participantId):
+        participant = match['participants'][participantId]
+        partId = match['participantIdentities'][participantId]['player']
 
         playerObject = cls(
             participantId=participantId,
-            matchId=matchId,
-            accountId=id['currentAccountId'],
-            championId=data['championId'],
-            team=data['teamId'] == 200,
+            matchId=match['gameId'],
+            accountId=partId['currentAccountId'],
+            championId=participant['championId'],
+            team=participantId > 5,
             statPerks=[
-                data['stats']['statPerk0'],
-                data['stats']['statPerk1'],
-                data['stats']['statPerk2']],
-            summonerSpells=[data['spell1Id'], data['spell2Id']],
-            items=[data['stats']['item%s' % i] for i in range(7)]
+                participant['stats']['statPerk0'],
+                participant['stats']['statPerk1'],
+                participant['stats']['statPerk2']],
+            summonerSpells=[participant['spell1Id'], participant['spell2Id']],
+            items=[participant['stats']['item%s' % i] for i in range(7)]
         )
 
-        for key in data['stats']:
+        for key in participant['stats']:
             if hasattr(Player, key):
-                setattr(playerObject, key, data['stats'][key])
+                setattr(playerObject, key, participant['stats'][key])
 
-        for entry in data['timeline']:
+        for entry in participant['timeline']:
             if entry.endswith('Deltas'):
-                setattr(playerObject, entry, data['timeline'][entry].values())
+                setattr(playerObject, entry, participant['timeline'][entry].values())
         return playerObject
 
 
@@ -115,16 +117,18 @@ class Runes(Base):
     stats3 = Column(Integer)
 
     @classmethod
-    def create(cls, data, matchId, participantId):
+    async def create(cls, match, participantId):
+        participant = match['participants'][participantId]
+
         runeObjects = []
         for i in range(6):
             runeObjects.append(cls(
-                matchId=matchId,
+                matchId=match['gameId'],
                 participantId=participantId,
                 position=i,
-                runeId=data['stats']['perk%s' % i],
-                stats1=data['stats']['perk%sVar1' % i],
-                stats2=data['stats']['perk%sVar2' % i],
-                stats3=data['stats']['perk%sVar3' % i],
+                runeId=participant['stats']['perk%s' % i],
+                stats1=participant['stats']['perk%sVar1' % i],
+                stats2=participant['stats']['perk%sVar2' % i],
+                stats3=participant['stats']['perk%sVar3' % i],
             ))
         return runeObjects

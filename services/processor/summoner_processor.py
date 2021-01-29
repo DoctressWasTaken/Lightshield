@@ -2,7 +2,6 @@ import threading
 import logging
 import asyncio
 import pickle
-from permanent_db import PermanentDB
 from rabbit_manager import RabbitManager
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,9 +20,6 @@ class SummonerProcessor(threading.Thread):
         self.stopped = False
         self.server = server
         self.permanent = permanent
-
-        self.channel = None
-        self.consumer = None
 
         self.rabbit = RabbitManager(
             exchange='temp',
@@ -67,18 +63,3 @@ class SummonerProcessor(threading.Thread):
 
     def shutdown(self):
         self.stopped = True
-
-    async def update_patches(self, patches):
-        self.patches = patches
-        self.permanent.commit_db(self.current_patch)
-        self.current_patch = self.patches[
-            sorted(self.patches.keys(), reverse=False)[0]]['name']
-
-    def on_message(self, ch, method, properties, body):
-        accountId, puuid, rank, wins, losses = pickle.loads(body)
-
-        self.permanent.add_summoner(self.current_patch, accountId, puuid, rank, wins, losses)
-
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-
-

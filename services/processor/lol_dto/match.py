@@ -1,6 +1,7 @@
 """Tables related to Match Data."""
 from sqlalchemy import Column, Enum, Integer, Boolean, String, BigInteger, TIMESTAMP, SmallInteger, VARCHAR
-from . import Base, Team
+from . import Base, Team, Player, Runes
+import asyncio
 from .enums import Server
 from sqlalchemy.orm import relationship
 
@@ -21,7 +22,7 @@ class Match(Base):
     win = Column(Boolean)  # False: Blue | True: Red
 
     @classmethod
-    def create(cls, match):
+    async def create(cls, match):
         """Create the match object as well as sub elements"""
         matchObject = cls(
             start=match['gameCreation'] // 1000,
@@ -29,8 +30,16 @@ class Match(Base):
             gameVersion=match['gameVersion'],
             matchId=match['gameId'],
         )
-        if match['teams'][0]['win'] == 'Win':
-            matchObject.win = False
-        else:
-            matchObject.win = True
-        return matchObject
+        matchObject.win = match['teams'][0]['win'] == 'Win'
+
+        items = {
+            'match': matchObject,
+            'team': [await Team.create(match, 0), await Team.create(match, 1)],
+            'player': await asyncio.gather(*[
+                asyncio.create_task(Player.create(match, i)) for i in range(1, 11)
+            ]),
+            'runes': await asyncio.gather(*[
+                asyncio.create_task(Runes.create(match, i)) for i in range(1, 11)
+            ])
+        }
+        return items

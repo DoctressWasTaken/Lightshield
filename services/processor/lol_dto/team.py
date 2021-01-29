@@ -24,7 +24,7 @@ class Team(Base):
     firstBaron = Column(Boolean)
 
     @classmethod
-    def create(cls, match, side):
+    async def create(cls, match, side):
         teamData = match['teams'][side]
         teamObject = cls(
             matchId=match['gameId'],
