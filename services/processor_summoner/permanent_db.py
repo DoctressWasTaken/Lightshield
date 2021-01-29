@@ -10,7 +10,7 @@ class PermanentDB:
     def __init__(self):
         self.engine = None
 
-    async def create_db(self, patch):
+    async def create_db(self):
         self.engine = create_async_engine(self.base_url, echo=True)
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -18,6 +18,7 @@ class PermanentDB:
     def commit_db(self, patch):
         if patch in self.engines:
             self.engines[patch]['session'].commit()
+
 
     def add_match(self, patch, match):
         if patch not in self.engines:

@@ -22,7 +22,8 @@ class SummonerProcessor(threading.Thread):
 
         self.stopped = False
         self.server = server
-        self.db = db
+        self.sql = db
+        self.db = None
 
     async def async_worker(self):
         channel = await self.connection.channel()
@@ -68,6 +69,7 @@ class SummonerProcessor(threading.Thread):
 
 
     async def run(self):
+        await self.sql.create_db()
         self.logging.info("Initiated Worker.")
         self.connection = await aio_pika.connect_robust(
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
