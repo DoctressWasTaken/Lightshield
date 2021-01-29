@@ -33,7 +33,7 @@ class MatchProcessor(threading.Thread):
     async def async_worker(self):
         self.logging.info("Initiated Worker.")
         connection = await aio_pika.connect_robust(
-            "amqp://guest:guest@127.0.0.1/", loop=asyncio.get_running_loop()
+            "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
         )
         channel = await connection.channel()
         await channel.set_qos(prefetch_count=100)
@@ -89,9 +89,7 @@ class MatchProcessor(threading.Thread):
 
     async def run(self):
         await self.rabbit.init()
-        fill_task = asyncio.create_task(self.rabbit.fill_queue())
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(1)])
-        await fill_task
 
 
     def shutdown(self):

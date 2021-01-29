@@ -55,18 +55,18 @@ async def main():
     matchP = MatchProcessor(server, permanent)
     summonerP = SummonerProcessor(server, permanent)
 
-    matchTask = asyncio.create_task(matchP.run())
+    #matchTask = asyncio.create_task(matchP.run())
     summonerTask = asyncio.create_task(summonerP.run())
    
 
     def shutdown_handler():
         summonerP.shutdown()
-        matchP.shutdown()
+        #matchP.shutdown()
 
     signal.signal(signal.SIGTERM, shutdown_handler)
 
     await summonerTask
-    await matchTask
+    #await matchTask
 
 if __name__ == "__main__":
     asyncio.run(main())

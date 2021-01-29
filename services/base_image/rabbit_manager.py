@@ -109,12 +109,8 @@ class RabbitManager:
         )
         while not self.stopped:
             try:
-                await asyncio.sleep(1)
                 task = await queue.get(timeout=3)
-                await asyncio.sleep(1)
-                self.logging.info("2")
                 await self.queue.put(task)
-                await asyncio.sleep(1)
             except Exception as err:
                 self.logging.info("Received %s: %s", err.__class__.__name__, err)
                 await channel.close()
