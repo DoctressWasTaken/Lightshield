@@ -1,4 +1,4 @@
-FROM lightshield_service
+FROM python3.8
 
 WORKDIR /project
 COPY startup.sh .
