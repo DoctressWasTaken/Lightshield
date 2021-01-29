@@ -100,6 +100,8 @@ services:
       context: services/processor
     environment:
       - SERVER=${SERVER}
+      - STREAM="placeholder"
+      - MAX_TASK_BUFFER=111
     external_links:
       - lightshield_rabbitmq:rabbitmq
     links:

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 class SummonerProcessor(threading.Thread):
 
-    def __init__(self, server, offset, patches, permanent):
+    def __init__(self, server, permanent):
         super().__init__()
         self.logging = logging.getLogger("SummonerProcessor")
         self.logging.setLevel(logging.INFO)
@@ -20,16 +20,13 @@ class SummonerProcessor(threading.Thread):
 
         self.stopped = False
         self.server = server
-        self.offset = offset
-        self.patches = patches
         self.permanent = permanent
-        self.current_patch = self.patches[
-            sorted(self.patches.keys(), reverse=False)[0]]['name']
 
         self.channel = None
         self.consumer = None
 
         self.rabbit = RabbitManager(
+            exchange='temp',
             incoming="SUMMONER_TO_PROCESSOR"
         )
     async def async_worker(self):
@@ -44,6 +41,7 @@ class SummonerProcessor(threading.Thread):
                 task.ack()
             if len(tasks) ==0 and self.stopped:
                 return
+            self.logging.info("Inserting %s summoner.", len(tasks))
             value_lists = ["('%s', '%s', %s, %s, %s)" % tuple(task) for task in tasks]
             values = ",".join(value_lists)
             async with AsyncSession(await self.permanent.get_engine()) as session:
@@ -65,12 +63,10 @@ class SummonerProcessor(threading.Thread):
 
     async def run(self):
         await self.rabbit.init()
-        await asyncio.gather([asyncio.create_task(self.async_worker()) for _ in range(5)])
+        await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
 
     def shutdown(self):
         self.stopped = True
-        self.channel.basic_cancel(self.consumer)
-        self.permanent.commit_db(self.current_patch)
 
     async def update_patches(self, patches):
         self.patches = patches

@@ -1,9 +1,5 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy_utils import database_exists, create_database
 from lol_dto import (
     Base, Summoner, Match, Team, Player, Runes)
-import threading
 from sqlalchemy.ext.asyncio import create_async_engine
 
 
