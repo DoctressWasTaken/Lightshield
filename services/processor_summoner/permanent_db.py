@@ -46,14 +46,3 @@ class PermanentDB:
             runeObjects += Runes.create(data, matchId, i)
 
         return playerObjects, runeObjects
-
-
- INSERT INTO summoner
-processor_summoner_1  |                     (account_id, puuid, rank, wins, losses)
-processor_summoner_1  |                     VALUES ('11AYWpXoVt7Td5bBFH-2HBmFJGXxGW97mLLAdXQpnXPI6LE', 'SIpNXr-dK454bBh9REMdd9PmerXbah4DiqECcVdvoLT5a2QJOVpWfJmRvug61WQW8MvXrwxrur7Gbw', 1600, 17, 22)
-processor_summoner_1  |                     ON CONFLICT (puuid)
-processor_summoner_1  |                     DO
-processor_summoner_1  |                         UPDATE SET rank = EXCLUDED.rank,
-processor_summoner_1  |                                    wins = EXCLUDED.wins,
-processor_summoner_1  |                                    losses = EXCLUDED.losses
-processor_summoner_1  |                     ;

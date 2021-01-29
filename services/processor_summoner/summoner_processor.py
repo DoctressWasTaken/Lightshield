@@ -66,7 +66,6 @@ class SummonerProcessor(threading.Thread):
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
 
-
     async def run(self):
         self.logging.info("Initiated Worker.")
         self.connection = await aio_pika.connect_robust(
