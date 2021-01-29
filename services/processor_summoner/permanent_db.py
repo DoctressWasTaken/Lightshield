@@ -5,7 +5,7 @@ from sqlalchemy_utils import create_database, database_exists
 
 
 class PermanentDB:
-    base_url = "postgresql+asyncpg://postgres@postgres/raw"
+    base_url = "postgresql://postgres@postgres/raw"
 
     def __init__(self):
         self.engine = None
