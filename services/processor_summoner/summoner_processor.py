@@ -5,6 +5,7 @@ import pickle
 from sqlalchemy.ext.asyncio import AsyncSession
 import aio_pika
 import traceback
+import asyncpg
 
 
 class SummonerProcessor(threading.Thread):
@@ -47,22 +48,20 @@ class SummonerProcessor(threading.Thread):
                 self.logging.info("Inserting %s summoner.", len(tasks))
                 value_lists = ["('%s', '%s', %s, %s, %s)" % tuple(task) for task in tasks]
                 values = ",".join(value_lists)
-                async with AsyncSession(self.db.engine) as session:
-                    async with session.begin():
-                        query = """
-                            INSERT INTO summoner 
-                            (account_id, puuid, rank, wins, losses)
-                            VALUES %s
-                            ON CONFLICT (puuid)
-                            DO
-                                UPDATE SET rank = EXCLUDED.rank,
-                                           wins = EXCLUDED.wins,
-                                           losses = EXCLUDED.losses
-                            ;
-                            """ % values
-                        print(query)
-                        await session.execute(query)
-                    await session.commit()
+                query = """
+                    INSERT INTO summoner 
+                    (account_id, puuid, rank, wins, losses)
+                    VALUES %s
+                    ON CONFLICT (puuid)
+                    DO
+                        UPDATE SET rank = EXCLUDED.rank,
+                                   wins = EXCLUDED.wins,
+                                   losses = EXCLUDED.losses
+                    ;
+                    """ % values
+                print(query)
+                await self.db.execute(query)
+                await self.db.close()
 
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
@@ -73,6 +72,7 @@ class SummonerProcessor(threading.Thread):
         self.connection = await aio_pika.connect_robust(
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
         )
+        self.db = await asyncpg.connect("postgresql://postgres@postgres/raw")
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
 
     def shutdown(self):
