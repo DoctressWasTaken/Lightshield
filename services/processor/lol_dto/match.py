@@ -31,7 +31,7 @@ class Match(Base):
             matchId=match['gameId'],
         )
         matchObject.win = match['teams'][0]['win'] == 'Win'
-
+        return {"match": matchObject}
         items = {
             'match': matchObject,
             'team': [await Team.create(match, 0), await Team.create(match, 1)],

@@ -52,16 +52,21 @@ async def main():
     permanent = PermanentDB()
     server = os.environ['SERVER']
 
-    #matchP = MatchProcessor(server, offsets[server], patches, permanent)
+    matchP = MatchProcessor(server, permanent)
     summonerP = SummonerProcessor(server, permanent)
+
+    matchTask = asyncio.create_task(matchP.run())
     summonerTask = asyncio.create_task(summonerP.run())
+   
 
     def shutdown_handler():
         summonerP.shutdown()
+        matchP.shutdown()
 
     signal.signal(signal.SIGTERM, shutdown_handler)
 
     await summonerTask
+    await matchTask
 
 if __name__ == "__main__":
     asyncio.run(main())

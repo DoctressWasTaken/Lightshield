@@ -5,6 +5,7 @@ import pickle
 from rabbit_manager import RabbitManager
 from sqlalchemy.ext.asyncio import AsyncSession
 from lol_dto import Match
+import traceback
 
 class MatchProcessor(threading.Thread):
 
@@ -17,6 +18,7 @@ class MatchProcessor(threading.Thread):
         handler.setFormatter(
             logging.Formatter('%(asctime)s [MatchProcessor] %(message)s'))
         self.logging.addHandler(handler)
+        self.logging.info("Initiated match Processor.")
 
         self.stopped = False
         self.server = server
@@ -24,20 +26,36 @@ class MatchProcessor(threading.Thread):
 
         self.rabbit = RabbitManager(
             exchange='temp',
-            incoming="SUMMONER_TO_PROCESSOR"
+            incoming="DETAILS_TO_PROCESSOR"
         )
 
     async def async_worker(self):
+        self.logging.info("Initiated Worker.")
         while not self.stopped:
             tasks = []
             while len(tasks) < 50 and not self.stopped:
-                if not (task := await self.rabbit.get()):
+                await asyncio.sleep(1)
+                self.logging.info("Getting task")
+                self.logging.info(self.rabbit.queue.qsize())
+                try:
+                    task = self.rabbit.queue.get_nowait()
+                except Exception as err:
+                    self.logging.info(err)
                     await asyncio.sleep(1)
+                    self.logging.info("No task found")
                     continue
-                items = await Match.create(pickle.loads(task.body))
-                self.logging(items)
-                self.logging(items['match'].__dict__)
-                self.logging(list(items['match']))
+                self.logging.info(self.rabbit.queue.qsize())
+                try:
+                    message = pickle.loads(task.body)
+                    self.logging.info(message)
+                    items = await Match.create(message)
+                    self.logging(items)
+                    self.logging(items['match'].__dict__)
+                    self.logging(list(items['match']))
+                except Exception as err:
+                    traceback.print_tb(err.__traceback__)
+                    print(err)
+                await asyncio.sleep(15)
                 return
                 #tasks.append(pickle.loads(task.body))
 
@@ -64,9 +82,11 @@ class MatchProcessor(threading.Thread):
                     )
                 await session.commit()
 
-    def run(self):
+    async def run(self):
         await self.rabbit.init()
+        fill_task = asyncio.create_task(self.rabbit.fill_queue())
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(1)])
+        await fill_task
 
 
     def shutdown(self):
