@@ -51,7 +51,7 @@ class SummonerProcessor(threading.Thread):
                     async with session.begin():
                         query = """
                             INSERT INTO summoner 
-                            (accountId, puuid, rank, wins, losses)
+                            (account_id, puuid, rank, wins, losses)
                             VALUES %s
                             ON COMFLICT (puuid)
                             DO
