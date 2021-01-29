@@ -9,7 +9,7 @@ import datetime
 
 class RabbitManager:
 
-    def __init__(self, incoming=None, exchange=None, outgoing=()):
+    def __init__(self, incoming=None, exchange='', outgoing=()):
         self.logging = logging.getLogger("RabbitMQ")
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
@@ -19,8 +19,10 @@ class RabbitManager:
         self.logging.addHandler(handler)
 
         self.server = os.environ['SERVER']
-        self.streamID = os.environ['STREAM']
-        self.max_buffer = int(os.environ['MAX_TASK_BUFFER'])
+        if 'STREAM' in os.environ:
+            self.streamID = os.environ['STREAM']
+        if 'MAX_TASK_BUFFER' in os.environ:
+            self.max_buffer = int(os.environ['MAX_TASK_BUFFER'])
 
         self.outgoing = outgoing
 

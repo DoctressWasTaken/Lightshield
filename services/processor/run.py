@@ -11,7 +11,7 @@ from match_processor import MatchProcessor
 from summoner_processor import SummonerProcessor
 
 
-def main():
+def main_():
 
     permanent = PermanentDB()
     server = os.environ['SERVER']
