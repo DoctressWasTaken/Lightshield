@@ -4,3 +4,4 @@ sqlalchemy-utils
 pika
 asyncpg
 aio-pika
+psycopg2
