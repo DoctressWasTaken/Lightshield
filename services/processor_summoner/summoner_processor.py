@@ -65,6 +65,7 @@ class SummonerProcessor(threading.Thread):
 
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
+                print(err)
 
     async def run(self):
         self.logging.info("Initiated Worker.")
