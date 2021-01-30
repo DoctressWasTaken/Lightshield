@@ -85,7 +85,7 @@ class Service:
                 async with aiohttp.ClientSession() as session:
                     response = await self.fetch(session, url)
                 await self.marker.execute_write(
-                    'INSERT INTO summoner_ids (summonerId, accountId, puuid) '
+                    'REPLACE INTO summoner_ids (summonerId, accountId, puuid) '
                     'VALUES ("%s", "%s", "%s");' % (
                     identifier, response['accountId'], response['puuid']))
 
