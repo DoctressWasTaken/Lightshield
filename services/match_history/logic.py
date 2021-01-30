@@ -49,7 +49,7 @@ class Service:
     async def init(self):
         """Initiate timelimit for pulled matches."""
         await self.marker.connect()
-        await self.rabbit.init()
+        #await self.rabbit.init()
 
     def shutdown(self):
         """Called on shutdown init."""
@@ -164,7 +164,9 @@ class Service:
             robust=True
         )
         consumer_tag = None
+        self.logging.info("Initialized package manager.")
         while not self.stopped:
+            self.logging.info(consumer_tag)
             if not self.rabbit.blocked and consumer_tag is None and len(self.buffered_elements) < 10:
                 self.logging.info("Starting consume")
                 consumer_tag = await queue.consume(self.async_worker)
