@@ -98,8 +98,9 @@ class Service:
                     responses = await asyncio.gather(*calls_in_progress)
                     match_data = list(set().union(*responses))
                     await self.marker.execute_write(
-                        'UPDATE match_history SET matches = %s WHERE accountId =  "%s";' % (matches,
-                                                                                             accountId))
+                        """REPLACE INTO match_history (accountId, matches)
+                           VALUES ('%s', %s)
+                        """ % matches, accountId)
                     while match_data:
                         id = match_data.pop()
                         await self.rabbit.add_task(id)
