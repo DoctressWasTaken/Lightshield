@@ -24,10 +24,6 @@ class MatchProcessor(threading.Thread):
         self.server = server
         self.permanent = permanent
 
-        self.rabbit = RabbitManager(
-            exchange='temp',
-            incoming="DETAILS_TO_PROCESSOR"
-        )
 
     async def async_worker(self):
         self.logging.info("Initiated Worker.")
