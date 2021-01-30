@@ -76,8 +76,8 @@ class Player(Base):
 
     @classmethod
     async def create(cls, match, participantId):
-        participant = match['participants'][participantId]
-        partId = match['participantIdentities'][participantId]['player']
+        participant = match['participants'][participantId - 1]
+        partId = match['participantIdentities'][participantId - 1]['player']
 
         playerObject = cls(
             participantId=participantId,
