@@ -46,9 +46,9 @@ class MatchProcessor(threading.Thread):
                         async with message.process():
                             task = pickle.loads(message.body)
                             items = await Match.create(task)
-                            self.logging(items)
-                            self.logging(items['match'].__dict__)
-                            self.logging(list(items['match']))
+                            self.logging.info(items)
+                            self.logging.info(items['match'].__dict__)
+                            self.logging.info(list(items['match']))
 
                         if len(tasks) >= 50 or self.stopped:
                             break
