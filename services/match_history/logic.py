@@ -100,7 +100,7 @@ class Service:
                     await self.marker.execute_write(
                         """REPLACE INTO match_history (accountId, matches)
                            VALUES ('%s', %s)
-                        """ % matches, accountId)
+                        """ % (matches, accountId))
                     while match_data:
                         id = match_data.pop()
                         await self.rabbit.add_task(id)
