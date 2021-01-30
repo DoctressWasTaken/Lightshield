@@ -95,7 +95,11 @@ class Service:
 
             except NotFoundException:
                 return
+            except Exception as err:
+                traceback.print_tb(err.__traceback__)
+                self.logging.info(err)
             finally:
+                self.logging.info("Finished task.")
                 del self.buffered_elements[accountId]
 
     async def fetch(self, session, url):
@@ -161,8 +165,10 @@ class Service:
         consumer_tag = None
         while not self.stopped:
             if not self.rabbit.blocked and consumer_tag is None and len(self.buffered_elements) < 10:
+                self.logging.info("Starting consume")
                 consumer_tag = await queue.consume(self.async_worker)
             elif consumer_tag:
+                self.logging.info("Stopping consume")
                 queue.cancel(consumer_tag)
             await asyncio.sleep(1)
 
