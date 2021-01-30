@@ -23,6 +23,7 @@ class SummonerProcessor(threading.Thread):
         self.server = server
         self.sql = db
         self.db = None
+        self.conn = None  # Connection object to the DB
 
     async def async_worker(self):
         channel = await self.connection.channel()
