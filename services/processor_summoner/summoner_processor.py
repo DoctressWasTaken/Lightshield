@@ -33,7 +33,6 @@ class SummonerProcessor(threading.Thread):
             robust=True
         )
         tasks = {}
-        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
         while not self.stopped:
             try:
                 while len(tasks) < 100 and not self.stopped:
@@ -46,7 +45,9 @@ class SummonerProcessor(threading.Thread):
                                 break
 
                     if len(tasks) < 100 and not self.stopped:
+                        await self.conn.close()  # close db connection when not finding messages
                         await asyncio.sleep(2)
+
                 self.logging.info("Inserting %s summoner.", len(tasks))
                 value_lists = ["('%s', '%s', %s, %s, %s)" % tuple(task) for task in tasks.values()]
                 values = ",".join(value_lists)
@@ -61,13 +62,15 @@ class SummonerProcessor(threading.Thread):
                                    losses = EXCLUDED.losses
                     ;
                     """ % values
-                await conn.execute(query)
+                if not self.conn:
+                    self.conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+                await self.conn.execute(query)
                 tasks = {}
 
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
                 print(err)
-        await conn.close()
+        await self.conn.close()
 
         await channel.close()
 
