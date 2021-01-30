@@ -1,5 +1,7 @@
 aiohttp
-sqlalchemy==1.4.0b1
+sqlalchemy
 sqlalchemy-utils
 pika
 asyncpg
+aio-pika
+psycopg2
