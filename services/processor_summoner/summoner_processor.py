@@ -68,10 +68,10 @@ class SummonerProcessor(threading.Thread):
                 if not self.conn:
                     self.logging.info("Creating connection")
                     self.conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-                self.logging.info("Executing query.")
-                await self.conn.execute(query)
-                tasks = {}
                 await asyncio.sleep(2)
+                self.logging.info("Executing query.")
+                self.logging.info(await self.conn.execute(query))
+                tasks = {}
 
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
