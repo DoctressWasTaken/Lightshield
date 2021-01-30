@@ -49,7 +49,7 @@ class Service:
     async def init(self):
         """Initiate timelimit for pulled matches."""
         await self.marker.connect()
-        #await self.rabbit.init()
+        await self.rabbit.init()
 
     def shutdown(self):
         """Called on shutdown init."""
