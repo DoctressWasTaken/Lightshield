@@ -45,6 +45,8 @@ class Service:
 
         self.timelimit = int(os.environ['TIME_LIMIT'])
         self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
+        self.active_tasks = 0
+        self.working_tasks = []
 
     async def init(self):
         """Initiate timelimit for pulled matches."""
@@ -56,11 +58,11 @@ class Service:
         self.stopped = True
         self.rabbit.shutdown()
 
-    async def async_worker(self, message):
-        async with message.process():
-            accountId, puuid, rank, wins, losses = pickle.loads(message.body)
-            matches = wins + losses
-            try:
+    async def task_selector(self, message):
+        try:
+            async with message.process():
+                accountId, puuid, rank, wins, losses = pickle.loads(message.body)
+                matches = wins + losses
                 if prev := await self.marker.execute_read(
                     'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
                     matches = matches - int(prev[0][0])
@@ -69,38 +71,47 @@ class Service:
                 if accountId in self.buffered_elements:
                     return
                 self.buffered_elements[accountId] = True
+                self.working_tasks.append(
+                    asyncio.create_task(self.async_worker(accountId, matches)))
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
+        finally:
+            self.active_tasks -= 1
 
-                matches_to_call = matches + 3
-                calls = int(matches_to_call / 100) + 1
-                ids = [start_id * 100 for start_id in range(calls)]
-                calls_in_progress = []
-                async with aiohttp.ClientSession() as session:
-                    while ids:
-                        id = ids.pop()
-                        calls_in_progress.append(asyncio.create_task(
-                            self.handler(
-                                session=session,
-                                url=self.url % (accountId, id, id + 100)
-                            )
-                        ))
-                        await asyncio.sleep(0.1)
-                        responses = await asyncio.gather(*calls_in_progress)
-                        match_data = list(set().union(*responses))
-                        await self.marker.execute_write(
-                            'UPDATE match_history SET matches = %s WHERE accountId =  "%s";' % (matches,
-                                                                                                 accountId))
-                        while match_data:
-                            id = match_data.pop()
-                            await self.rabbit.add_task(id)
+    async def async_worker(self, accountId, matches):
+        try:
+            matches_to_call = matches + 3
+            calls = int(matches_to_call / 100) + 1
+            ids = [start_id * 100 for start_id in range(calls)]
+            calls_in_progress = []
+            async with aiohttp.ClientSession() as session:
+                while ids:
+                    id = ids.pop()
+                    calls_in_progress.append(asyncio.create_task(
+                        self.handler(
+                            session=session,
+                            url=self.url % (accountId, id, id + 100)
+                        )
+                    ))
+                    await asyncio.sleep(0.1)
+                    responses = await asyncio.gather(*calls_in_progress)
+                    match_data = list(set().union(*responses))
+                    await self.marker.execute_write(
+                        'UPDATE match_history SET matches = %s WHERE accountId =  "%s";' % (matches,
+                                                                                             accountId))
+                    while match_data:
+                        id = match_data.pop()
+                        await self.rabbit.add_task(id)
 
-            except NotFoundException:
-                return
-            except Exception as err:
-                traceback.print_tb(err.__traceback__)
-                self.logging.info(err)
-            finally:
-                self.logging.info("Finished task.")
-                del self.buffered_elements[accountId]
+        except NotFoundException:
+            return
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
+        finally:
+            self.logging.info("Finished task.")
+            del self.buffered_elements[accountId]
 
     async def fetch(self, session, url):
             """Execute call to external target using the proxy server.
@@ -163,27 +174,28 @@ class Service:
             durable=True,
             robust=True
         )
-        consumer_tag = None
         self.logging.info("Initialized package manager.")
-        while not self.stopped:
-            if not self.rabbit.blocked and consumer_tag is None and len(self.buffered_elements) < 10:
-                self.logging.info("Starting consume")
-                consumer_tag = await queue.consume(self.async_worker)
-            elif consumer_tag:
-                self.logging.info("Stopping consume")
-                await queue.cancel(consumer_tag)
-                consumer_tag = None
-            await asyncio.sleep(1)
+        async with queue.iterator() as queue_iter:
+            async for message in queue_iter:
+                self.active_tasks += 1
+                await self.task_selector(message)
 
-        if consumer_tag:
-            await queue.cancel(consumer_tag)
-        await channel.close()
+                while self.active_tasks >= 5 or self.rabbit.blocked:
+                    await asyncio.sleep(0.5)
+
         self.logging.info("Exited package manager.")
+
 
     async def run(self):
         """Runner."""
         await self.init()
         self.logging.info("Initiated.")
         check_task = asyncio.create_task(self.rabbit.check_full())
-        await self.package_manager()
+        manager = asyncio.create_task(self.package_manager())
+        while not self.stopped:
+            await asyncio.sleep(1)
+        try:
+            manager.cancel()
+        except:
+            pass
         await check_task
