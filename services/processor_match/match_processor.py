@@ -7,6 +7,16 @@ import traceback
 import aio_pika
 import asyncpg
 
+
+async def create_set(data_list):
+    formatted_list = []
+    for entry in data_list:
+        if type(entry) == str:
+            formatted_list.append("'%s'" % entry)
+        else:
+            formatted_list.append(entry)
+
+
 class MatchProcessor(threading.Thread):
 
     def __init__(self, server, permanent):
@@ -23,7 +33,6 @@ class MatchProcessor(threading.Thread):
         self.stopped = False
         self.server = server
         self.permanent = permanent
-
 
     async def async_worker(self):
         self.logging.info("Initiated Worker.")
@@ -46,20 +55,46 @@ class MatchProcessor(threading.Thread):
                         async with message.process():
                             task = pickle.loads(message.body)
                             items = await Match.create(task)
-                            self.logging.info(items)
-                            self.logging.info(items['match'].__dict__)
-                            self.logging.info(list(items['match']))
+                            tasks.append(items)
 
                         if len(tasks) >= 50 or self.stopped:
                             break
+
+                match_list = []
+                team_list = []
+                player_list = []
+                runes_list = []
+                m_keys = [col.split(".")[0] for col in tasks[0]['match'].__table__.columns]
+                t_keys = [col.split(".")[0] for col in tasks[0]['team'][0].__table__.columns]
+                p_keys = [col.split(".")[0] for col in tasks[0]['player'][0].__table__.columns]
+                r_keys = [col.split(".")[0] for col in tasks[0]['runes'][0][0].__table__.columns]
+
+                for entry in tasks:
+                    m = entry['match']
+                    match_list.append(", ".join(await create_set([m.__dict__[key] for key in m_keys])))
+
+                    for team in entry['team']:
+                        team_list.append(", ".join(await create_set([team.__dict__[key] for key in t_keys])))
+
+                    for index, player in enumerate(entry['player']):
+                        player_list.append(", ".join(await create_set([player.__dict__[key] for key in p_keys])))
+                        for i in range(6):
+                            runes_list.append(
+                                ", ".join(await create_set([entry['runes'][index][i].__dict__[key] for key in r_keys])))
+
+                self.logging.info(match_list)
+                self.logging.info(team_list)
+                self.logging.info(player_list)
+                self.logging.info(runes_list)
+
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
                 print(err)
             await asyncio.sleep(15)
             return
-                #tasks.append(pickle.loads(task.body))
+            # tasks.append(pickle.loads(task.body))
 
-                #task.ack()
+            # task.ack()
             if len(tasks) == 0 and self.stopped:
                 return
             self.logging.info("Inserting %s summoner.", len(tasks))
@@ -88,7 +123,6 @@ class MatchProcessor(threading.Thread):
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
         )
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(1)])
-
 
     def shutdown(self):
         self.stopped = True
