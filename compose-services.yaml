@@ -86,7 +86,7 @@ services:
     environment:
       - SERVER=${SERVER}
       - WORKER=45
-      - MAX_TASK_BUFFER=200
+      - MAX_TASK_BUFFER=1000
       - STREAM=DETAILS
     volumes:
       - ./sqlite/:/project/sqlite/
@@ -94,10 +94,10 @@ services:
       - lightshield_rabbitmq:rabbitmq
     restart: always
 
-  processor:
+  processor_match:
     build:
       dockerfile: Dockerfile
-      context: services/processor
+      context: services/processor_match
     environment:
       - SERVER=${SERVER}
       - STREAM="placeholder"

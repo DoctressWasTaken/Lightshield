@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from lol_dto import Match
 import traceback
 import aio_pika
+import asyncpg
 
 class MatchProcessor(threading.Thread):
 
@@ -88,7 +89,10 @@ class MatchProcessor(threading.Thread):
                 await session.commit()
 
     async def run(self):
-        await self.rabbit.init()
+        self.logging.info("Initiated Worker.")
+        self.connection = await aio_pika.connect_robust(
+            "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
+        )
         await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(1)])
 
 
