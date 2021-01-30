@@ -118,7 +118,7 @@ class Runes(Base):
 
     @classmethod
     async def create(cls, match, participantId):
-        participant = match['participants'][participantId]
+        participant = match['participants'][participantId - 1]
 
         runeObjects = []
         for i in range(6):
