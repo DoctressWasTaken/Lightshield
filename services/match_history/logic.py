@@ -171,12 +171,13 @@ class Service:
                 consumer_tag = await queue.consume(self.async_worker)
             elif consumer_tag:
                 self.logging.info("Stopping consume")
-                queue.cancel(consumer_tag)
+                await queue.cancel(consumer_tag)
+                consumer_tag = None
             await asyncio.sleep(1)
 
         if consumer_tag:
-            queue.cancel(consumer_tag)
-        channel.close()
+            await queue.cancel(consumer_tag)
+        await channel.close()
         self.logging.info("Exited package manager.")
 
     async def run(self):
