@@ -152,11 +152,12 @@ class Service:
                 await asyncio.sleep(0.1)
 
     async def package_manager(self):
+        self.logging.info("Starting package manager.")
         connection = await aio_pika.connect_robust(
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
         )
         channel = await connection.channel()
-        await channel.set_qos(prefetch_count=100)
+        await channel.set_qos(prefetch_count=50)
         queue = await channel.declare_queue(
             name=self.server + "_SUMMONER_TO_HISTORY",
             durable=True,
@@ -180,6 +181,7 @@ class Service:
     async def run(self):
         """Runner."""
         await self.init()
+        self.logging.info("Initiated.")
         fill_task = asyncio.create_task(self.rabbit.fill_queue())
         await self.package_manager()
         await fill_task
