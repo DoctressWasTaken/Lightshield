@@ -33,6 +33,7 @@ class SummonerProcessor(threading.Thread):
             robust=True
         )
         tasks = {}
+        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
         while not self.stopped:
             try:
                 while len(tasks) < 100 and not self.stopped:
@@ -60,14 +61,15 @@ class SummonerProcessor(threading.Thread):
                                    losses = EXCLUDED.losses
                     ;
                     """ % values
-                conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
                 await conn.execute(query)
-                await conn.close()
                 tasks = {}
 
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
                 print(err)
+        await conn.close()
+
+        await channel.close()
 
     async def run(self):
         self.logging.info("Initiated Worker.")
