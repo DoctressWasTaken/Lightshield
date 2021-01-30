@@ -81,16 +81,11 @@ class RabbitManager:
                     queues = {entry['name']: entry['messages'] for entry in resp}
                     was_blocked = self.blocked
                     self.blocked = False
-                    queue_identifier = self.server + "_" + self.streamID
+                    queue_identifier = self.server.upper() + "_" + self.streamID
                     for queue in queues:
-                        self.logging.info(queue)
-                        self.logging.info(queues[queue])
                         if queue.startswith(queue_identifier):
-                            self.logging.info("Relevant queue")
                             try:
-                                
                                 if int(queues[queue]) > self.max_buffer:
-                                    self.logging.info("Blocking")
                                     if not was_blocked:
                                         self.logging.info("Queue %s is too full [%s/%s]", 
                                                 queue, queues[queue], self.max_buffer)

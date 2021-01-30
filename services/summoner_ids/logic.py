@@ -102,6 +102,8 @@ class Service:
             finally:
                 del self.buffered_elements[identifier]
                 await task.ack()
+            while self.rabbit.blocked:
+                await asyncio.sleep(0.5)
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
