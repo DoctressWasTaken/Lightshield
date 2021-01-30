@@ -67,8 +67,10 @@ class Service:
                     'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
                     matches = matches - int(prev[0][0])
                 if matches < self.required_matches:
+                    self.active_tasks -= 1
                     return
                 if accountId in self.buffered_elements:
+                    self.active_tasks -= 1
                     return
                 self.buffered_elements[accountId] = True
                 self.working_tasks.append(
@@ -76,8 +78,6 @@ class Service:
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
-        finally:
-            self.active_tasks -= 1
 
     async def async_worker(self, accountId, matches):
         try:
@@ -110,6 +110,7 @@ class Service:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
         finally:
+            self.active_tasks -= 1
             self.logging.info("Finished task.")
             del self.buffered_elements[accountId]
 
