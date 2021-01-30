@@ -166,7 +166,6 @@ class Service:
         consumer_tag = None
         self.logging.info("Initialized package manager.")
         while not self.stopped:
-            self.logging.info(consumer_tag)
             if not self.rabbit.blocked and consumer_tag is None and len(self.buffered_elements) < 10:
                 self.logging.info("Starting consume")
                 consumer_tag = await queue.consume(self.async_worker)
@@ -184,6 +183,6 @@ class Service:
         """Runner."""
         await self.init()
         self.logging.info("Initiated.")
-        fill_task = asyncio.create_task(self.rabbit.fill_queue())
+        check_task = asyncio.create_task(self.rabbit.check_full())
         await self.package_manager()
-        await fill_task
+        await check_task
