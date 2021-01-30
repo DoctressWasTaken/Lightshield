@@ -69,7 +69,7 @@ class SummonerProcessor(threading.Thread):
 
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
-                print(err)
+                self.logging.info(err)
         await self.conn.close()
 
         await channel.close()
