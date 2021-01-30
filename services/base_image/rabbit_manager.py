@@ -72,7 +72,7 @@ class RabbitManager:
         headers = {
             'content-type': 'application/json'
         }
-        self.logging.info("Initiating buffer checker")
+        self.logging.info("Initiating buffer checker. Max buffer: %s", self.max_buffer)
         async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
             while not self.stopped:
                 async with session.get(
@@ -83,17 +83,21 @@ class RabbitManager:
                     self.blocked = False
                     queue_identifier = self.server + "_" + self.streamID
                     for queue in queues:
+                        self.logging.info(queue)
+                        self.logging.info(queues[queue])
                         if queue.startswith(queue_identifier):
+                            self.logging.info("Relevant queue")
                             try:
                                 
                                 if int(queues[queue]) > self.max_buffer:
+                                    self.logging.info("Blocking")
                                     if not was_blocked:
                                         self.logging.info("Queue %s is too full [%s/%s]", 
                                                 queue, queues[queue], self.max_buffer)
                                     self.blocked = True
 
                             except Exception as err:
-                                print(err)
+                                self.logging.info(err)
                                 raise err
                     if was_blocked and not self.blocked:
                         self.logging.info("Blocker released.")
