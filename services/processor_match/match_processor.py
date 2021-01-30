@@ -63,7 +63,7 @@ class MatchProcessor(threading.Thread):
                     return
                 async with AsyncSession(self.permanent.engine) as session:
                     async with session.begin():
-                        session.bulk_save_objects(
+                        session.add_all(
                             tasks
                         )
                     await session.commit()
