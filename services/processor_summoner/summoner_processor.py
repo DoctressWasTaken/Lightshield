@@ -69,7 +69,7 @@ class SummonerProcessor(threading.Thread):
                 if not conn:
                     self.logging.info("Creating connection")
                     conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-                self.logging.info(await conn.execute(query))
+                await conn.execute(query)
                 tasks = {}
 
             except Exception as err:
