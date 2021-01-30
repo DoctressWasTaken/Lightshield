@@ -2,7 +2,6 @@ import threading
 import logging
 import asyncio
 import pickle
-from rabbit_manager import RabbitManager
 from sqlalchemy.ext.asyncio import AsyncSession
 from lol_dto import Match
 import traceback
