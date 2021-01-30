@@ -64,10 +64,10 @@ class MatchProcessor(threading.Thread):
                 team_list = []
                 player_list = []
                 runes_list = []
-                m_keys = [col.__str__.split(".")[0] for col in tasks[0]['match'].__table__.columns]
-                t_keys = [col.__str__.split(".")[0] for col in tasks[0]['team'][0].__table__.columns]
-                p_keys = [col.__str__.split(".")[0] for col in tasks[0]['player'][0].__table__.columns]
-                r_keys = [col.__str__.split(".")[0] for col in tasks[0]['runes'][0][0].__table__.columns]
+                m_keys = [col.__str__().split(".")[0] for col in tasks[0]['match'].__table__.columns]
+                t_keys = [col.__str__().split(".")[0] for col in tasks[0]['team'][0].__table__.columns]
+                p_keys = [col.__str__().split(".")[0] for col in tasks[0]['player'][0].__table__.columns]
+                r_keys = [col.__str__().split(".")[0] for col in tasks[0]['runes'][0][0].__table__.columns]
 
                 for entry in tasks:
                     m = entry['match']
