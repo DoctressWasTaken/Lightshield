@@ -8,6 +8,8 @@ from exceptions import RatelimitException, NotFoundException, Non200Exception
 from datetime import datetime, timedelta
 from repeat_marker import RepeatMarker
 from rabbit_manager import RabbitManager
+import aio_pika
+import traceback
 
 class Service:
     """Core service worker object."""
@@ -54,27 +56,18 @@ class Service:
         self.stopped = True
         self.rabbit.shutdown()
 
-    async def async_worker(self):
-        self.logging.info("Initiated worker.")
-        while not self.stopped:
-            while self.rabbit.blocked:
-                await asyncio.sleep(1)
-                if self.stopped:
-                    return
-
-            if not (task := await self.rabbit.get()):
-                await asyncio.sleep(1)
-                continue
-            accountId, puuid, rank, wins, losses = pickle.loads(task.body)
+    async def async_worker(self, message):
+        async with message.process():
+            accountId, puuid, rank, wins, losses = pickle.loads(message.body)
             matches = wins + losses
             try:
                 if prev := await self.marker.execute_read(
                     'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
                     matches = matches - int(prev[0][0])
                 if matches < self.required_matches:
-                    continue
+                    return
                 if accountId in self.buffered_elements:
-                    continue
+                    return
                 self.buffered_elements[accountId] = True
 
                 matches_to_call = matches + 3
@@ -91,7 +84,6 @@ class Service:
                             )
                         ))
                         await asyncio.sleep(0.1)
-
                         responses = await asyncio.gather(*calls_in_progress)
                         match_data = list(set().union(*responses))
                         await self.marker.execute_write(
@@ -102,9 +94,8 @@ class Service:
                             await self.rabbit.add_task(id)
 
             except NotFoundException:
-                pass
+                return
             finally:
-                await task.ack()
                 del self.buffered_elements[accountId]
 
     async def fetch(self, session, url):
@@ -156,12 +147,33 @@ class Service:
             except Non200Exception:
                 await asyncio.sleep(0.1)
 
+    async def package_manager(self):
+        connection = await aio_pika.connect_robust(
+            "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
+        )
+        channel = await connection.channel()
+        await channel.set_qos(prefetch_count=100)
+        queue = await channel.declare_queue(
+            name=self.server + "_SUMMONER_TO_HISTORY",
+            durable=True,
+            robust=True
+        )
+        consumer_tag = None
+        while not self.stopped:
+            if not self.rabbit.blocked and consumer_tag is None and len(self.buffered_elements) < 10:
+                consumer_tag = await queue.consume(self.async_worker)
+            elif consumer_tag:
+                queue.cancel(consumer_tag)
+            await asyncio.sleep(1)
+
+        if consumer_tag:
+            queue.cancel(consumer_tag)
+        channel.close()
+        self.logging.info("Exited package manager.")
+
     async def run(self):
         """Runner."""
         await self.init()
-        rabbit_check = asyncio.create_task(self.rabbit.check_full())
         fill_task = asyncio.create_task(self.rabbit.fill_queue())
-
-        await asyncio.gather(*[asyncio.create_task(self.async_worker()) for _ in range(5)])
-        await rabbit_check
+        await self.package_manager()
         await fill_task
