@@ -11,6 +11,7 @@ from rabbit_manager import RabbitManager
 import aio_pika
 import traceback
 
+
 class Service:
     """Core service worker object."""
 
@@ -64,7 +65,7 @@ class Service:
                 accountId, puuid, rank, wins, losses = pickle.loads(message.body)
                 matches = wins + losses
                 if prev := await self.marker.execute_read(
-                    'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
+                        'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
                     matches = matches - int(prev[0][0])
                 if matches < self.required_matches:
                     self.active_tasks -= 1
@@ -98,9 +99,7 @@ class Service:
                     responses = await asyncio.gather(*calls_in_progress)
                     match_data = list(set().union(*responses))
                     await self.marker.execute_write(
-                        """REPLACE INTO match_history (accountId, matches)
-                           VALUES ("%s", %s)
-                        """ % (matches, accountId))
+                        'REPLACE INTO match_history (accountId, matches) VALUES (\'%s\', %s)' % (matches, accountId))
                     while match_data:
                         id = match_data.pop()
                         await self.rabbit.add_task(id)
@@ -116,34 +115,34 @@ class Service:
             del self.buffered_elements[accountId]
 
     async def fetch(self, session, url):
-            """Execute call to external target using the proxy server.
+        """Execute call to external target using the proxy server.
 
-            Receives aiohttp session as well as url to be called. Executes the request and returns
-            either the content of the response as json or raises an exeption depending on response.
-            :param session: The aiohttp Clientsession used to execute the call.
-            :param url: String url ready to be requested.
+        Receives aiohttp session as well as url to be called. Executes the request and returns
+        either the content of the response as json or raises an exeption depending on response.
+        :param session: The aiohttp Clientsession used to execute the call.
+        :param url: String url ready to be requested.
 
-            :returns: Request response as dict.
+        :returns: Request response as dict.
 
-            :raises RatelimitException: on 429 or 430 HTTP Code.
-            :raises NotFoundException: on 404 HTTP Code.
-            :raises Non200Exception: on any other non 200 HTTP Code.
-            """
-            try:
-                async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
-                    await response.text()
-            except aiohttp.ClientConnectionError:
-                raise Non200Exception()
-            if response.status in [429, 430]:
-                if "Retry-After" in response.headers:
-                    delay = int(response.headers['Retry-After'])
-                    self.retry_after = datetime.now() + timedelta(seconds=delay)
-                raise RatelimitException()
-            if response.status == 404:
-                raise NotFoundException()
-            if response.status != 200:
-                raise Non200Exception()
-            return await response.json(content_type=None)
+        :raises RatelimitException: on 429 or 430 HTTP Code.
+        :raises NotFoundException: on 404 HTTP Code.
+        :raises Non200Exception: on any other non 200 HTTP Code.
+        """
+        try:
+            async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
+                await response.text()
+        except aiohttp.ClientConnectionError:
+            raise Non200Exception()
+        if response.status in [429, 430]:
+            if "Retry-After" in response.headers:
+                delay = int(response.headers['Retry-After'])
+                self.retry_after = datetime.now() + timedelta(seconds=delay)
+            raise RatelimitException()
+        if response.status == 404:
+            raise NotFoundException()
+        if response.status != 200:
+            raise Non200Exception()
+        return await response.json(content_type=None)
 
     async def handler(self, session, url):
         rate_flag = False
@@ -186,7 +185,6 @@ class Service:
                     await asyncio.sleep(0.5)
 
         self.logging.info("Exited package manager.")
-
 
     async def run(self):
         """Runner."""
