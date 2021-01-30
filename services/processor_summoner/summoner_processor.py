@@ -23,7 +23,6 @@ class SummonerProcessor(threading.Thread):
         self.server = server
         self.sql = db
         self.db = None
-        self.conn = None  # Connection object to the DB
 
     async def async_worker(self):
         channel = await self.connection.channel()
@@ -34,6 +33,7 @@ class SummonerProcessor(threading.Thread):
             robust=True
         )
         tasks = {}
+        conn = None
         while not self.stopped:
             try:
                 while len(tasks) < 100 and not self.stopped:
@@ -47,8 +47,9 @@ class SummonerProcessor(threading.Thread):
 
                     if len(tasks) < 100 and not self.stopped:
                         self.logging.info("Found no tasks. Taking a short break.")
-                        await self.conn.close()  # close db connection when not finding messages
-                        self.conn = None
+                        if conn:
+                            await conn.close()  # close db connection when not finding messages
+                        conn = None
                         await asyncio.sleep(5)
 
                 self.logging.info("Inserting %s summoner.", len(tasks))
@@ -65,18 +66,16 @@ class SummonerProcessor(threading.Thread):
                                    losses = EXCLUDED.losses
                     ;
                     """ % values
-                if not self.conn:
+                if not conn:
                     self.logging.info("Creating connection")
-                    self.conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-                await asyncio.sleep(2)
-                self.logging.info("Executing query.")
-                self.logging.info(await self.conn.execute(query))
+                    conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+                self.logging.info(await conn.execute(query))
                 tasks = {}
 
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
                 self.logging.info(err)
-        await self.conn.close()
+        await conn.close()
 
         await channel.close()
 
