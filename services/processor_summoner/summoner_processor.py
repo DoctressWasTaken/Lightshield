@@ -46,8 +46,10 @@ class SummonerProcessor(threading.Thread):
                                 break
 
                     if len(tasks) < 100 and not self.stopped:
+                        self.logging.info("Found no tasks. Taking a short break.")
                         await self.conn.close()  # close db connection when not finding messages
-                        await asyncio.sleep(2)
+                        self.conn = None
+                        await asyncio.sleep(5)
 
                 self.logging.info("Inserting %s summoner.", len(tasks))
                 value_lists = ["('%s', '%s', %s, %s, %s)" % tuple(task) for task in tasks.values()]
