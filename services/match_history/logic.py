@@ -99,7 +99,7 @@ class Service:
                     match_data = list(set().union(*responses))
                     await self.marker.execute_write(
                         """REPLACE INTO match_history (accountId, matches)
-                           VALUES ('%s', %s)
+                           VALUES ("%s", %s)
                         """ % (matches, accountId))
                     while match_data:
                         id = match_data.pop()
