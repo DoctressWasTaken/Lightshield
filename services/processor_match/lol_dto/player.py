@@ -110,7 +110,7 @@ class Runes(Base):
 
     matchId = Column(BigInteger, primary_key=True)
     participantId = Column(SmallInteger, primary_key=True)
-    position = Column(VARCHAR(1), primary_key=True)
+    position = Column(SmallInteger, primary_key=True)
     runeId = Column(SmallInteger)
     stats1 = Column(Integer)
     stats2 = Column(Integer)
