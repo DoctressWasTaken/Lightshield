@@ -108,6 +108,9 @@ services:
       - persistant_db:postgres
     depends_on:
       - structural_creator
+      - processor_summoner
+    volumes:
+      - ./lol_dto:/project/lol_dto
     restart: always
     logging:
       driver: "json-file"
@@ -127,6 +130,8 @@ services:
       - persistant_db:postgres
     depends_on:
       - structural_creator
+    volumes:
+      - ./lol_dto:/project/lol_dto
     restart: always
     logging:
       driver: "json-file"
