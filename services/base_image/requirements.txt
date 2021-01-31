@@ -4,5 +4,5 @@ websockets
 uvloop
 aiosqlite
 aiormq>=2.7
-aio-pika
+aio-pika==6.7.1
 pika
