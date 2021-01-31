@@ -60,35 +60,30 @@ class Service:
 
     async def task_selector(self, message):
         self.logging.debug("Started task.")
-        try:
-            identifier, rank, wins, losses = content = pickle.loads(message.body)
-            if data := await self.marker.execute_read(
-                    'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
-                # Pass on package directly if IDs already aquired
-                self.logging.debug("Already existent skipping.")
-                package = {'accountId': data[0][0], 'puuid': data[0][1]}
+        identifier, rank, wins, losses = content = pickle.loads(message.body)
+        if data := await self.marker.execute_read(
+                'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
+            # Pass on package directly if IDs already aquired
+            self.logging.debug("Already existent skipping.")
+            package = {'accountId': data[0][0], 'puuid': data[0][1]}
 
-                await self.rabbit.add_task([
-                    package['accountId'],
-                    package['puuid'],
-                    rank,
-                    wins,
-                    losses
-                ])
-            elif identifier not in self.buffered_elements:
-                # Create request task if it is not currently run already
-                self.logging.debug("Creating extended task.")
-                self.active_tasks.append(
-                    asyncio.create_task(self.async_worker(content))
-                )
-                return
-            # Case: data not already aquired but currently in progress
-            # Discards task
-            self.logging.debug("Discarding task.")
-        except Exception as err:
-            traceback.print_tb(err.__traceback__)
-            self.logging.info(err)
-            raise err
+            await self.rabbit.add_task([
+                package['accountId'],
+                package['puuid'],
+                rank,
+                wins,
+                losses
+            ])
+        elif identifier not in self.buffered_elements:
+            # Create request task if it is not currently run already
+            self.logging.debug("Creating extended task.")
+            self.active_tasks.append(
+                asyncio.create_task(self.async_worker(content))
+            )
+            return
+        # Case: data not already aquired but currently in progress
+        # Discards task
+        self.logging.debug("Discarding task.")
 
     async def async_worker(self, content):
         """Create only a new call if the summoner is not yet in the db."""
@@ -159,30 +154,35 @@ class Service:
         await self.rabbit.init()
 
     async def package_manager(self):
-        self.logging.info("Starting package manager.")
-        connection = await aio_pika.connect_robust(
-            "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
-        )
-        channel = await connection.channel()
-        await channel.set_qos(prefetch_count=50)
-        queue = await channel.declare_queue(
-            name=self.server + "_RANKED_TO_SUMMONER",
-            durable=True,
-            robust=True
-        )
-        self.logging.info("Initialized package manager.")
-        async with queue.iterator() as queue_iter:
-            async for message in queue_iter:
-                async with message.process():
-                    await self.task_selector(message)
+        try:
+            self.logging.info("Starting package manager.")
+            connection = await aio_pika.connect_robust(
+                "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
+            )
+            channel = await connection.channel()
+            await channel.set_qos(prefetch_count=50)
+            queue = await channel.declare_queue(
+                name=self.server + "_RANKED_TO_SUMMONER",
+                durable=True,
+                robust=True
+            )
+            self.logging.info("Initialized package manager.")
+            async with queue.iterator() as queue_iter:
+                async for message in queue_iter:
+                    async with message.process():
+                        await self.task_selector(message)
 
-                while len(self.buffered_elements) >= 25 or self.rabbit.blocked:
-                    if self.active_tasks:
-                        await asyncio.gather(*self.active_tasks)
-                        self.active_tasks = []
-                    await asyncio.sleep(0.5)
+                    while len(self.buffered_elements) >= 25 or self.rabbit.blocked:
+                        if self.active_tasks:
+                            await asyncio.gather(*self.active_tasks)
+                            self.active_tasks = []
+                        await asyncio.sleep(0.5)
 
-        self.logging.info("Exited package manager.")
+            self.logging.info("Exited package manager.")
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
+            raise err
 
     async def run(self):
         """Runner."""
