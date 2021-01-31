@@ -109,6 +109,11 @@ services:
     depends_on:
       - structural_creator
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+       max-file: "5"
+       max-size: "10m"
 
   processor_summoner:
     build:
@@ -123,6 +128,11 @@ services:
     depends_on:
       - structural_creator
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+       max-file: "5"
+       max-size: "10m"
 
   persistant_db:
     container_name: ${COMPOSE_PROJECT_NAME}_persistant_db
