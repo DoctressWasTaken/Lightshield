@@ -13,7 +13,7 @@ import os
 from repeat_marker import RepeatMarker
 from rabbit_manager import RabbitManager
 import aio_pika
-
+import traceback
 
 class Service:
     """Core service worker object."""
@@ -62,31 +62,36 @@ class Service:
     async def task_selector(self, message):
         self.logging.debug("Started task.")
         async with message.process():
-            identifier, rank, wins, losses = content = pickle.loads(message.body)
-            if data := await self.marker.execute_read(
-                    'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
-                # Pass on package directly if IDs already aquired
-                self.logging.debug("Already existent skipping.")
-                package = {'accountId': data[0][0], 'puuid': data[0][1]}
+            try:
+                identifier, rank, wins, losses = content = pickle.loads(message.body)
+                if data := await self.marker.execute_read(
+                        'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
+                    # Pass on package directly if IDs already aquired
+                    self.logging.debug("Already existent skipping.")
+                    package = {'accountId': data[0][0], 'puuid': data[0][1]}
 
-                await self.rabbit.add_task([
-                    package['accountId'],
-                    package['puuid'],
-                    rank,
-                    wins,
-                    losses
-                ])
-            elif identifier not in self.buffered_elements:
-                # Create request task if it is not currently run already
-                self.logging.debug("Creating extended task.")
-                self.active_tasks.append(
-                    asyncio.create_task(self.async_worker(content))
-                )
-                return
-            # Case: data not already aquired but currently in progress
-            # Discards task
-            self.logging.debug("Discarding task.")
-            self.active_task_count -= 1
+                    await self.rabbit.add_task([
+                        package['accountId'],
+                        package['puuid'],
+                        rank,
+                        wins,
+                        losses
+                    ])
+                elif identifier not in self.buffered_elements:
+                    # Create request task if it is not currently run already
+                    self.logging.debug("Creating extended task.")
+                    self.active_tasks.append(
+                        asyncio.create_task(self.async_worker(content))
+                    )
+                    return
+                # Case: data not already aquired but currently in progress
+                # Discards task
+                self.logging.debug("Discarding task.")
+                self.active_task_count -= 1
+            except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
+            raise err
 
     async def async_worker(self, content):
         """Create only a new call if the summoner is not yet in the db."""
