@@ -12,7 +12,7 @@ class Team(Base):
     side = Column(Boolean, primary_key=True)  # False: Blue | True: Red
     bans = Column(JSON)
 
-    riftHeraldKills = Column(VARCHAR(1))
+    riftHeraldKills = Column(SmallInteger)
     dragonKills = Column(SmallInteger)
     baronKills = Column(SmallInteger)
     towerKills = Column(SmallInteger)
