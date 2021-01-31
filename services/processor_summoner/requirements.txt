@@ -5,3 +5,4 @@ pika
 asyncpg
 aio-pika
 psycopg2
+uvloop
