@@ -182,7 +182,7 @@ class Service:
                 self.active_tasks += 1
                 await self.task_selector(message)
 
-                while self.active_tasks >= 5 or self.rabbit.blocked:
+                while self.active_tasks >= 10 or self.rabbit.blocked:
                     await asyncio.sleep(0.5)
 
         self.logging.info("Exited package manager.")
