@@ -38,7 +38,6 @@ class Service:
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
 
-        self.active_task_count = 0
         self.active_tasks = []
 
         self.rabbit = RabbitManager(
@@ -61,34 +60,32 @@ class Service:
 
     async def task_selector(self, message):
         self.logging.debug("Started task.")
-        async with message.process():
-            try:
-                identifier, rank, wins, losses = content = pickle.loads(message.body)
-                if data := await self.marker.execute_read(
-                        'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
-                    # Pass on package directly if IDs already aquired
-                    self.logging.debug("Already existent skipping.")
-                    package = {'accountId': data[0][0], 'puuid': data[0][1]}
+        try:
+            identifier, rank, wins, losses = content = pickle.loads(message.body)
+            if data := await self.marker.execute_read(
+                    'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
+                # Pass on package directly if IDs already aquired
+                self.logging.debug("Already existent skipping.")
+                package = {'accountId': data[0][0], 'puuid': data[0][1]}
 
-                    await self.rabbit.add_task([
-                        package['accountId'],
-                        package['puuid'],
-                        rank,
-                        wins,
-                        losses
-                    ])
-                elif identifier not in self.buffered_elements:
-                    # Create request task if it is not currently run already
-                    self.logging.debug("Creating extended task.")
-                    self.active_tasks.append(
-                        asyncio.create_task(self.async_worker(content))
-                    )
-                    return
-                # Case: data not already aquired but currently in progress
-                # Discards task
-                self.logging.debug("Discarding task.")
-                self.active_task_count -= 1
-            except Exception as err:
+                await self.rabbit.add_task([
+                    package['accountId'],
+                    package['puuid'],
+                    rank,
+                    wins,
+                    losses
+                ])
+            elif identifier not in self.buffered_elements:
+                # Create request task if it is not currently run already
+                self.logging.debug("Creating extended task.")
+                self.active_tasks.append(
+                    asyncio.create_task(self.async_worker(content))
+                )
+                return
+            # Case: data not already aquired but currently in progress
+            # Discards task
+            self.logging.debug("Discarding task.")
+        except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
             raise err
@@ -121,7 +118,6 @@ class Service:
         finally:
             self.logging.debug("Finished extended task.")
             del self.buffered_elements[identifier]
-            self.active_task_count -= 1
 
 
     async def fetch(self, session, url):
@@ -177,10 +173,10 @@ class Service:
         self.logging.info("Initialized package manager.")
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
-                self.active_task_count += 1
-                await self.task_selector(message)
+                async with message.process():
+                    await self.task_selector(message)
 
-                while self.active_task_count >= 25 or self.rabbit.blocked:
+                while len(self.buffered_elements) >= 25 or self.rabbit.blocked:
                     if self.active_tasks:
                         await asyncio.gather(*self.active_tasks)
                         self.active_tasks = []
