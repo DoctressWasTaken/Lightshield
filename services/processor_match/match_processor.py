@@ -6,6 +6,7 @@ from lol_dto import Match
 import traceback
 import aio_pika
 import asyncpg
+from sqlalchemy.sql import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 async def create_set(data_list):
@@ -50,10 +51,14 @@ class MatchProcessor(threading.Thread):
         while not self.stopped:
             tasks = []
             try:
+                async with self.permanent.engine.connect() as conn:
                 async with queue.iterator() as queue_iter:
                     async for message in queue_iter:
                         async with message.process():
                             task = pickle.loads(message.body)
+                            result = await conn.execute(select(Match.c.matchId)).where(Match.c.matchId == task['gameId'])
+                            if result.fetchone():
+                                continue
                             items = await Match.create(task)
                             tasks += items
 
