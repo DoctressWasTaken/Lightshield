@@ -35,7 +35,10 @@ class Match(Base):
 
         objects += [await Team.create(match, 0), await Team.create(match, 1)] + await asyncio.gather(*[
             asyncio.create_task(Player.create(match, i)) for i in range(1, 11)
-        ]) + await asyncio.gather(*[
-            asyncio.create_task(Runes.create(match, i)) for i in range(1, 11)
         ])
+        for entry in await asyncio.gather(*[
+            asyncio.create_task(Runes.create(match, i)) for i in range(1, 11)
+        ]):
+            objects += entry
+
         return objects
