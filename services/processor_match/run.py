@@ -5,7 +5,6 @@ from permanent_db import PermanentDB
 import time
 import threading
 import signal
-
 from match_processor import MatchProcessor
 
 
