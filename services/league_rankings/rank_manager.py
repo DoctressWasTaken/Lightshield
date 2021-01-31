@@ -1,8 +1,7 @@
 """Manage which rank is to be crawled next."""
 import json
-import os
-import asyncio
 import logging
+import os
 from datetime import datetime, timedelta
 
 tiers = [
@@ -69,7 +68,7 @@ class RankManager:
             if not oldest_timestamp or entry[2] < oldest_timestamp:
                 oldest_key = entry[0:2]
                 oldest_timestamp = entry[2]
-        #if (total_seconds := (datetime.now() - datetime.fromtimestamp(
+        # if (total_seconds := (datetime.now() - datetime.fromtimestamp(
         #        oldest_timestamp)).total_seconds() - self.update_interval * 3600) > 0:
         #    self.logging.info("Waiting for %s seconds before starting next element.",
         #                      total_seconds)

@@ -1,6 +1,7 @@
 """Default worker module containing the Worker class."""
 import asyncio
 from datetime import datetime
+
 import aiohttp
 
 

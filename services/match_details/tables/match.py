@@ -1,5 +1,6 @@
 """Tables related to Match Data."""
 from sqlalchemy import Column, Integer, String, Enum, BigInteger, JSON
+
 from . import Base
 from .enums import Server
 

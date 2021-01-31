@@ -3,17 +3,19 @@
 No Service defined as the service is exactly the same as the default case.
 Import is done directly.
 """
-from exceptions import RatelimitException, NotFoundException, Non200Exception
-from datetime import datetime, timedelta
 import asyncio
-import aiohttp
-import pickle
 import logging
 import os
-from repeat_marker import RepeatMarker
-from rabbit_manager import RabbitManager
-import aio_pika
+import pickle
 import traceback
+from datetime import datetime, timedelta
+
+import aio_pika
+import aiohttp
+from exceptions import RatelimitException, NotFoundException, Non200Exception
+from rabbit_manager import RabbitManager
+from repeat_marker import RepeatMarker
+
 
 class Service:
     """Core service worker object."""
@@ -48,10 +50,10 @@ class Service:
 
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
         asyncio.run(self.marker.build(
-               "CREATE TABLE IF NOT EXISTS summoner_ids("
-               "summonerId TEXT PRIMARY KEY,"
-               "accountId TEXT,"
-               "puuid TEXT);"))
+            "CREATE TABLE IF NOT EXISTS summoner_ids("
+            "summonerId TEXT PRIMARY KEY,"
+            "accountId TEXT,"
+            "puuid TEXT);"))
 
     def shutdown(self):
         """Called on shutdown init."""
@@ -98,7 +100,7 @@ class Service:
             await self.marker.execute_write(
                 'REPLACE INTO summoner_ids (summonerId, accountId, puuid) '
                 'VALUES ("%s", "%s", "%s");' % (
-                identifier, response['accountId'], response['puuid']))
+                    identifier, response['accountId'], response['puuid']))
 
             await self.rabbit.add_task([
                 response['accountId'],
@@ -106,14 +108,13 @@ class Service:
                 rank,
                 wins,
                 losses
-                ])
+            ])
 
         except (RatelimitException, NotFoundException, Non200Exception):
             return
         finally:
             self.logging.debug("Finished extended task.")
             del self.buffered_elements[identifier]
-
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.

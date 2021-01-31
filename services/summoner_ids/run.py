@@ -15,6 +15,7 @@ if __name__ == "__main__":
 
         service.shutdown()
 
+
     signal.signal(signal.SIGTERM, shutdown_handler)
 
     asyncio.run(service.run())

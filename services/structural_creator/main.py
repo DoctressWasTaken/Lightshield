@@ -1,19 +1,19 @@
-import aio_pika
 import asyncio
 import os
 
+import aio_pika
 from aio_pika import ExchangeType
 
 server = os.environ['SERVER']
+
 
 async def main(loop):
     print("Creating channels")
 
     connection = await aio_pika.connect_robust(
-        "amqp://guest:guest@rabbitmq/", loop=loop) 
-    
+        "amqp://guest:guest@rabbitmq/", loop=loop)
+
     async with connection:
-        
         channel = await connection.channel()
 
         # League Rankings
@@ -66,7 +66,6 @@ async def main(loop):
             name="%s_DETAILS_TO_PROCESSOR" % server,
             durable=True)
         await processor_details_in.bind(details_out, routing_key="#")
-
 
 
 if __name__ == "__main__":

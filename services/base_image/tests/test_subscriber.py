@@ -1,23 +1,20 @@
 # flake8: noqa
-import os
 import asyncio
-from unittest.mock import AsyncMock, Mock, patch, PropertyMock
+import os
+from unittest.mock import AsyncMock, Mock, patch
+
 from services.base_image.subscriber import Subscriber
-import websockets
-from websockets.exceptions import InvalidHandshake
+
 
 class TestSubscriber:
-
     subscriber = None
 
     def setup_method(self):
-
         os.environ['MAX_TASK_BUFFER'] = "10"
         self.subscriber = Subscriber(service_name='Test')
         self.loop = asyncio.get_event_loop()
 
     def test_initialization(self):
-
         assert self.subscriber.max_buffer == 10
 
     def test_pause_handler_not_stopped(self):

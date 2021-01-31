@@ -1,9 +1,10 @@
-import threading
-import logging
 import asyncio
+import logging
 import pickle
-import aio_pika
+import threading
 import traceback
+
+import aio_pika
 import asyncpg
 
 

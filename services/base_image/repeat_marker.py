@@ -3,11 +3,11 @@
 This is done by using a localized SQLite Database to hold the data.
 It provides a connection pool manager to avoid multiple worker overflowing the database.
 """
-import aiosqlite
 import logging
-import asyncio
 import os
 import socket
+
+import aiosqlite
 
 
 class RepeatMarker:
@@ -63,5 +63,3 @@ class RepeatMarker:
             async with aiosqlite.connect(dbname) as db:
                 await db.execute(query)
                 await db.commit()
-
-

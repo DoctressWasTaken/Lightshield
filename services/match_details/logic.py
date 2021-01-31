@@ -1,15 +1,17 @@
 """Match History updater. Pulls matchlists for all player."""
 import asyncio
-import aiohttp
-import pickle
 import logging
 import os
-from exceptions import RatelimitException, NotFoundException, Non200Exception
-from datetime import datetime, timedelta
-from repeat_marker import RepeatMarker
-from rabbit_manager import RabbitManager
-import aio_pika
+import pickle
 import traceback
+from datetime import datetime, timedelta
+
+import aio_pika
+import aiohttp
+from exceptions import RatelimitException, NotFoundException, Non200Exception
+from rabbit_manager import RabbitManager
+from repeat_marker import RepeatMarker
+
 
 class Service:
     """Core service worker object."""
@@ -53,9 +55,9 @@ class Service:
     async def limiter(self):
         """Method to periodically break down the db size by removing a % of the lowest match Ids."""
         retain_period_days = 60
-        removal = 100/retain_period_days
+        removal = 100 / retain_period_days
         while True:
-            await asyncio.sleep(24*60*60)
+            await asyncio.sleep(24 * 60 * 60)
             count = await self.marker.execute_read(
                 'SELECT COUNT(*) FROM match_id'
             )
@@ -86,59 +88,58 @@ class Service:
             self.logging.info(err)
 
     async def async_worker(self, matchId):
-            try:
-                self.buffered_elements[matchId] = True
-                url = self.url % matchId
-                if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
-                    await asyncio.sleep(delay)
-                async with aiohttp.ClientSession() as session:
-                    response = await self.fetch(session, url)
-                    await self.marker.execute_write(
-                        'INSERT OR IGNORE INTO match_id (id) VALUES (%s);' % matchId)
+        try:
+            self.buffered_elements[matchId] = True
+            url = self.url % matchId
+            if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
+                await asyncio.sleep(delay)
+            async with aiohttp.ClientSession() as session:
+                response = await self.fetch(session, url)
+                await self.marker.execute_write(
+                    'INSERT OR IGNORE INTO match_id (id) VALUES (%s);' % matchId)
 
-                    await self.rabbit.add_task(response)
-                self.active_tasks -= 1
+                await self.rabbit.add_task(response)
+            self.active_tasks -= 1
 
-            except (RatelimitException, Non200Exception):
-                self.working_tasks.append(
-                    asyncio.create_task(self.async_worker(matchId))
-                )
-            except NotFoundException:
-                self.active_tasks -= 1
-            finally:
-                if matchId in self.buffered_elements:
-                    del self.buffered_elements[matchId]
+        except (RatelimitException, Non200Exception):
+            self.working_tasks.append(
+                asyncio.create_task(self.async_worker(matchId))
+            )
+        except NotFoundException:
+            self.active_tasks -= 1
+        finally:
+            if matchId in self.buffered_elements:
+                del self.buffered_elements[matchId]
 
     async def fetch(self, session, url):
-            """Execute call to external target using the proxy server.
+        """Execute call to external target using the proxy server.
 
-            Receives aiohttp session as well as url to be called. Executes the request and returns
-            either the content of the response as json or raises an exeption depending on response.
-            :param session: The aiohttp Clientsession used to execute the call.
-            :param url: String url ready to be requested.
+        Receives aiohttp session as well as url to be called. Executes the request and returns
+        either the content of the response as json or raises an exeption depending on response.
+        :param session: The aiohttp Clientsession used to execute the call.
+        :param url: String url ready to be requested.
 
-            :returns: Request response as dict.
+        :returns: Request response as dict.
 
-            :raises RatelimitException: on 429 or 430 HTTP Code.
-            :raises NotFoundException: on 404 HTTP Code.
-            :raises Non200Exception: on any other non 200 HTTP Code.
-            """
-            try:
-                async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
-                    await response.text()
-            except aiohttp.ClientConnectionError:
-                raise Non200Exception()
-            if response.status in [429, 430]:
-                if "Retry-After" in response.headers:
-                    delay = int(response.headers['Retry-After'])
-                    self.retry_after = datetime.now() + timedelta(seconds=delay)
-                raise RatelimitException()
-            if response.status == 404:
-                raise NotFoundException()
-            if response.status != 200:
-                raise Non200Exception()
-            return await response.json(content_type=None)
-
+        :raises RatelimitException: on 429 or 430 HTTP Code.
+        :raises NotFoundException: on 404 HTTP Code.
+        :raises Non200Exception: on any other non 200 HTTP Code.
+        """
+        try:
+            async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
+                await response.text()
+        except aiohttp.ClientConnectionError:
+            raise Non200Exception()
+        if response.status in [429, 430]:
+            if "Retry-After" in response.headers:
+                delay = int(response.headers['Retry-After'])
+                self.retry_after = datetime.now() + timedelta(seconds=delay)
+            raise RatelimitException()
+        if response.status == 404:
+            raise NotFoundException()
+        if response.status != 200:
+            raise Non200Exception()
+        return await response.json(content_type=None)
 
     async def package_manager(self):
         self.logging.info("Starting package manager.")

@@ -1,5 +1,6 @@
 """Tables related to Summoner Data."""
 from sqlalchemy import Column, Integer, String, Enum
+
 from . import Base
 from .enums import Tier, Rank, Server
 

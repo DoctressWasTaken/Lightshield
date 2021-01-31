@@ -1,11 +1,13 @@
 import asyncio
-import os
-import aiohttp
-import logging
-import aio_pika
-from aio_pika import ExchangeType, Message, DeliveryMode
-import pickle
 import datetime
+import logging
+import os
+import pickle
+
+import aio_pika
+import aiohttp
+from aio_pika import ExchangeType, Message, DeliveryMode
+
 
 class RabbitManager:
 
@@ -87,8 +89,8 @@ class RabbitManager:
                             try:
                                 if int(queues[queue]) > self.max_buffer:
                                     if not was_blocked:
-                                        self.logging.info("Queue %s is too full [%s/%s]", 
-                                                queue, queues[queue], self.max_buffer)
+                                        self.logging.info("Queue %s is too full [%s/%s]",
+                                                          queue, queues[queue], self.max_buffer)
                                     self.blocked = True
 
                             except Exception as err:

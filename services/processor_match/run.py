@@ -17,7 +17,6 @@ async def main():
 
     matchTask = asyncio.create_task(matchP.run())
 
-
     def shutdown_handler():
         matchP.shutdown()
 
@@ -25,6 +24,6 @@ async def main():
 
     await matchTask
 
+
 if __name__ == "__main__":
     asyncio.run(main())
-

@@ -4,13 +4,13 @@ Each service can limit the output by providing a list of Required Subscriber. As
 required subscriber are connected the publisher will pause.
 Additional service can connect without halting/interrupting the publishing (e.g. logging systems).
 """
-import os
-import logging
 import asyncio
+import logging
+import os
 import threading
+
 import aioredis
 import websockets
-from aiohttp import web
 
 
 class Publisher(threading.Thread):
@@ -52,10 +52,10 @@ class Publisher(threading.Thread):
 
     def run(self) -> None:
         """Initiate the async loop/websocket server."""
-        
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         asyncio.run(self.async_run())
 
     async def init(self) -> None:

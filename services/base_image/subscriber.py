@@ -4,13 +4,12 @@ By linking a container to this container using the alias 'provider' this service
 attempt to connect to the publishing services websocket on (default) ws://provider:9999.
 The service will authenticate using the passed on service name.
 """
-import os
-import json
 import asyncio
 import logging
+import os
 import threading
+
 import aioredis
-import aiohttp
 import websockets
 
 

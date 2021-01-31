@@ -1,15 +1,16 @@
 """Match History updater. Pulls matchlists for all player."""
 import asyncio
-import aiohttp
-import pickle
 import logging
 import os
-from exceptions import RatelimitException, NotFoundException, Non200Exception
-from datetime import datetime, timedelta
-from repeat_marker import RepeatMarker
-from rabbit_manager import RabbitManager
-import aio_pika
+import pickle
 import traceback
+from datetime import datetime, timedelta
+
+import aio_pika
+import aiohttp
+from exceptions import RatelimitException, NotFoundException, Non200Exception
+from rabbit_manager import RabbitManager
+from repeat_marker import RepeatMarker
 
 
 class Service:
@@ -93,7 +94,8 @@ class Service:
                     await asyncio.sleep(0.1)
                     responses = await asyncio.gather(*calls_in_progress)
                     match_data = list(set().union(*responses))
-                    query = 'REPLACE INTO match_history (accountId, matches) VALUES (\'%s\', %s);' % (account_id, matches)
+                    query = 'REPLACE INTO match_history (accountId, matches) VALUES (\'%s\', %s);' % (
+                        account_id, matches)
                     await self.marker.execute_write(query)
 
                     while match_data:

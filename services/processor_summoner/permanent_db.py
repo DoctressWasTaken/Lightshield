@@ -1,7 +1,8 @@
-from lol_dto import (
-    Base, Summoner, Match, Team, Player, Runes)
 from sqlalchemy import create_engine
 from sqlalchemy_utils import create_database, database_exists
+
+from lol_dto import (
+    Base)
 
 
 class PermanentDB:

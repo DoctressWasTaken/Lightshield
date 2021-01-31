@@ -1,13 +1,14 @@
 """League Updater Module."""
 import asyncio
-from datetime import datetime, timedelta
-import os
-import aiohttp
 import logging
-from repeat_marker import RepeatMarker
-from rank_manager import RankManager
-from rabbit_manager import RabbitManager
+import os
+from datetime import datetime, timedelta
+
+import aiohttp
 from exceptions import RatelimitException, NotFoundException, Non200Exception
+from rabbit_manager import RabbitManager
+from rank_manager import RankManager
+from repeat_marker import RepeatMarker
 
 tiers = {
     "IRON": 0,
@@ -160,11 +161,11 @@ class Service:  # pylint: disable=R0902
             ranking = tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']
 
             await self.rabbit.add_task([
-                    entry['summonerId'],
-                    ranking,
-                    entry['wins'],
-                    entry['losses']
-                ])
+                entry['summonerId'],
+                ranking,
+                entry['wins'],
+                entry['losses']
+            ])
 
     async def run(self):
         """Override the default run method due to special case.
@@ -180,4 +181,3 @@ class Service:  # pylint: disable=R0902
             await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
             await self.rankmanager.update(key=(tier, division))
         await rabbit_check
-

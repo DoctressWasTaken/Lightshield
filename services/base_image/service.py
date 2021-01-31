@@ -1,14 +1,10 @@
 """Default worker module containing the Service class."""
-import asyncio
-import os
-import json
 import logging
-
+import os
 from datetime import datetime, timedelta
-from exceptions import RatelimitException, NotFoundException, Non200Exception
 
 import aiohttp
-import aioredis
+from exceptions import RatelimitException, NotFoundException, Non200Exception
 
 
 class ServiceClass:  # pylint: disable=R0902

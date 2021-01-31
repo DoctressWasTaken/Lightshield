@@ -7,15 +7,16 @@ E.g. If Data is not to be passed on further, but the service instead poses as a 
     is needed.
 """
 
-import signal
 import asyncio
-from publisher import Publisher
-from subscriber import Subscriber
-from logic import Service, Worker
-from repeat_marker import RepeatMarker
-import uvloop
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+import signal
 
+import uvloop
+from logic import Service, Worker
+from publisher import Publisher
+from repeat_marker import RepeatMarker
+from subscriber import Subscriber
+
+uvloop.install()
 
 if __name__ == "__main__":
     marker = RepeatMarker()
@@ -25,6 +26,7 @@ if __name__ == "__main__":
     subscriber = Subscriber(service_name="")
     service = Service(url_snippet="", marker=marker)
 
+
     def shutdown_handler():
         """Shutdown handler called by the termination signal manager.
 
@@ -33,6 +35,7 @@ if __name__ == "__main__":
         publisher.shutdown()
         subscriber.shutdown()
         service.shutdown()
+
 
     signal.signal(signal.SIGTERM, shutdown_handler)
 
