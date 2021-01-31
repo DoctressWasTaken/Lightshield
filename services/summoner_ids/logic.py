@@ -159,24 +159,26 @@ class Service:
             connection = await aio_pika.connect_robust(
                 "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
             )
-            channel = await connection.channel()
-            await channel.set_qos(prefetch_count=50)
-            queue = await channel.declare_queue(
-                name=self.server + "_RANKED_TO_SUMMONER",
-                durable=True,
-                robust=True
-            )
-            self.logging.info("Initialized package manager.")
-            async with queue.iterator() as queue_iter:
-                async for message in queue_iter:
-                    async with message.process():
-                        await self.task_selector(message)
+            async with connection:
+                channel = await connection.channel()
+                await channel.set_qos(prefetch_count=50)
+                queue = await channel.declare_queue(
+                    name=self.server + "_RANKED_TO_SUMMONER",
+                    durable=True,
+                    robust=True
+                )
+                self.logging.info("Initialized package manager.")
 
-                    while len(self.buffered_elements) >= 25 or self.rabbit.blocked:
-                        if self.active_tasks:
-                            await asyncio.gather(*self.active_tasks)
-                            self.active_tasks = []
-                        await asyncio.sleep(0.5)
+                async with queue.iterator() as queue_iter:
+                    async for message in queue_iter:
+                        async with message.process():
+                            await self.task_selector(message)
+
+                        while len(self.buffered_elements) >= 25 or self.rabbit.blocked:
+                            if self.active_tasks:
+                                await asyncio.gather(*self.active_tasks)
+                                self.active_tasks = []
+                            await asyncio.sleep(0.5)
 
             self.logging.info("Exited package manager.")
         except Exception as err:
