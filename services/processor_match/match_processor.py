@@ -1,13 +1,14 @@
-import threading
-import logging
 import asyncio
+import logging
 import pickle
-from lol_dto import Match
+import threading
 import traceback
+
 import aio_pika
-import asyncpg
-from sqlalchemy.sql import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import select
+
+from lol_dto import Match
 
 
 async def create_set(data_list):

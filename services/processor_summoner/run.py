@@ -1,12 +1,12 @@
 import asyncio
-import datetime
 import os
-from permanent_db import PermanentDB
-import time
-import threading
 import signal
 
+import uvloop
+from permanent_db import PermanentDB
 from summoner_processor import SummonerProcessor
+
+uvloop.install()
 
 
 async def main():
@@ -16,7 +16,6 @@ async def main():
     summonerP = SummonerProcessor(server, permanent)
 
     summonerTask = asyncio.create_task(summonerP.run())
-   
 
     def shutdown_handler():
         summonerP.shutdown()

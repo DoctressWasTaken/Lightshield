@@ -1,11 +1,12 @@
 import asyncio
-import datetime
 import os
-from permanent_db import PermanentDB
-import time
-import threading
 import signal
+
+import uvloop
 from match_processor import MatchProcessor
+from permanent_db import PermanentDB
+
+uvloop.install()
 
 
 async def main():
