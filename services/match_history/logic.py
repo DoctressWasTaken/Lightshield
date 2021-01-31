@@ -49,8 +49,7 @@ class Service:
 
         self.timelimit = int(os.environ['TIME_LIMIT'])
         self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
-        self.active_tasks = 0
-        self.working_tasks = []
+        self.active_tasks = []
 
     async def init(self):
         """Initiate timelimit for pulled matches."""
@@ -63,17 +62,17 @@ class Service:
         self.rabbit.shutdown()
 
     async def task_selector(self, message):
-        account_id, puuid, rank, wins, losses = pickle.loads(message.body)
+        accountId, puuid, rank, wins, losses = pickle.loads(message.body)
         matches = wins + losses
         if prev := await self.marker.execute_read(
-                'SELECT matches FROM match_history WHERE accountId = "%s"' % account_id):
+                'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
             matches = matches - int(prev[0][0])
         if matches < self.required_matches:
             return
-        if account_id in self.buffered_elements:
+        if accountId in self.buffered_elements:
             return
-        self.working_tasks.append(
-            asyncio.create_task(self.async_worker(account_id, matches)))
+        self.active_tasks.append(
+            asyncio.create_task(self.async_worker(accountId, matches)))
 
     async def async_worker(self, account_id, matches):
         self.buffered_elements[account_id] = True
@@ -107,7 +106,6 @@ class Service:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
         finally:
-            self.active_tasks -= 1
             self.logging.debug("Finished task.")
             del self.buffered_elements[account_id]
 
