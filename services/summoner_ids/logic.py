@@ -14,15 +14,19 @@ from repeat_marker import RepeatMarker
 from rabbit_manager import RabbitManager
 import aio_pika
 
+
 class Service:
     """Core service worker object."""
 
     def __init__(self):
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("SummonerIDs")
-        self.logging.setLevel(logging.INFO)
+        level = logging.INFO
+        if "LOGGING" in os.environ:
+            level = getattr(logging, os.environ['LOGGING'])
+        self.logging.setLevel(level)
         handler = logging.StreamHandler()
-        handler.setLevel(logging.INFO)
+        handler.setLevel(level)
         handler.setFormatter(
             logging.Formatter('%(asctime)s [SummonerIDs] %(message)s'))
         self.logging.addHandler(handler)
@@ -56,11 +60,13 @@ class Service:
         self.rabbit.shutdown()
 
     async def task_selector(self, message):
+        self.logging.debug("Started task.")
         async with message.process():
             identifier, rank, wins, losses = content = pickle.loads(message.body)
             if data := await self.marker.execute_read(
                     'SELECT accountId, puuid FROM summoner_ids WHERE summonerId = "%s";' % identifier):
                 # Pass on package directly if IDs already aquired
+                self.logging.debug("Already existent skipping.")
                 package = {'accountId': data[0][0], 'puuid': data[0][1]}
 
                 await self.rabbit.add_task([
@@ -72,12 +78,14 @@ class Service:
                 ])
             elif identifier not in self.buffered_elements:
                 # Create request task if it is not currently run already
+                self.logging.debug("Creating extended task.")
                 self.active_tasks.append(
                     asyncio.create_task(self.async_worker(content))
                 )
                 return
             # Case: data not already aquired but currently in progress
             # Discards task
+            self.logging.debug("Discarding task.")
             self.active_task_count -= 1
 
     async def async_worker(self, content):
@@ -106,6 +114,7 @@ class Service:
         except (RatelimitException, NotFoundException, Non200Exception):
             return
         finally:
+            self.logging.debug("Finished extended task.")
             del self.buffered_elements[identifier]
             self.active_task_count -= 1
 

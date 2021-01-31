@@ -46,6 +46,7 @@ services:
       - WORKER=35
       - MAX_TASK_BUFFER=1000
       - STREAM=SUMMONER
+      - LOGGING=${LOGGING}
     volumes:
       - ./sqlite/:/project/sqlite/
     external_links:
