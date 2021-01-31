@@ -18,9 +18,12 @@ class Service:
     def __init__(self):
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("MatchHistory")
-        self.logging.setLevel(logging.INFO)
+        level = logging.INFO
+        if "LOGGING" in os.environ:
+            level = getattr(logging, os.environ['LOGGING'])
+        self.logging.setLevel(level)
         handler = logging.StreamHandler()
-        handler.setLevel(logging.INFO)
+        handler.setLevel(level)
         handler.setFormatter(
             logging.Formatter('%(asctime)s [Subscriber] %(message)s'))
         self.logging.addHandler(handler)
@@ -60,27 +63,20 @@ class Service:
         self.rabbit.shutdown()
 
     async def task_selector(self, message):
-        try:
-            async with message.process():
-                accountId, puuid, rank, wins, losses = pickle.loads(message.body)
-                matches = wins + losses
-                if prev := await self.marker.execute_read(
-                        'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
-                    matches = matches - int(prev[0][0])
-                if matches < self.required_matches:
-                    self.active_tasks -= 1
-                    return
-                if accountId in self.buffered_elements:
-                    self.active_tasks -= 1
-                    return
-                self.buffered_elements[accountId] = True
-                self.working_tasks.append(
-                    asyncio.create_task(self.async_worker(accountId, matches)))
-        except Exception as err:
-            traceback.print_tb(err.__traceback__)
-            self.logging.info(err)
+        account_id, puuid, rank, wins, losses = pickle.loads(message.body)
+        matches = wins + losses
+        if prev := await self.marker.execute_read(
+                'SELECT matches FROM match_history WHERE accountId = "%s"' % account_id):
+            matches = matches - int(prev[0][0])
+        if matches < self.required_matches:
+            return
+        if account_id in self.buffered_elements:
+            return
+        self.working_tasks.append(
+            asyncio.create_task(self.async_worker(account_id, matches)))
 
-    async def async_worker(self, accountId, matches):
+    async def async_worker(self, account_id, matches):
+        self.buffered_elements[account_id] = True
         try:
             matches_to_call = matches + 3
             calls = int(matches_to_call / 100) + 1
@@ -92,13 +88,13 @@ class Service:
                     calls_in_progress.append(asyncio.create_task(
                         self.handler(
                             session=session,
-                            url=self.url % (accountId, id, id + 100)
+                            url=self.url % (account_id, id, id + 100)
                         )
                     ))
                     await asyncio.sleep(0.1)
                     responses = await asyncio.gather(*calls_in_progress)
                     match_data = list(set().union(*responses))
-                    query = 'REPLACE INTO match_history (accountId, matches) VALUES (\'%s\', %s);' % (accountId, matches)
+                    query = 'REPLACE INTO match_history (accountId, matches) VALUES (\'%s\', %s);' % (account_id, matches)
                     await self.marker.execute_write(query)
 
                     while match_data:
@@ -112,8 +108,8 @@ class Service:
             self.logging.info(err)
         finally:
             self.active_tasks -= 1
-            self.logging.info("Finished task.")
-            del self.buffered_elements[accountId]
+            self.logging.debug("Finished task.")
+            del self.buffered_elements[account_id]
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
@@ -165,27 +161,34 @@ class Service:
                 await asyncio.sleep(0.1)
 
     async def package_manager(self):
-        self.logging.info("Starting package manager.")
-        connection = await aio_pika.connect_robust(
-            "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
-        )
-        channel = await connection.channel()
-        await channel.set_qos(prefetch_count=50)
-        queue = await channel.declare_queue(
-            name=self.server + "_SUMMONER_TO_HISTORY",
-            durable=True,
-            robust=True
-        )
-        self.logging.info("Initialized package manager.")
-        async with queue.iterator() as queue_iter:
-            async for message in queue_iter:
-                self.active_tasks += 1
-                await self.task_selector(message)
+        try:
+            self.logging.info("Starting package manager.")
+            connection = await aio_pika.connect_robust(
+                "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
+            )
+            channel = await connection.channel()
+            await channel.set_qos(prefetch_count=50)
+            queue = await channel.declare_queue(
+                name=self.server + "_SUMMONER_TO_HISTORY",
+                durable=True,
+                robust=True
+            )
+            self.logging.info("Initialized package manager.")
+            async with queue.iterator() as queue_iter:
+                async for message in queue_iter:
+                    async with message.process():
+                        await self.task_selector(message)
 
-                while self.active_tasks >= 25 or self.rabbit.blocked:
-                    await asyncio.sleep(0.5)
+                    while len(self.buffered_elements) >= 25 or self.rabbit.blocked:
+                        if self.active_tasks:
+                            await asyncio.gather(*self.active_tasks)
+                            self.active_tasks = []
+                        await asyncio.sleep(0.5)
 
-        self.logging.info("Exited package manager.")
+            self.logging.info("Exited package manager.")
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
 
     async def run(self):
         """Runner."""
