@@ -151,7 +151,7 @@ services:
 
 volumes:
   postgres:
-    name: ${SERVER}_lightshield
+    name: ${SERVER}_lightshield_persistent
   ranking_progress:
     name: ${SERVER}_ranking_progress
 
