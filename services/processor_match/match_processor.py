@@ -57,8 +57,8 @@ class MatchProcessor(threading.Thread):
                         async for message in queue_iter:
                             async with message.process():
                                 task = pickle.loads(message.body)
-                                result = await conn.execute(select(Match.__table__.column.matchId).where(
-                                    Match.__table__.column.matchId == task['gameId']))
+                                result = await conn.execute(select(Match.__table__.columns.matchId).where(
+                                    Match.__table__.columns.matchId == task['gameId']))
                                 if result.fetchone():
                                     continue
                                 items = await Match.create(task)
