@@ -12,7 +12,7 @@ class PermanentDB:
 
     async def init(self):
         self.engine = create_async_engine(
-            self.base_url, echo=True,
+            self.base_url, echo=False,
         )
 
         async with self.engine.begin() as conn:
