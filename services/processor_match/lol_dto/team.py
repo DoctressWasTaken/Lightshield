@@ -8,7 +8,7 @@ class Team(Base):
 
     __tablename__ = 'team'
 
-    matchId = Column(BigInteger, ForeignKey('match.matchId'), primary_key=True)
+    matchId = Column(BigInteger, primary_key=True)
     side = Column(Boolean, primary_key=True)  # False: Blue | True: Red
     bans = Column(JSON)
 

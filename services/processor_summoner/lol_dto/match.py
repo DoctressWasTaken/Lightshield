@@ -31,15 +31,14 @@ class Match(Base):
             matchId=match['gameId'],
         )
         matchObject.win = match['teams'][0]['win'] == 'Win'
-        return {"match": matchObject}
-        items = {
-            'match': matchObject,
-            'team': [await Team.create(match, 0), await Team.create(match, 1)],
-            'player': await asyncio.gather(*[
-                asyncio.create_task(Player.create(match, i)) for i in range(1, 11)
-            ]),
-            'runes': await asyncio.gather(*[
-                asyncio.create_task(Runes.create(match, i)) for i in range(1, 11)
-            ])
-        }
-        return items
+        objects = [matchObject]
+
+        objects += [await Team.create(match, 0), await Team.create(match, 1)] + await asyncio.gather(*[
+            asyncio.create_task(Player.create(match, i)) for i in range(1, 11)
+        ])
+        for entry in await asyncio.gather(*[
+            asyncio.create_task(Runes.create(match, i)) for i in range(1, 11)
+        ]):
+            objects += entry
+
+        return objects

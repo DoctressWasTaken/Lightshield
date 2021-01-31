@@ -9,6 +9,7 @@ import asyncpg
 from sqlalchemy.sql import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
 async def create_set(data_list):
     formatted_list = []
     for entry in data_list:
@@ -52,18 +53,19 @@ class MatchProcessor(threading.Thread):
             tasks = []
             try:
                 async with self.permanent.engine.connect() as conn:
-                async with queue.iterator() as queue_iter:
-                    async for message in queue_iter:
-                        async with message.process():
-                            task = pickle.loads(message.body)
-                            result = await conn.execute(select(Match.c.matchId)).where(Match.c.matchId == task['gameId'])
-                            if result.fetchone():
-                                continue
-                            items = await Match.create(task)
-                            tasks += items
+                    async with queue.iterator() as queue_iter:
+                        async for message in queue_iter:
+                            async with message.process():
+                                task = pickle.loads(message.body)
+                                result = await conn.execute(select(Match.__table__.column.matchId).where(
+                                    Match.__table__.column.matchId == task['gameId']))
+                                if result.fetchone():
+                                    continue
+                                items = await Match.create(task)
+                                tasks += items
 
-                        if len(tasks) >= 50 or self.stopped:
-                            break
+                            if len(tasks) >= 50 or self.stopped:
+                                break
                 if len(tasks) == 0 and self.stopped:
                     return
                 async with AsyncSession(self.permanent.engine) as session:
@@ -79,7 +81,6 @@ class MatchProcessor(threading.Thread):
             # tasks.append(pickle.loads(task.body))
 
             # task.ack()
-
 
     async def run(self):
         self.logging.info("Initiated Worker.")

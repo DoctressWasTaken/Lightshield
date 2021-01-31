@@ -9,7 +9,7 @@ class Player(Base):
 
     __tablename__ = 'player'
 
-    matchId = Column(BigInteger, ForeignKey('match.matchId'), primary_key=True)
+    matchId = Column(BigInteger, primary_key=True)
     participantId = Column(SmallInteger, primary_key=True)
 
     accountId = Column(VARCHAR(56), index=True)
@@ -108,7 +108,7 @@ class Runes(Base):
 
     __tablename__ = 'runes'
 
-    matchId = Column(BigInteger, ForeignKey('match.matchId'), primary_key=True)
+    matchId = Column(BigInteger, primary_key=True)
     participantId = Column(SmallInteger, primary_key=True)
     position = Column(VARCHAR(1), primary_key=True)
     runeId = Column(SmallInteger)

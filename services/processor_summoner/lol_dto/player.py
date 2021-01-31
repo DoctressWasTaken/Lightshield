@@ -9,7 +9,7 @@ class Player(Base):
 
     __tablename__ = 'player'
 
-    matchId = Column(BigInteger, ForeignKey('match.matchId'), primary_key=True)
+    matchId = Column(BigInteger, primary_key=True)
     participantId = Column(SmallInteger, primary_key=True)
 
     accountId = Column(VARCHAR(56), index=True)
@@ -76,8 +76,8 @@ class Player(Base):
 
     @classmethod
     async def create(cls, match, participantId):
-        participant = match['participants'][participantId]
-        partId = match['participantIdentities'][participantId]['player']
+        participant = match['participants'][participantId - 1]
+        partId = match['participantIdentities'][participantId - 1]['player']
 
         playerObject = cls(
             participantId=participantId,
@@ -108,7 +108,7 @@ class Runes(Base):
 
     __tablename__ = 'runes'
 
-    matchId = Column(BigInteger, ForeignKey('match.matchId'), primary_key=True)
+    matchId = Column(BigInteger, primary_key=True)
     participantId = Column(SmallInteger, primary_key=True)
     position = Column(VARCHAR(1), primary_key=True)
     runeId = Column(SmallInteger)
@@ -118,7 +118,7 @@ class Runes(Base):
 
     @classmethod
     async def create(cls, match, participantId):
-        participant = match['participants'][participantId]
+        participant = match['participants'][participantId - 1]
 
         runeObjects = []
         for i in range(6):
