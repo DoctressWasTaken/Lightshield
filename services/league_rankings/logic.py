@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import aiohttp
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-from rabbit_manager import RabbitManager
+from rabbit_manager_slim import RabbitManager
 from rank_manager import RankManager
 from repeat_marker import RepeatMarker
 
