@@ -6,6 +6,7 @@ import traceback
 
 import aio_pika
 from aio_pika import ExchangeType, Message, DeliveryMode
+from aiormq.exceptions import DeliveryError
 
 
 class RabbitManager:
@@ -80,10 +81,12 @@ class RabbitManager:
             await self.check_queue_task
             self.check_queue_task = None
         try:
-            if not await self.exchange.publish(
+            try:
+                await self.exchange.publish(
                     Message(body=pickle.dumps(message),
                             delivery_mode=DeliveryMode.PERSISTENT),
-                    routing_key=""):
+                    routing_key="")
+            except DeliveryError:
                 self.blocked = True
                 self.outstanding_messages.append(message)
                 if not self.check_queue:
