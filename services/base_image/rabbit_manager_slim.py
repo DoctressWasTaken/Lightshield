@@ -61,6 +61,7 @@ class RabbitManager:
 
         Once all backlogged tasks are added to the queue releases blocker.
         """
+        self.logging.info("Queue full. Started scaling backoff attempts.")
         timeout = 1
         while self.outstanding_messages:
             message = self.outstanding_messages.pop()
@@ -69,9 +70,10 @@ class RabbitManager:
                             delivery_mode=DeliveryMode.PERSISTENT),
                     routing_key=""):
                 await asyncio.sleep(timeout)
-                timeout += 1
+                timeout = min(30, timeout + 1)
                 self.outstanding_messages.append(message)
         self.blocked = False
+        self.logging.info("Queue unblocked.")
 
     async def add_task(self, message) -> None:
         if self.blocked:
@@ -89,10 +91,9 @@ class RabbitManager:
             except DeliveryError:
                 self.blocked = True
                 self.outstanding_messages.append(message)
-                if not self.check_queue:
-                    self.check_queue_task = asyncio.create_task(
-                        self.check_queue()
-                    )
+                self.check_queue_task = asyncio.create_task(
+                    self.check_queue()
+                )
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
