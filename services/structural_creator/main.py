@@ -7,8 +7,8 @@ from aio_pika import ExchangeType
 server = os.environ['SERVER']
 
 args = {
-    'overflow': 'reject-publish',
-    'max_length': 2000}
+    'x-overflow': 'reject-publish',
+    'x-max-length': 2000}
 
 
 async def main(loop):
