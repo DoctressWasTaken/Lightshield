@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import aiohttp
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-from rabbit_manager import RabbitManager
+from rabbit_manager_slim import RabbitManager
 from rank_manager import RankManager
 from repeat_marker import RepeatMarker
 
@@ -51,10 +51,7 @@ class Service:  # pylint: disable=R0902
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
 
-        self.rabbit = RabbitManager(
-            exchange="RANKED",
-            outgoing=['RANKED_TO_SUMMONER']
-        )
+        self.rabbit = RabbitManager(exchange="RANKED")
 
         asyncio.run(self.marker.build(
             "CREATE TABLE IF NOT EXISTS match_history("
@@ -64,7 +61,6 @@ class Service:  # pylint: disable=R0902
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
-        self.rabbit.shutdown()
 
     async def init(self):
         """Override of the default init function.
@@ -173,11 +169,10 @@ class Service:  # pylint: disable=R0902
         Worker are started and stopped after each tier/rank combination.
         """
         await self.init()
-        rabbit_check = asyncio.create_task(self.rabbit.check_full())
         while not self.stopped:
             tier, division = await self.rankmanager.get_next()
             self.empty = False
             self.next_page = 1
             await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
             await self.rankmanager.update(key=(tier, division))
-        await rabbit_check
+        self.rabbit.shutdown()

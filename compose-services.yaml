@@ -33,8 +33,10 @@ services:
     volumes:
       - ./sqlite/:/project/sqlite/
       - ranking_progress:/project/configs/
+      - /backup
 
-  summoner_ids:  # SI
+
+  summoner_ids: # SI
     hostname: summoner_ids
     mem_limit: 150m
     cpus: 0.25
@@ -49,6 +51,7 @@ services:
       - LOGGING=${LOGGING}
     volumes:
       - ./sqlite/:/project/sqlite/
+      - /backup
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
