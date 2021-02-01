@@ -66,10 +66,12 @@ class RabbitManager:
         timeout = 1
         while self.outstanding_messages:
             message = self.outstanding_messages.pop()
-            if not await self.exchange.publish(
+            try:
+                await self.exchange.publish(
                     Message(body=pickle.dumps(message),
                             delivery_mode=DeliveryMode.PERSISTENT),
-                    routing_key=""):
+                    routing_key="")
+            except DeliveryError:
                 await asyncio.sleep(timeout)
                 timeout = min(30, timeout + 1)
                 self.outstanding_messages.append(message)
