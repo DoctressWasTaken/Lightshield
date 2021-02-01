@@ -35,7 +35,8 @@ class RabbitManager:
 
         try:
             # Attempt to load already backed up tasks
-            pickle.load(open("/backup/save.p", "rb"))
+            self.outstanding_messages = pickle.load(open("/backup/save.p", "rb"))
+            self.logging.info("Restarted service with %s outstanding tasks." % len(self.outstanding_messages))
         except:
             pass
 
@@ -91,9 +92,10 @@ class RabbitManager:
             except DeliveryError:
                 self.blocked = True
                 self.outstanding_messages.append(message)
-                self.check_queue_task = asyncio.create_task(
-                    self.check_queue()
-                )
+                if not self.check_queue_task:
+                    self.check_queue_task = asyncio.create_task(
+                        self.check_queue()
+                    )
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
