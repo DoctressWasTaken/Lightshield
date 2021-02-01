@@ -160,8 +160,7 @@ class Service:
                 await channel.set_qos(prefetch_count=50)
                 queue = await channel.declare_queue(
                     name=self.server + "_RANKED_TO_SUMMONER",
-                    durable=True,
-                    robust=True
+                    passive=True
                 )
                 self.logging.info("Initialized package manager.")
 
