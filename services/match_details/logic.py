@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import aio_pika
 import aiohttp
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-from rabbit_manager import RabbitManager
+from rabbit_manager_sim import RabbitManager
 from repeat_marker import RepeatMarker
 
 
