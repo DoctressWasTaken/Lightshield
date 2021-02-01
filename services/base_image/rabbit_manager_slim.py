@@ -2,15 +2,16 @@ import asyncio
 import logging
 import os
 import pickle
+import traceback
 
 import aio_pika
-import aiohttp
 from aio_pika import ExchangeType, Message, DeliveryMode
 
 
 class RabbitManager:
+    """Manage outgoing package handling."""
 
-    def __init__(self, incoming=None, exchange='', outgoing=(), prefetch=50):
+    def __init__(self, exchange=''):
         self.logging = logging.getLogger("RabbitMQ")
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
@@ -19,106 +20,77 @@ class RabbitManager:
             logging.Formatter('%(asctime)s [RabbitMQ] %(message)s'))
         self.logging.addHandler(handler)
 
-        self.server = os.environ['SERVER']
-        if 'STREAM' in os.environ:
-            self.streamID = os.environ['STREAM']
-        if 'MAX_TASK_BUFFER' in os.environ:
-            self.max_buffer = int(os.environ['MAX_TASK_BUFFER'])
+        self.exchange_name = os.environ['SERVER'] + "_" + exchange
+        self.blocked = False  # Set to true if the queue rejects messages due to being full.
+        self.stopped = False  # Set to true once the service receives the shutdown signal
 
-        self.outgoing = outgoing
-
-        self.incoming = incoming
-        self.exchange = self.server + "_" + exchange
-        self.prefetch = prefetch
-        self.queue = None
-        self.blocked = True
-        self.stopped = False
+        # Rabbit elements
         self.connection = None
-        self.empty_response = None
+        self.channel = None
+        self.exchange = None
 
-        self.fill_task = None
+        self.outstanding_messages = []  # Contains outstanding ready messages rejected by the queue
+        self.check_queue_task = None  # Contains a task instance of check_queue
+
+        try:
+            # Attempt to load already backed up tasks
+            pickle.load(open("/backup/save.p", "rb"))
+        except:
+            pass
 
     def shutdown(self) -> None:
         self.stopped = True
+        pickle.dump(self.outstanding_messages, open("/backup/save.p", "wb+"))
 
     async def connect(self):
         self.connection = await aio_pika.connect_robust(
             "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop())
-
-    async def init(self):
-        await self.connect()
-        headers = {
-            'content-type': 'application/json'
-        }
-
-    async def check_full(self) -> None:
-        """Check if the size of any of the queues is above wanted levels."""
-        headers = {
-            'content-type': 'application/json'
-        }
-        self.logging.info("Initiating buffer checker. Max buffer: %s", self.max_buffer)
-        async with aiohttp.ClientSession(auth=aiohttp.BasicAuth("guest", "guest")) as session:
-            while not self.stopped:
-                async with session.get(
-                        'http://rabbitmq:15672/api/queues', headers=headers) as response:
-                    resp = await response.json()
-                    queues = {entry['name']: entry['messages'] for entry in resp}
-                    was_blocked = self.blocked
-                    self.blocked = False
-                    queue_identifier = self.server.upper() + "_" + self.streamID
-                    for queue in queues:
-                        if queue.startswith(queue_identifier):
-                            try:
-                                if int(queues[queue]) > self.max_buffer:
-                                    if not was_blocked:
-                                        self.logging.info("Queue %s is too full [%s/%s]",
-                                                          queue, queues[queue], self.max_buffer)
-                                    self.blocked = True
-
-                            except Exception as err:
-                                self.logging.info(err)
-                                raise err
-                    if was_blocked and not self.blocked:
-                        self.logging.info("Blocker released.")
-                await asyncio.sleep(1)
-
-    async def fill_queue(self):
-        channel = await self.connection.channel()
-        await channel.set_qos(prefetch_count=50)
-        queue = await channel.declare_queue(
-            name=self.server + "_" + self.incoming,
-            durable=True,
-            robust=True
-        )
-        while not self.stopped:
-            try:
-                task = await queue.get(timeout=3)
-                await self.queue.put(task)
-            except Exception as err:
-                self.logging.info("Received %s: %s", err.__class__.__name__, err)
-                await channel.close()
-                channel = await self.connection.channel()
-                await channel.set_qos(prefetch_count=50)
-                queue = await channel.declare_queue(
-                    name=self.server + "_" + self.incoming,
-                    durable=True,
-                    robust=True
-                )
-
-    async def get(self):
-        return await self.queue.get()
-
-    async def add_task(self, message) -> None:
-        channel = await self.connection.channel()
-        exchange = await channel.declare_exchange(
-            name=self.exchange,
+        self.channel = await self.connection.channel()
+        self.exchange = await self.channel.declare_exchange(
+            name=self.exchange_name,
             durable=True,
             type=ExchangeType.TOPIC,
             robust=True)
+
+    async def init(self):
+        await self.connect()
+
+    async def check_queue(self):
+        """Attempt to add backlog of tasks to full queue.
+
+        Once all backlogged tasks are added to the queue releases blocker.
+        """
+        timeout = 1
+        while self.outstanding_messages:
+            message = self.outstanding_messages.pop()
+            if not await self.exchange.publish(
+                    Message(body=pickle.dumps(message),
+                            delivery_mode=DeliveryMode.PERSISTENT),
+                    routing_key=""):
+                await asyncio.sleep(timeout)
+                timeout += 1
+                self.outstanding_messages.append(message)
+        self.blocked = False
+
+    async def add_task(self, message) -> None:
+        if self.blocked:
+            self.outstanding_messages.append(message)
+            return
+        if self.check_queue_task:
+            await self.check_queue_task
+            self.check_queue_task = None
         try:
-            await exchange.publish(
-                Message(body=pickle.dumps(message),
-                        delivery_mode=DeliveryMode.PERSISTENT),
-                routing_key="")
-        finally:
-            await channel.close()
+            if not await self.exchange.publish(
+                    Message(body=pickle.dumps(message),
+                            delivery_mode=DeliveryMode.PERSISTENT),
+                    routing_key=""):
+                self.blocked = True
+                self.outstanding_messages.append(message)
+                if not self.check_queue:
+                    self.check_queue_task = asyncio.create_task(
+                        self.check_queue()
+                    )
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
+            raise err

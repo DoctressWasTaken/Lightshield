@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import aio_pika
 import aiohttp
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-from rabbit_manager import RabbitManager
+from rabbit_manager_slim import RabbitManager
 from repeat_marker import RepeatMarker
 
 
@@ -42,11 +42,7 @@ class Service:
 
         self.active_tasks = []
 
-        self.rabbit = RabbitManager(
-            exchange="SUMMONER",
-            incoming="RANKED_TO_SUMMONER",
-            outgoing=['SUMMONER_TO_HISTORY', 'SUMMONER_TO_PROCESSOR']
-        )
+        self.rabbit = RabbitManager(exchange="SUMMONER")
 
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
         asyncio.run(self.marker.build(
@@ -58,7 +54,6 @@ class Service:
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
-        self.rabbit.shutdown()
 
     async def task_selector(self, message):
         self.logging.debug("Started task.")
@@ -190,7 +185,6 @@ class Service:
     async def run(self):
         """Runner."""
         await self.init()
-        check_task = asyncio.create_task(self.rabbit.check_full())
         manager = asyncio.create_task(self.package_manager())
         while not self.stopped:
             await asyncio.sleep(1)
@@ -198,4 +192,4 @@ class Service:
             manager.cancel()
         except:
             pass
-        await check_task
+        self.rabbit.shutdown()
