@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import aio_pika
 import aiohttp
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-from rabbit_manager import RabbitManager
+from rabbit_manager_slim import RabbitManager
 from repeat_marker import RepeatMarker
 
 
@@ -42,11 +42,7 @@ class Service:
             "accountId TEXT PRIMARY KEY,"
             "matches INTEGER);"))
 
-        self.rabbit = RabbitManager(
-            exchange="HISTORY",
-            incoming="SUMMONER_TO_HISTORY",
-            outgoing=["HISTORY_TO_DETAILS"]
-        )
+        self.rabbit = RabbitManager(exchange="HISTORY")
 
         self.timelimit = int(os.environ['TIME_LIMIT'])
         self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
@@ -60,7 +56,6 @@ class Service:
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
-        self.rabbit.shutdown()
 
     async def task_selector(self, message):
         accountId, puuid, rank, wins, losses = pickle.loads(message.body)
@@ -170,8 +165,7 @@ class Service:
             await channel.set_qos(prefetch_count=50)
             queue = await channel.declare_queue(
                 name=self.server + "_SUMMONER_TO_HISTORY",
-                durable=True,
-                robust=True
+                passive=True
             )
             self.logging.info("Initialized package manager.")
             async with queue.iterator() as queue_iter:
@@ -194,7 +188,6 @@ class Service:
         """Runner."""
         await self.init()
         self.logging.info("Initiated.")
-        check_task = asyncio.create_task(self.rabbit.check_full())
         manager = asyncio.create_task(self.package_manager())
         while not self.stopped:
             await asyncio.sleep(1)
@@ -202,4 +195,3 @@ class Service:
             manager.cancel()
         except:
             pass
-        await check_task

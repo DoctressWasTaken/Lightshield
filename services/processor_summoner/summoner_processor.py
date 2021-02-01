@@ -30,8 +30,7 @@ class SummonerProcessor(threading.Thread):
         await channel.set_qos(prefetch_count=100)
         queue = await channel.declare_queue(
             name=self.server + "_SUMMONER_TO_PROCESSOR",
-            durable=True,
-            robust=True
+            passive=True
         )
         tasks = {}
         conn = None

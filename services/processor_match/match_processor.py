@@ -46,8 +46,7 @@ class MatchProcessor(threading.Thread):
         await channel.set_qos(prefetch_count=100)
         queue = await channel.declare_queue(
             name=self.server + "_DETAILS_TO_PROCESSOR",
-            durable=True,
-            robust=True
+            passive=True
         )
 
         while not self.stopped:

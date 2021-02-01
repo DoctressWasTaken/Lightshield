@@ -175,4 +175,3 @@ class Service:  # pylint: disable=R0902
             self.next_page = 1
             await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
             await self.rankmanager.update(key=(tier, division))
-        self.rabbit.shutdown()

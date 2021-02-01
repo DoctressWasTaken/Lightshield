@@ -191,4 +191,3 @@ class Service:
             manager.cancel()
         except:
             pass
-        self.rabbit.shutdown()

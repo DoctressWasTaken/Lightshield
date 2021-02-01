@@ -32,11 +32,7 @@ class Service:
         self.stopped = False
         self.marker = RepeatMarker()
         self.retry_after = datetime.now()
-        self.rabbit = RabbitManager(
-            exchange="DETAILS",
-            incoming="HISTORY_TO_DETAILS",
-            outgoing=["DETAILS_TO_PROCESSOR"]
-        )
+        self.rabbit = RabbitManager(exchange="DETAILS")
         self.active_tasks = 0
         self.working_tasks = []
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
@@ -50,12 +46,17 @@ class Service:
         Initiate the Rankmanager object.
         """
         await self.marker.connect()
-        await self.rabbit.init(prefetch=250)
+        await self.rabbit.init()
+
+    def shutdown(self):
+        """Called on shutdown init."""
+        self.stopped = True
 
     async def limiter(self):
         """Method to periodically break down the db size by removing a % of the lowest match Ids."""
         retain_period_days = 60
         removal = 100 / retain_period_days
+        await asyncio.sleep(7 * 24 * 60 * 60)  # Initial 7 day wait
         while True:
             await asyncio.sleep(24 * 60 * 60)
             count = await self.marker.execute_read(
@@ -150,8 +151,7 @@ class Service:
         await channel.set_qos(prefetch_count=50)
         queue = await channel.declare_queue(
             name=self.server + "_HISTORY_TO_DETAILS",
-            durable=True,
-            robust=True
+            passive=True
         )
         self.logging.info("Initialized package manager.")
         async with queue.iterator() as queue_iter:
@@ -169,7 +169,6 @@ class Service:
     async def run(self):
         """Runner."""
         await self.init()
-        rabbit_check = asyncio.create_task(self.rabbit.check_full())
         limiter_task = asyncio.create_task(self.limiter())
         manager = asyncio.create_task(self.package_manager())
         while not self.stopped:
@@ -179,4 +178,3 @@ class Service:
         except:
             pass
         await limiter_task
-        await rabbit_check

@@ -70,10 +70,10 @@ services:
       - WORKER=10
       - MATCHES_TO_UPDATE=10
       - TIME_LIMIT=1595401200
-      - MAX_TASK_BUFFER=2000
       - STREAM=HISTORY
     volumes:
       - ./sqlite/:/project/sqlite/
+      - /backup
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:
@@ -94,6 +94,7 @@ services:
       - STREAM=DETAILS
     volumes:
       - ./sqlite/:/project/sqlite/
+      - /backup
     external_links:
       - lightshield_rabbitmq:rabbitmq
     restart: always
