@@ -51,6 +51,7 @@ class MatchProcessor(threading.Thread):
 
         while not self.stopped:
             tasks = []
+            matches = 0
             try:
                 async with self.permanent.engine.connect() as conn:
                     async with queue.iterator() as queue_iter:
@@ -63,10 +64,10 @@ class MatchProcessor(threading.Thread):
                                     continue
                                 items = await Match.create(task)
                                 tasks += items
-
-                            if len(tasks) >= 50 or self.stopped:
+                                matches += 1
+                            if matches >= 50 or self.stopped:
                                 break
-                if len(tasks) == 0 and self.stopped:
+                if matches == 0 and self.stopped:
                     return
                 async with AsyncSession(self.permanent.engine) as session:
                     async with session.begin():
