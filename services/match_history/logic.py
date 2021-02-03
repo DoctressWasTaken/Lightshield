@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 import aio_pika
 import aiohttp
+import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from rabbit_manager_slim import RabbitManager
 from repeat_marker import RepeatMarker
@@ -93,9 +94,13 @@ class Service:
                         account_id, matches)
                     await self.marker.execute_write(query)
 
-                    while match_data:
-                        id = match_data.pop()
-                        await self.rabbit.add_task(id)
+                    result = await self.conn.execute('''
+                        INSERT INTO match (matchId)
+                        VALUES %s
+                        ON CONFLICT (matchId)
+                        DO NOTHING;
+                    ''' % ",".join(["(%s)" % matchId for matchId in match_data]))
+                    self.logging.info(result)
 
         except NotFoundException:
             return
@@ -186,6 +191,7 @@ class Service:
 
     async def run(self):
         """Runner."""
+        self.conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
         await self.init()
         self.logging.info("Initiated.")
         manager = asyncio.create_task(self.package_manager())
@@ -195,3 +201,4 @@ class Service:
             manager.cancel()
         except:
             pass
+        await self.conn.close()

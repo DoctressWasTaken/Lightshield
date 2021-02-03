@@ -1,9 +1,9 @@
 """Tables related to Match Data."""
-from sqlalchemy import Column, Enum, Integer, Boolean, String, BigInteger, TIMESTAMP, SmallInteger, VARCHAR
-from . import Base, Team, Player, Runes
 import asyncio
-from .enums import Server
-from sqlalchemy.orm import relationship
+
+from sqlalchemy import Column, Boolean, String, BigInteger, SmallInteger
+
+from . import Base, Team, Player, Runes
 
 
 class Match(Base):
@@ -15,7 +15,7 @@ class Match(Base):
 
     matchId = Column(BigInteger, primary_key=True)
 
-    start = Column(BigInteger)
+    start = Column(BigInteger, index=True)
     duration = Column(SmallInteger)
     gameVersion = Column(String)
 

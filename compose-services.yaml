@@ -74,6 +74,8 @@ services:
     volumes:
       - ./sqlite/:/project/sqlite/
       - /backup
+    links:
+      - persistant_db:postgres
     external_links:
       - lightshield_rabbitmq:rabbitmq
     depends_on:

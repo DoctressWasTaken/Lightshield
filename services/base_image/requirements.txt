@@ -6,3 +6,4 @@ aiosqlite
 aiormq>=2.7
 aio-pika==6.7.1
 pika
+asyncpg
