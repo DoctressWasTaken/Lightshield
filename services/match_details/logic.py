@@ -76,10 +76,8 @@ class Service:
                 matchId = pickle.loads(message.body)
                 if await self.marker.execute_read(
                         'SELECT * FROM match_id WHERE id = %s;' % matchId):
-                    self.active_tasks -= 1
                     return
                 if matchId in self.buffered_elements:
-                    self.active_tasks -= 1
                     return
                 self.working_tasks.append(
                     asyncio.create_task(self.async_worker(matchId))
@@ -100,14 +98,13 @@ class Service:
                     'INSERT OR IGNORE INTO match_id (id) VALUES (%s);' % matchId)
 
                 await self.rabbit.add_task(response)
-            self.active_tasks -= 1
 
         except (RatelimitException, Non200Exception):
             self.working_tasks.append(
                 asyncio.create_task(self.async_worker(matchId))
             )
         except NotFoundException:
-            self.active_tasks -= 1
+            pass
         finally:
             if matchId in self.buffered_elements:
                 del self.buffered_elements[matchId]
@@ -156,10 +153,9 @@ class Service:
         self.logging.info("Initialized package manager.")
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
-                self.active_tasks += 1
                 await self.task_selector(message)
 
-                while self.active_tasks >= 50 or self.rabbit.blocked:
+                while len(self.working_tasks) >= 150 or self.rabbit.blocked:
                     await asyncio.sleep(0.5)
                     await asyncio.gather(*self.working_tasks)
                     self.working_tasks = []
