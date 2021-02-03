@@ -102,7 +102,7 @@ class Service:
                         DO NOTHING;
                     ''' % ",".join(["(%s)" % matchId for matchId in match_data]))
                     await conn.close()
-                    self.logging.info(result)
+                    self.logging.debug(result)
 
 
         except NotFoundException:
