@@ -105,6 +105,9 @@ class Service:
             )
         except NotFoundException:
             pass
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
         finally:
             if matchId in self.buffered_elements:
                 del self.buffered_elements[matchId]
