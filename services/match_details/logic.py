@@ -97,14 +97,16 @@ class Service:
                 await self.marker.execute_write(
                     'INSERT OR IGNORE INTO match_id (id) VALUES (%s);' % matchId)
 
+                self.logging.info("Added new task")
                 await self.rabbit.add_task(response)
 
         except (RatelimitException, Non200Exception):
+            self.logging.info("Failed to receive data, requeuing task.")
             self.working_tasks.append(
                 asyncio.create_task(self.async_worker(matchId))
             )
         except NotFoundException:
-            pass
+            self.logging.info("Match not found.")
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
