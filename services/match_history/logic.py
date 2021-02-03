@@ -93,14 +93,17 @@ class Service:
                     query = 'REPLACE INTO match_history (accountId, matches) VALUES (\'%s\', %s);' % (
                         account_id, matches)
                     await self.marker.execute_write(query)
+                    conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
 
-                    result = await self.conn.execute('''
+                    result = await conn.execute('''
                         INSERT INTO match ("matchId")
                         VALUES %s
                         ON CONFLICT ("matchId")
                         DO NOTHING;
                     ''' % ",".join(["(%s)" % matchId for matchId in match_data]))
+                    await conn.close()
                     self.logging.info(result)
+
 
         except NotFoundException:
             return
@@ -191,7 +194,6 @@ class Service:
 
     async def run(self):
         """Runner."""
-        self.conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
         await self.init()
         self.logging.info("Initiated.")
         manager = asyncio.create_task(self.package_manager())
@@ -201,4 +203,3 @@ class Service:
             manager.cancel()
         except:
             pass
-        await self.conn.close()
