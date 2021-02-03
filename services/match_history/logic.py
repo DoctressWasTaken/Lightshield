@@ -95,9 +95,9 @@ class Service:
                     await self.marker.execute_write(query)
 
                     result = await self.conn.execute('''
-                        INSERT INTO match (matchId)
+                        INSERT INTO match ("matchId")
                         VALUES %s
-                        ON CONFLICT (matchId)
+                        ON CONFLICT ("matchId")
                         DO NOTHING;
                     ''' % ",".join(["(%s)" % matchId for matchId in match_data]))
                     self.logging.info(result)
