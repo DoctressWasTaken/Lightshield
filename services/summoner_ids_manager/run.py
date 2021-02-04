@@ -4,6 +4,9 @@ from datetime import datetime, timedelta
 
 import aioredis
 import asyncpg
+import uvloop
+
+uvloop.install()
 
 
 class Manager:
