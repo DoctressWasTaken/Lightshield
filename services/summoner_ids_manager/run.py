@@ -22,9 +22,9 @@ class Manager:
         while not self.stopped:
             # Drop timed out tasks
             limit = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
-            self.redis.zremrangebyscore('in_progress', max=limit)
+            await self.redis.zremrangebyscore('in_progress', max=limit)
             # Check remaining buffer size
-            if self.redis.llen('tasks') < 250:
+            if await self.redis.llen('tasks') < 250:
                 # Pull new tasks
                 conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
                 result = await conn.fetch('''
@@ -35,7 +35,7 @@ class Manager:
                     ''')
                 # Add new tasks
                 for entry in result:
-                    if self.redis.lpush('task', entry['summoner_id']) >= 500:
+                    if await self.redis.lpush('task', entry['summoner_id']) >= 500:
                         break
 
             await asyncio.sleep(10)
