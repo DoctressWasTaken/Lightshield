@@ -121,7 +121,7 @@ services:
        max-file: "5"
        max-size: "10m"
 
-  persistant_db:
+  persistent_db:
     container_name: ${COMPOSE_PROJECT_NAME}_persistant_db
     build:
       context: postgres
