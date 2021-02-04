@@ -51,8 +51,6 @@ class Service:
     async def async_worker(self, matchId):
         try:
             url = self.url % matchId
-            if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
-                await asyncio.sleep(delay)
             async with aiohttp.ClientSession() as session:
                 response = await self.fetch(session, url)
 
@@ -121,7 +119,7 @@ class Service:
             for entry in responses:
                 if not entry:
                     continue
-                if entry.startswith("!"):
+                if str(entry).startswith("!"):
                     not_found.append(entry[1:])
                 else:
                     success.append(entry)
@@ -137,6 +135,10 @@ class Service:
                     WHERE "matchId" in (%s)
                     ''' % ','.join(not_found))
             await conn.close()
+            if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
+                await asyncio.sleep(delay)
+            while self.rabbit.blocked:
+                await asyncio.sleep(0.25)
 
         self.logging.info("Exited package manager.")
 
