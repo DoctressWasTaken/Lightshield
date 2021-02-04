@@ -93,8 +93,6 @@ services:
       - lightshield_rabbitmq:rabbitmq
     links:
       - persistant_db:postgres
-    depends_on:
-      - processor_summoner
     volumes:
       - ./lol_dto:/project/lol_dto
     restart: always
@@ -114,8 +112,6 @@ services:
       - lightshield_rabbitmq:rabbitmq
     links:
       - persistant_db:postgres
-    depends_on:
-      - structural_creator
     volumes:
       - ./lol_dto:/project/lol_dto
     restart: always
