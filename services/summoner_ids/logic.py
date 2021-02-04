@@ -6,13 +6,12 @@ Import is done directly.
 import asyncio
 import logging
 import os
-import traceback
 from datetime import datetime, timedelta
 
 import aiohttp
+import aioredis
 import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-from rabbit_manager_slim import RabbitManager
 
 
 class Service:
@@ -37,33 +36,40 @@ class Service:
         self.stopped = False
         self.retry_after = datetime.now()
 
-        self.active_tasks = []
-
-        self.rabbit = RabbitManager(exchange="SUMMONER")
-
-        self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
+        self.completed_tasks = []
 
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
 
-    async def async_worker(self, content):
+    async def flush_manager(self):
+        """Update entries in postgres once enough tasks are done."""
+        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+        result = await conn.executemany('''
+            UPDATE summoner
+            SET accountId = '$1', puuid = '$2'
+            WHERE account_id = '%s';
+            ''', self.completed_tasks)
+        self.completed_tasks = []
+        await conn.close()
+
+    async def get_task(self):
+        """Return tasks to the async worker."""
+        task = self.redis.spop('tasks')
+        start = datetime.utcnow().timestamp()
+        self.redis.zadd('in_progress', start, task)
+
+    async def async_worker(self):
         """Create only a new call if the summoner is not yet in the db."""
-        identifier, rank, wins, losses = content
-        self.buffered_elements[identifier] = True
-        url = self.url % identifier
+        summoner_id = await self.get_task()
+
+        url = self.url % summoner_id
         try:
-            if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
-                await asyncio.sleep(delay)
             async with aiohttp.ClientSession() as session:
                 response = await self.fetch(session, url)
-                return response
-
+                self.completed_tasks.append(response)
         except (RatelimitException, NotFoundException, Non200Exception):
             return
-        finally:
-            self.logging.debug("Finished extended task.")
-            del self.buffered_elements[identifier]
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
@@ -100,51 +106,14 @@ class Service:
 
         Initiate the Rankmanager object.
         """
-        await self.rabbit.init()
-
-    async def package_manager(self):
-        try:
-            conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-            while not self.stopped:
-                entries = conn.fetch('''
-                    UPDATE summoner 
-                    SET checkout = CURRENT_TIMESTAMP
-                    WHERE summoner_id IN (
-                        SELECT summoner_id
-                        FROM summoner
-                        WHERE (
-                            checkout IS NULL
-                            OR EXTRACT(MINUTE FROM (CURRENT_TIMESTAMP - checkout)) > 5)
-                            AND account_id IS NULL
-                        LIMIT 25
-                        )
-                    RETURNING summoner_id;
-                ''')
-
-                responses = await asyncio.gather(*[
-                    asyncio.create_task(self.async_worker(x['summoner_id'] for x in entries))
-                ])
-                entries_serialized = []
-                for response in responses:
-                    if response:
-                        entries_serialized.append(
-                            "('%s', '%s')" % (response['accountId'], response['puuid'])
-                        )
-
-            self.logging.info("Exited package manager.")
-            await conn.close()
-        except Exception as err:
-            traceback.print_tb(err.__traceback__)
-            self.logging.info(err)
-            raise err
+        self.redis = await aioredis.create_redis_pool(
+            ('redis', 6379))
 
     async def run(self):
         """Runner."""
         await self.init()
-        manager = asyncio.create_task(self.package_manager())
-        while not self.stopped:
-            await asyncio.sleep(1)
-        try:
-            manager.cancel()
-        except:
-            pass
+        flush_manager = asyncio.create_task(self.flush_manager())
+        await asyncio.gather(*[
+            asyncio.create_task(self.async_worker()) for _ in range(5)
+        ])
+        await flush_manager

@@ -24,7 +24,7 @@ class Manager:
             limit = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
             await self.redis.zremrangebyscore('in_progress', max=limit)
             # Check remaining buffer size
-            if await self.redis.llen('tasks') < 250:
+            if await self.redis.scard('tasks') < 250:
                 # Pull new tasks
                 conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
                 result = await conn.fetch('''
@@ -33,9 +33,12 @@ class Manager:
                     WHERE account_id IS NULL
                     LIMIT 500;
                     ''')
+                await conn.close()
                 # Add new tasks
                 for entry in result:
-                    if await self.redis.lpush('task', entry['summoner_id']) >= 500:
+
+                    await self.redis.sadd('task', entry['summoner_id'])
+                    if self.redis.scard('tasks') >= 500:
                         break
 
             await asyncio.sleep(10)
