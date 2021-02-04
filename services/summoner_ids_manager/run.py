@@ -21,7 +21,7 @@ class Manager:
 
         while not self.stopped:
             # Drop timed out tasks
-            limit = (datetime.utcnow() - timedelta(minutes=10)).total_seconds()
+            limit = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
             self.aioredis.zremrangebyscore('in_progress', max=limit)
             # Check remaining buffer size
             if self.aioredis.llen('tasks') < 250:
