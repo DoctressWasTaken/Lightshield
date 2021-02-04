@@ -34,20 +34,18 @@ services:
 
   summoner_ids: # SI
     hostname: summoner_ids
-    mem_limit: 150m
-    cpus: 0.25
+    mem_limit: 100m
+    cpus: 0.15
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids
     environment:
       - SERVER=${SERVER}
-      - WORKER=35
-      - MAX_TASK_BUFFER=1000
-      - STREAM=SUMMONER
-      - LOGGING=${LOGGING}
     volumes:
-      - ./sqlite/:/project/sqlite/
       - /backup
+    links:
+      - buffer_db:redis
+      - persistent_db:postgres
     external_links:
       - lightshield_rabbitmq:rabbitmq
     restart: always
