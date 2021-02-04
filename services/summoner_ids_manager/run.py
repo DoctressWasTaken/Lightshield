@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import signal
 from datetime import datetime, timedelta
 
@@ -11,6 +12,16 @@ uvloop.install()
 
 class Manager:
     stopped = False
+
+    def __init__(self):
+        self.logging = logging.getLogger("Main")
+        level = logging.INFO
+        self.logging.setLevel(level)
+        handler = logging.StreamHandler()
+        handler.setLevel(level)
+        handler.setFormatter(
+            logging.Formatter('%(asctime)s %(message)s'))
+        self.logging.addHandler(handler)
 
     async def init(self):
         self.redis = await aioredis.create_redis(
@@ -27,21 +38,22 @@ class Manager:
             limit = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
             await self.redis.zremrangebyscore('in_progress', max=limit)
             # Check remaining buffer size
-            if await self.redis.scard('tasks') < 250:
+            if await (size := self.redis.scard('tasks')) < 1000:
+                self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
                 conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
                 result = await conn.fetch('''
                     SELECT summoner_id
                     FROM summoner
                     WHERE account_id IS NULL
-                    LIMIT 500;
+                    LIMIT 2000;
                     ''')
                 await conn.close()
                 # Add new tasks
                 for entry in result:
 
                     await self.redis.sadd('task', entry['summoner_id'])
-                    if self.redis.scard('tasks') >= 500:
+                    if self.redis.scard('tasks') >= 2000:
                         break
 
             await asyncio.sleep(10)

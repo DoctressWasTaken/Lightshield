@@ -44,14 +44,18 @@ class Service:
 
     async def flush_manager(self):
         """Update entries in postgres once enough tasks are done."""
-        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-        result = await conn.executemany('''
-            UPDATE summoner
-            SET account_id = '$1', puuid = '$2'
-            WHERE account_id = '%s';
-            ''', self.completed_tasks)
-        self.completed_tasks = []
-        await conn.close()
+        while not self.stopped:
+            if len(self.completed_tasks) >= 50:
+                conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+                result = await conn.executemany('''
+                    UPDATE summoner
+                    SET account_id = '$1', puuid = '$2'
+                    WHERE account_id = '%s';
+                    ''', self.completed_tasks)
+                self.logging.info("Inserted %s summoner IDs.", len(self.completed_tasks))
+                self.completed_tasks = []
+                await conn.close()
+            await asyncio.sleep(0.5)
 
     async def get_task(self):
         """Return tasks to the async worker."""
