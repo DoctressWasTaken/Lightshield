@@ -149,9 +149,9 @@ class Service:  # pylint: disable=R0902
             INSERT INTO summoner (summoner_id, rank, wins, losses)
                 VALUES %s
                 ON CONFLICT (summoner_id) DO 
-                UPDATE SET rank = EXCLUDED.rank
-                       SET wins = EXCLUDED.wins
-                       SET losses = EXCLUDED.losses  
+                UPDATE SET rank = EXCLUDED.rank,
+                           wins = EXCLUDED.wins,
+                           losses = EXCLUDED.losses  
         ''' % ",".join(entries_serialized))
         await conn.close()
 
