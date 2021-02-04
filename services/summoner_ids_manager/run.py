@@ -10,7 +10,7 @@ class Manager:
     stopped = False
 
     async def init(self):
-        self.aioredis = await aioredis.create_connection(
+        self.redis = await aioredis.create_redis(
             ('redis', 6379))
 
     def shutdown(self):
@@ -22,9 +22,9 @@ class Manager:
         while not self.stopped:
             # Drop timed out tasks
             limit = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
-            self.aioredis.zremrangebyscore('in_progress', max=limit)
+            self.redis.zremrangebyscore('in_progress', max=limit)
             # Check remaining buffer size
-            if self.aioredis.llen('tasks') < 250:
+            if self.redis.llen('tasks') < 250:
                 # Pull new tasks
                 conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
                 result = await conn.fetch('''
@@ -35,10 +35,11 @@ class Manager:
                     ''')
                 # Add new tasks
                 for entry in result:
-                    if self.aioredis.lpush('task', entry['summoner_id']) >= 500:
+                    if self.redis.lpush('task', entry['summoner_id']) >= 500:
                         break
 
             await asyncio.sleep(10)
+        await self.redis.close()
 
 
 async def main():
