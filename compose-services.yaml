@@ -19,6 +19,19 @@ services:
     volumes:
       - ranking_progress:/project/configs/
 
+  summoner_ids_manager:
+    hostname: summoner_ids
+    mem_limit: 100m
+    cpus: 0.1
+    build:
+      dockerfile: Dockerfile
+      context: services/summoner_ids_manager
+    external_links:
+      - lightshield_rabbitmq:rabbitmq
+    links:
+      - buffer_db:redis
+      - persistent_db:postgres
+
   summoner_ids: # SI
     hostname: summoner_ids
     mem_limit: 150m
@@ -132,9 +145,18 @@ services:
       - POSTGRES_HOST_AUTH_METHOD=trust
     restart: always
 
+  buffer_db:
+    image: redis:6.0
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - redis:/data
+    restart: always
+
 volumes:
   postgres:
     name: ${SERVER}_lightshield_persistent
+  redis:
+    name: ${SERVER}_lightshield_buffer
   ranking_progress:
     name: ${SERVER}_ranking_progress
 
