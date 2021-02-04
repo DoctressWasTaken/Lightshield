@@ -55,7 +55,8 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        task = await self.redis.spop('tasks')
+        while not (task := await self.redis.spop('tasks')):
+            await asyncio.sleep(0.5)
         start = datetime.utcnow().timestamp()
         await self.redis.zadd('in_progress', start, task)
 
