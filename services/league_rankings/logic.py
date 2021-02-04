@@ -5,10 +5,10 @@ import os
 from datetime import datetime, timedelta
 
 import aiohttp
+import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from rabbit_manager_slim import RabbitManager
 from rank_manager import RankManager
-from repeat_marker import RepeatMarker
 
 tiers = {
     "IRON": 0,
@@ -48,15 +48,9 @@ class Service:  # pylint: disable=R0902
         self.empty = False
         self.next_page = 1
         self.stopped = False
-        self.marker = RepeatMarker()
         self.retry_after = datetime.now()
 
         self.rabbit = RabbitManager(exchange="RANKED")
-
-        asyncio.run(self.marker.build(
-            "CREATE TABLE IF NOT EXISTS match_history("
-            "summonerId TEXT PRIMARY KEY,"
-            "matches INTEGER);"))
 
     def shutdown(self):
         """Called on shutdown init."""
@@ -67,7 +61,6 @@ class Service:  # pylint: disable=R0902
 
         Initiate the Rankmanager object.
         """
-        await self.marker.connect()
         await self.rankmanager.init()
         await self.rabbit.init()
 
@@ -140,28 +133,27 @@ class Service:  # pylint: disable=R0902
 
         Check for changes that would warrent it be sent on.
          """
+
+        entries_serialized = []
         for entry in content:
-            matches_local = entry['wins'] + entry['losses']
-            matches = None
-            if prev := await self.marker.execute_read(
-                    'SELECT matches FROM match_history WHERE summonerId = "%s";' % entry['summonerId']):
-                matches = int(prev[0][0])
-
-            if matches and matches == matches_local:
-                return
-            await self.marker.execute_write(
-                'UPDATE match_history SET matches = %s WHERE summonerId = "%s";' % (
-                    matches_local,
-                    entry['summonerId']))
-
-            ranking = tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']
-
-            await self.rabbit.add_task([
+            entries_serialized.append("('%s',%s,%s,%s)" % (
                 entry['summonerId'],
-                ranking,
+                str(tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']),
                 entry['wins'],
                 entry['losses']
-            ])
+            ))
+
+        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+
+        await conn.execute('''
+            INSERT INTO summoner (summoner_id, rank, wins, losses)
+                VALUES %s
+                ON CONFLICT (summoner_id) DO 
+                UPDATE SET rank = EXCLUDED.rank
+                       SET wins = EXCLUDED.wins
+                       SET losses = EXCLUDED.losses  
+        ''' % ",".join(entries_serialized))
+        await conn.close()
 
     async def run(self):
         """Override the default run method due to special case.

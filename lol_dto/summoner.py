@@ -1,8 +1,6 @@
-from .base import Base
+from sqlalchemy import Column, String, ARRAY, SmallInteger, VARCHAR
 
-from sqlalchemy import Column, String, Integer, ARRAY, SmallInteger, Enum
-from sqlalchemy.orm import relationship
-from .enums import Server
+from .base import Base
 
 
 class Summoner(Base):
@@ -17,9 +15,17 @@ class Summoner(Base):
 
     __tablename__ = 'summoner'
 
-    puuid = Column(String(78), primary_key=True)
+    puuid = Column(String(78))
+    account_id = Column(String(56))
+    summoner_id = Column(String(63), primary_key=True)
+
     rank = Column("rank", SmallInteger)  # Calculated summed LP from lowest rank
+    rank_history = Column('rank_history', ARRAY(SmallInteger))
+
     wins = Column("wins", SmallInteger)
     losses = Column("losses", SmallInteger)
 
-    account_id = Column(String(56))
+    wins_p = Column("wins_diff", SmallInteger)
+    losses_diff = Column("losses_diff", SmallInteger)
+
+    priority = Column("priority", VARCHAR(1))

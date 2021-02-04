@@ -2,16 +2,6 @@ version: '2.3'
 services:
 ### Services
 
-  structural_creator:
-    build:
-      dockerfile: Dockerfile
-      context: services/structural_creator
-    container_name: ${COMPOSE_PROJECT_NAME}_structural_creator
-    environment:
-      - SERVER=${SERVER}
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
-
   league_rankings:
     hostname: league_rankings
     mem_limit: 150m
@@ -23,18 +13,11 @@ services:
       - SERVER=${SERVER}
       - UPDATE_INTERVAL=1
       - WORKER=5
-      - STREAM=RANKED
-      - MAX_TASK_BUFFER=1000
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
-    depends_on:
-      - structural_creator
+    links:
+      - persistant_db:postgres
     restart: always
     volumes:
-      - ./sqlite/:/project/sqlite/
       - ranking_progress:/project/configs/
-      - /backup
-
 
   summoner_ids: # SI
     hostname: summoner_ids
@@ -54,8 +37,6 @@ services:
       - /backup
     external_links:
       - lightshield_rabbitmq:rabbitmq
-    depends_on:
-      - structural_creator
     restart: always
 
   match_history:  # MH
@@ -78,8 +59,6 @@ services:
       - persistant_db:postgres
     external_links:
       - lightshield_rabbitmq:rabbitmq
-    depends_on:
-      - structural_creator
     restart: always
 
   match_details:  # MD
@@ -115,7 +94,6 @@ services:
     links:
       - persistant_db:postgres
     depends_on:
-      - structural_creator
       - processor_summoner
     volumes:
       - ./lol_dto:/project/lol_dto
@@ -149,13 +127,14 @@ services:
 
   persistant_db:
     container_name: ${COMPOSE_PROJECT_NAME}_persistant_db
-    image: postgres:alpine
+    build:
+      context: postgres
+      dockerfile: Dockerfile
     volumes:
       - postgres:/var/lib/postgresql/data
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
     restart: always
-
 
 volumes:
   postgres:

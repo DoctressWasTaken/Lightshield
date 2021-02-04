@@ -1,0 +1,1 @@
+CREATE DATABASE raw WITH OWNER postgres;
