@@ -128,12 +128,12 @@ class Service:
                     UPDATE match
                     SET status='C'
                     WHERE "matchId" in (%s)
-                    ''' % ','.join(success))
+                    ''' % ','.join(str(x) for x in success))
             if not_found:
                 await conn.execute('''
                     DELETE FROM match
                     WHERE "matchId" in (%s)
-                    ''' % ','.join(not_found))
+                    ''' % ','.join(str(x) for x in not_found))
             await conn.close()
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
