@@ -9,7 +9,6 @@ import aiohttp
 import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from rabbit_manager_slim import RabbitManager
-from repeat_marker import RepeatMarker
 
 
 class Service:
@@ -29,7 +28,6 @@ class Service:
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
                    "match/v4/matches/%s"
         self.stopped = False
-        self.marker = RepeatMarker()
         self.retry_after = datetime.now()
         self.rabbit = RabbitManager(exchange="DETAILS")
         self.active_tasks = 0
@@ -41,7 +39,6 @@ class Service:
 
         Initiate the Rankmanager object.
         """
-        await self.marker.connect()
         await self.rabbit.init()
 
     def shutdown(self):

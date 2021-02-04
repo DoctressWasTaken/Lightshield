@@ -95,7 +95,6 @@ services:
       - MAX_TASK_BUFFER=1000
       - STREAM=DETAILS
     volumes:
-      - ./sqlite/:/project/sqlite/
       - /backup
     links:
       - persistant_db:postgres
