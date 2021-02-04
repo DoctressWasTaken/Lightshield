@@ -47,7 +47,7 @@ class Service:
         conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
         result = await conn.executemany('''
             UPDATE summoner
-            SET accountId = '$1', puuid = '$2'
+            SET account_id = '$1', puuid = '$2'
             WHERE account_id = '%s';
             ''', self.completed_tasks)
         self.completed_tasks = []
@@ -55,9 +55,9 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        task = self.redis.spop('tasks')
+        task = await self.redis.spop('tasks')
         start = datetime.utcnow().timestamp()
-        self.redis.zadd('in_progress', start, task)
+        await self.redis.zadd('in_progress', start, task)
 
     async def async_worker(self):
         """Create only a new call if the summoner is not yet in the db."""
