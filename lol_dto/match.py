@@ -1,7 +1,7 @@
 """Tables related to Match Data."""
 import asyncio
 
-from sqlalchemy import Column, Boolean, String, BigInteger, SmallInteger
+from sqlalchemy import Column, Boolean, String, BigInteger, SmallInteger, VARCHAR
 
 from . import Base, Team, Player, Runes
 
@@ -14,8 +14,9 @@ class Match(Base):
     __tablename__ = 'match'
 
     matchId = Column(BigInteger, primary_key=True)
+    status = Column(VARCHAR(1), index=True)
 
-    start = Column(BigInteger, index=True)
+    start = Column(BigInteger)
     duration = Column(SmallInteger)
     gameVersion = Column(String)
 

@@ -2,12 +2,11 @@
 import asyncio
 import logging
 import os
-import pickle
 import traceback
 from datetime import datetime, timedelta
 
-import aio_pika
 import aiohttp
+import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from rabbit_manager_slim import RabbitManager
 from repeat_marker import RepeatMarker
@@ -36,9 +35,6 @@ class Service:
         self.active_tasks = 0
         self.working_tasks = []
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
-        asyncio.run(self.marker.build(
-            "CREATE TABLE IF NOT EXISTS match_id("
-            "id BIGINT PRIMARY KEY);"))
 
     async def init(self):
         """Override of the default init function.
@@ -52,67 +48,24 @@ class Service:
         """Called on shutdown init."""
         self.stopped = True
 
-    async def limiter(self):
-        """Method to periodically break down the db size by removing a % of the lowest match Ids."""
-        retain_period_days = 60
-        removal = 100 / retain_period_days
-        await asyncio.sleep(7 * 24 * 60 * 60)  # Initial 7 day wait
-        while True:
-            await asyncio.sleep(24 * 60 * 60)
-            count = await self.marker.execute_read(
-                'SELECT COUNT(*) FROM match_id'
-            )
-            to_delete = int(count * removal)
-            lowest_limit = await self.marker.execute_read(
-                'SELECT id FROM match_id ORDER BY id ASC LIMIT %s' % to_delete
-            )[-1]
-            await self.marker.execute_read(
-                'DELETE FROM match_id WHERE id <= %s' % lowest_limit
-            )
-
-    async def task_selector(self, message):
-        try:
-            async with message.process():
-                matchId = pickle.loads(message.body)
-                if await self.marker.execute_read(
-                        'SELECT * FROM match_id WHERE id = %s;' % matchId):
-                    return
-                if matchId in self.buffered_elements:
-                    return
-                self.working_tasks.append(
-                    asyncio.create_task(self.async_worker(matchId))
-                )
-        except Exception as err:
-            traceback.print_tb(err.__traceback__)
-            self.logging.info(err)
-
     async def async_worker(self, matchId):
         try:
-            self.buffered_elements[matchId] = True
             url = self.url % matchId
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
             async with aiohttp.ClientSession() as session:
                 response = await self.fetch(session, url)
-                await self.marker.execute_write(
-                    'INSERT OR IGNORE INTO match_id (id) VALUES (%s);' % matchId)
 
-                self.logging.info("Added new task")
                 await self.rabbit.add_task(response)
-
+                return matchId
         except (RatelimitException, Non200Exception):
             self.logging.info("Failed to receive data, requeuing task.")
-            self.working_tasks.append(
-                asyncio.create_task(self.async_worker(matchId))
-            )
         except NotFoundException:
             self.logging.info("Match not found.")
+            return "!%s" % matchId
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
-        finally:
-            if matchId in self.buffered_elements:
-                del self.buffered_elements[matchId]
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
@@ -146,36 +99,48 @@ class Service:
 
     async def package_manager(self):
         self.logging.info("Starting package manager.")
-        connection = await aio_pika.connect_robust(
-            "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
-        )
-        channel = await connection.channel()
-        await channel.set_qos(prefetch_count=50)
-        queue = await channel.declare_queue(
-            name=self.server + "_HISTORY_TO_DETAILS",
-            passive=True
-        )
-        self.logging.info("Initialized package manager.")
-        async with queue.iterator() as queue_iter:
-            async for message in queue_iter:
-                await self.task_selector(message)
 
-                while len(self.working_tasks) >= 150 or self.rabbit.blocked:
-                    await asyncio.sleep(0.5)
-                    await asyncio.gather(*self.working_tasks)
-                    self.working_tasks = []
+        while not self.stopped:
+            conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+
+            match_id_records = await conn.fetch('''
+                SELECT "matchId"
+                FROM match 
+                WHERE status IS NULL 
+                LIMIT 50;
+                ''')
+
+            tasks = []
+            for record in match_id_records:
+                tasks.append(
+                    asyncio.create_task(self.async_worker(record['matchId']))
+                )
+            responses = await asyncio.gather(*tasks)
+            success = []
+            not_found = []
+            for entry in responses:
+                if not entry:
+                    continue
+                if entry.startswith("!"):
+                    not_found.append(entry[1:])
+                else:
+                    success.append(entry)
+            if success:
+                await conn.execute('''
+                    UPDATE match
+                    SET status='C'
+                    WHERE "matchId" in (%s)
+                    ''' % ','.join(success))
+            if not_found:
+                await conn.execute('''
+                    DELETE FROM match
+                    WHERE "matchId" in (%s)
+                    ''' % ','.join(not_found))
+            await conn.close()
 
         self.logging.info("Exited package manager.")
 
     async def run(self):
         """Runner."""
         await self.init()
-        limiter_task = asyncio.create_task(self.limiter())
-        manager = asyncio.create_task(self.package_manager())
-        while not self.stopped:
-            await asyncio.sleep(0.5)
-        try:
-            manager.cancel()
-        except:
-            pass
-        await limiter_task
+        await self.package_manager()
