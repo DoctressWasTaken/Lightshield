@@ -113,6 +113,7 @@ class Service:
                 tasks.append(
                     asyncio.create_task(self.async_worker(record['matchId']))
                 )
+                await asyncio.sleep(0.01)
             responses = await asyncio.gather(*tasks)
             success = []
             not_found = []
