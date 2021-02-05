@@ -6,6 +6,7 @@ Import is done directly.
 import asyncio
 import logging
 import os
+import traceback
 from datetime import datetime, timedelta
 
 import aiohttp
@@ -44,18 +45,24 @@ class Service:
 
     async def flush_manager(self):
         """Update entries in postgres once enough tasks are done."""
-        while not self.stopped:
-            if len(self.completed_tasks) >= 50:
-                conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-                result = await conn.executemany('''
-                    UPDATE summoner
-                    SET account_id = '$1', puuid = '$2'
-                    WHERE account_id = '%s';
-                    ''', self.completed_tasks)
-                self.logging.info("Inserted %s summoner IDs.", len(self.completed_tasks))
-                self.completed_tasks = []
-                await conn.close()
-            await asyncio.sleep(0.5)
+        self.logging.info("Started flush manager.")
+        try:
+            while not self.stopped:
+                if len(self.completed_tasks) >= 50:
+                    conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+                    result = await conn.executemany('''
+                        UPDATE summoner
+                        SET account_id = '$1', puuid = '$2'
+                        WHERE account_id = '%s';
+                        ''', self.completed_tasks)
+                    self.logging.info("Inserted %s summoner IDs.", len(self.completed_tasks))
+                    self.completed_tasks = []
+                    await conn.close()
+                await asyncio.sleep(0.5)
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
+        self.logging.info("Stopped flush manager.")
 
     async def get_task(self):
         """Return tasks to the async worker."""
@@ -69,17 +76,26 @@ class Service:
 
     async def async_worker(self):
         """Create only a new call if the summoner is not yet in the db."""
-        while not self.stopped:
-            summoner_id = await self.get_task()
-            if self.stopped:
-                return
-            url = self.url % summoner_id
-            try:
-                async with aiohttp.ClientSession() as session:
-                    response = await self.fetch(session, url)
-                    self.completed_tasks.append(response)
-            except (RatelimitException, NotFoundException, Non200Exception):
-                continue
+        self.logging.info("Started worker.")
+        try:
+            while not self.stopped:
+                summoner_id = await self.get_task()
+                if self.stopped:
+                    return
+                url = self.url % summoner_id
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        response = await self.fetch(session, url)
+                        self.completed_tasks.append(response)
+                except (RatelimitException, NotFoundException, Non200Exception):
+                    continue
+                if datetime.now() < self.retry_after:
+                    delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
+                    await asyncio.sleep(delay)
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
+        self.logging.info("Stopped worker.")
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
