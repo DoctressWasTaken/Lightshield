@@ -49,14 +49,14 @@ class Service:
         try:
             conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
             while not self.stopped:
-                if len(self.completed_tasks) >= 50:
-                    result = await conn.executemany('''
+                if (size := len(self.completed_tasks)) >= 50:
+                    await conn.executemany('''
                         UPDATE summoner
                         SET account_id = $1, puuid = $2
                         WHERE summoner_id = $3;
                         ''', self.completed_tasks)
-                    self.logging.info("Inserted %s summoner IDs.", len(self.completed_tasks))
                     self.completed_tasks = []
+                    self.logging.info("Inserted %s summoner IDs.", size)
                 await asyncio.sleep(0.5)
             await conn.close()
         except Exception as err:
