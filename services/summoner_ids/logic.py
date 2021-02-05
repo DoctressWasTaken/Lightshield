@@ -47,18 +47,18 @@ class Service:
         """Update entries in postgres once enough tasks are done."""
         self.logging.info("Started flush manager.")
         try:
+            conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
             while not self.stopped:
                 if len(self.completed_tasks) >= 50:
-                    conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
                     result = await conn.executemany('''
                         UPDATE summoner
-                        SET account_id = '$1', puuid = '$2'
-                        WHERE summoner_id = '$3';
+                        SET account_id = $1, puuid = $2
+                        WHERE summoner_id = $3;
                         ''', self.completed_tasks)
                     self.logging.info("Inserted %s summoner IDs.", len(self.completed_tasks))
                     self.completed_tasks = []
-                    await conn.close()
                 await asyncio.sleep(0.5)
+            await conn.close()
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
@@ -87,7 +87,7 @@ class Service:
                     async with aiohttp.ClientSession() as session:
                         response = await self.fetch(session, url)
                         self.completed_tasks.append(
-                            [response['accountId'], response['puuid'], summoner_id])
+                            (response['accountId'], response['puuid'], summoner_id))
                 except (RatelimitException, NotFoundException, Non200Exception):
                     continue
                 if datetime.now() < self.retry_after:
@@ -141,6 +141,6 @@ class Service:
         await self.init()
         flush_manager = asyncio.create_task(self.flush_manager())
         await asyncio.gather(*[
-            asyncio.create_task(self.async_worker()) for _ in range(5)
+            asyncio.create_task(self.async_worker()) for _ in range(25)
         ])
         await flush_manager
