@@ -26,6 +26,8 @@ class Manager:
     async def init(self):
         self.redis = await aioredis.create_redis(
             ('redis', 6379))
+        await self.redis.delete('in_progress')
+        await self.redis.delete('tasks')
 
     def shutdown(self):
         self.stopped = True
@@ -35,8 +37,7 @@ class Manager:
 
         while not self.stopped:
             # Drop timed out tasks
-            limit = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
-            self.logging.info(limit)
+            limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
             await self.redis.zremrangebyscore('in_progress', max=limit)
             # Check remaining buffer size
             if (size := await self.redis.scard('tasks')) < 1000:
