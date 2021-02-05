@@ -72,6 +72,7 @@ class Service:
             return
         start = datetime.utcnow().timestamp()
         await self.redis.zadd('in_progress', start, task)
+        self.logging.info("Returned task.")
         return task
 
     async def async_worker(self):
