@@ -107,7 +107,8 @@ class Service:
                         tasks.append(asyncio.create_task(
                             self.fetch_manager(session, summoner_id)
                         ))
-                await asyncio.gather(*tasks)
+                        await asyncio.sleep(0.02)
+                    await asyncio.gather(*tasks)
                 await self.flush_manager()
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
