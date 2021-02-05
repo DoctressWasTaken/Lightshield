@@ -132,7 +132,8 @@ class Service:
         try:
             async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
                 await response.text()
-                self.logging.info(response.status)
+                if response.status != 200:
+                    self.logging.info(response.status)
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
         if response.status in [429, 430]:
