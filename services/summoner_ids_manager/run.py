@@ -51,8 +51,7 @@ class Manager:
                 await conn.close()
                 # Add new tasks
                 for entry in result:
-                    self.logging.info(entry['summoner_id'])
-                    await self.redis.sadd('task', entry['summoner_id'])
+                    await self.redis.sadd('tasks', entry['summoner_id'])
                     if await self.redis.scard('tasks') >= 2000:
                         break
                 self.logging.info("Filled tasks to %s.", await self.redis.scard('tasks'))
