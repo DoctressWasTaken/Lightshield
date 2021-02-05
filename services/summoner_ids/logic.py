@@ -72,7 +72,6 @@ class Service:
             return
         start = datetime.utcnow().timestamp()
         await self.redis.zadd('in_progress', start, task)
-        self.logging.info("Returned task.")
         return task
 
     async def async_worker(self):
@@ -134,7 +133,7 @@ class Service:
         Initiate the Rankmanager object.
         """
         self.redis = await aioredis.create_redis_pool(
-            ('redis', 6379))
+            ('redis', 6379), encoding='utf-8')
 
     async def run(self):
         """Runner."""
