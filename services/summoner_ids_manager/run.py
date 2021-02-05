@@ -53,6 +53,8 @@ class Manager:
                 await conn.close()
                 # Add new tasks
                 for entry in result:
+                    if await self.redis.sismember('tasks', entry['summoner_id'])
+                        continue
                     await self.redis.sadd('tasks', entry['summoner_id'])
                     if await self.redis.scard('tasks') >= 2000:
                         break

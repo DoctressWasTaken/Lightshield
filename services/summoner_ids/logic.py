@@ -38,6 +38,7 @@ class Service:
         self.retry_after = datetime.now()
 
         self.completed_tasks = []
+        self.to_delete = []
 
     def shutdown(self):
         """Called on shutdown init."""
@@ -45,57 +46,72 @@ class Service:
 
     async def flush_manager(self):
         """Update entries in postgres once enough tasks are done."""
-        self.logging.info("Started flush manager.")
         try:
             conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-            while not self.stopped:
-                if (size := len(self.completed_tasks)) >= 50:
-                    await conn.executemany('''
-                        UPDATE summoner
-                        SET account_id = $1, puuid = $2
-                        WHERE summoner_id = $3;
-                        ''', self.completed_tasks)
-                    self.completed_tasks = []
-                    self.logging.info("Inserted %s summoner IDs.", size)
-                await asyncio.sleep(0.5)
+            if self.completed_tasks:
+                self.logging.info("Inserting %s summoner IDs.", len(self.completed_tasks))
+                await conn.executemany('''
+                    UPDATE summoner
+                    SET account_id = $1, puuid = $2
+                    WHERE summoner_id = $3;
+                    ''', self.completed_tasks)
+                self.completed_tasks = []
+            if self.to_delete:
+                await conn.execute('''
+                    DROP FROM summoner
+                    WHERE summoner_id IN (%s);
+                    ''', ",".join(["'%s'" % id for id in self.to_delete]))
+                self.to_delete = []
+
             await conn.close()
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
-        self.logging.info("Stopped flush manager.")
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        while not (task := await self.redis.spop('tasks')) or self.stopped:
-            await asyncio.sleep(0.5)
-        if self.stopped:
+
+        task = await self.redis.spop('tasks')
+        if not task or self.stopped:
             return
-        start = datetime.utcnow().timestamp()
+        start = int(datetime.utcnow().timestamp())
         await self.redis.zadd('in_progress', start, task)
         return task
+
+    async def fetch_manager(self, session, summoner_id):
+        """Manage the fetch response."""
+
+        try:
+            response = await self.fetch(session, self.url % summoner_id)
+            self.completed_tasks.append(
+                (response['accountId'], response['puuid'], summoner_id))
+        except NotFoundException:
+            self.to_delete.append(summoner_id)
+        except (RatelimitException, Non200Exception):
+            return
 
     async def async_worker(self):
         """Create only a new call if the summoner is not yet in the db."""
         self.logging.info("Started worker.")
-        try:
-            while not self.stopped:
-                summoner_id = await self.get_task()
-                if self.stopped:
-                    return
-                url = self.url % summoner_id
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        response = await self.fetch(session, url)
-                        self.completed_tasks.append(
-                            (response['accountId'], response['puuid'], summoner_id))
-                except (RatelimitException, NotFoundException, Non200Exception):
-                    continue
-                if datetime.now() < self.retry_after:
-                    delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
-                    await asyncio.sleep(delay)
-        except Exception as err:
-            traceback.print_tb(err.__traceback__)
-            self.logging.info(err)
+        while not self.stopped:
+            if datetime.now() < self.retry_after:
+                delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
+                await asyncio.sleep(delay)
+            try:
+                tasks = []
+                async with aiohttp.ClientSession() as session:
+                    for i in range(50):
+                        summoner_id = await self.get_task()
+                        if not summoner_id:
+                            continue
+                        tasks.append(asyncio.create_task(
+                            self.fetch(session, self.url % summoner_id)
+                        ))
+                await asyncio.gather(*tasks)
+                await self.flush_manager()
+            except Exception as err:
+                traceback.print_tb(err.__traceback__)
+                self.logging.info(err)
         self.logging.info("Stopped worker.")
 
     async def fetch(self, session, url):
@@ -122,7 +138,6 @@ class Service:
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
                 self.retry_after = datetime.now() + timedelta(seconds=delay)
-            raise RatelimitException()
         if response.status == 404:
             raise NotFoundException()
         if response.status != 200:
@@ -140,8 +155,4 @@ class Service:
     async def run(self):
         """Runner."""
         await self.init()
-        flush_manager = asyncio.create_task(self.flush_manager())
-        await asyncio.gather(*[
-            asyncio.create_task(self.async_worker()) for _ in range(10)
-        ])
-        await flush_manager
+        await self.async_worker()
