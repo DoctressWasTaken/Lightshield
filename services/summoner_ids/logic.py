@@ -105,7 +105,7 @@ class Service:
                         if not summoner_id:
                             continue
                         tasks.append(asyncio.create_task(
-                            self.fetch(session, self.url % summoner_id)
+                            self.fetch_manager(session, summoner_id)
                         ))
                 await asyncio.gather(*tasks)
                 await self.flush_manager()
