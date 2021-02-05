@@ -53,7 +53,7 @@ class Service:
                     result = await conn.executemany('''
                         UPDATE summoner
                         SET account_id = '$1', puuid = '$2'
-                        WHERE account_id = '%s';
+                        WHERE summoner_id = '$3';
                         ''', self.completed_tasks)
                     self.logging.info("Inserted %s summoner IDs.", len(self.completed_tasks))
                     self.completed_tasks = []
@@ -86,7 +86,8 @@ class Service:
                 try:
                     async with aiohttp.ClientSession() as session:
                         response = await self.fetch(session, url)
-                        self.completed_tasks.append(response)
+                        self.completed_tasks.append(
+                            [response['accountId'], response['puuid'], summoner_id])
                 except (RatelimitException, NotFoundException, Non200Exception):
                     continue
                 if datetime.now() < self.retry_after:
