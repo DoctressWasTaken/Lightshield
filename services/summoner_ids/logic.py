@@ -59,22 +59,27 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        while not (task := await self.redis.spop('tasks')):
+        while not (task := await self.redis.spop('tasks')) or self.stopped:
             await asyncio.sleep(0.5)
+        if self.stopped:
+            return
         start = datetime.utcnow().timestamp()
         await self.redis.zadd('in_progress', start, task)
+        return task
 
     async def async_worker(self):
         """Create only a new call if the summoner is not yet in the db."""
-        summoner_id = await self.get_task()
-
-        url = self.url % summoner_id
-        try:
-            async with aiohttp.ClientSession() as session:
-                response = await self.fetch(session, url)
-                self.completed_tasks.append(response)
-        except (RatelimitException, NotFoundException, Non200Exception):
-            return
+        while not self.stopped:
+            summoner_id = await self.get_task()
+            if self.stopped:
+                return
+            url = self.url % summoner_id
+            try:
+                async with aiohttp.ClientSession() as session:
+                    response = await self.fetch(session, url)
+                    self.completed_tasks.append(response)
+            except (RatelimitException, NotFoundException, Non200Exception):
+                continue
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.

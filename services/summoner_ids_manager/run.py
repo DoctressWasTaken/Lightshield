@@ -51,12 +51,11 @@ class Manager:
                 await conn.close()
                 # Add new tasks
                 for entry in result:
-                    self.logging.info(type(entry['summoner_id']))
                     await self.redis.sadd('task', entry['summoner_id'])
                     if await self.redis.scard('tasks') >= 2000:
                         break
 
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
         await self.redis.close()
 
 
