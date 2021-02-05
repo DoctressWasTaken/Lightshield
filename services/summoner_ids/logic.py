@@ -115,6 +115,7 @@ class Service:
         try:
             async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
                 await response.text()
+                self.logging.info(response.status)
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
         if response.status in [429, 430]:
@@ -141,6 +142,6 @@ class Service:
         await self.init()
         flush_manager = asyncio.create_task(self.flush_manager())
         await asyncio.gather(*[
-            asyncio.create_task(self.async_worker()) for _ in range(25)
+            asyncio.create_task(self.async_worker()) for _ in range(10)
         ])
         await flush_manager
