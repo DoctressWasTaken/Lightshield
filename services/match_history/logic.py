@@ -126,6 +126,9 @@ class Service:
         while not self.stopped:
             if limit and start > limit * 100:
                 return [match for match in matches if match['platformId'] == self.server.upper()]
+            if datetime.now() < self.retry_after:
+                delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
+                await asyncio.sleep(delay)
             try:
                 result = await self.fetch(session=session,
                                           url=self.url % (account_id, start, end))
@@ -137,6 +140,8 @@ class Service:
                 await asyncio.sleep(0.2)
             except NotFoundException:
                 return [match for match in matches if match['platformId'] == self.server.upper()]
+            except (Non200Exception, RatelimitException):
+                continue
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
                 self.logging.info(err)
@@ -174,6 +179,7 @@ class Service:
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
         if response.status in [429, 430]:
+            self.logging.info(response.status)
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
                 self.retry_after = datetime.now() + timedelta(seconds=delay)
