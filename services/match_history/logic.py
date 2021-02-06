@@ -2,16 +2,13 @@
 import asyncio
 import logging
 import os
-import pickle
 import traceback
 from datetime import datetime, timedelta
 
-import aio_pika
 import aiohttp
+import aioredis
 import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-from rabbit_manager_slim import RabbitManager
-from repeat_marker import RepeatMarker
 
 
 class Service:
@@ -34,86 +31,94 @@ class Service:
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
                    "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s&queue=420"
         self.stopped = False
-        self.marker = RepeatMarker()
         self.retry_after = datetime.now()
 
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
-        asyncio.run(self.marker.build(
-            "CREATE TABLE IF NOT EXISTS match_history("
-            "accountId TEXT PRIMARY KEY,"
-            "matches INTEGER);"))
 
-        self.rabbit = RabbitManager(exchange="HISTORY")
-
-        self.timelimit = int(os.environ['TIME_LIMIT'])
-        self.required_matches = int(os.environ['MATCHES_TO_UPDATE'])
         self.active_tasks = []
 
     async def init(self):
         """Initiate timelimit for pulled matches."""
-        await self.marker.connect()
-        await self.rabbit.init()
+        self.redis = await aioredis.create_redis_pool(
+            ('redis', 6379), encoding='utf-8')
 
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
 
-    async def task_selector(self, message):
-        accountId, puuid, rank, wins, losses = pickle.loads(message.body)
-        matches = wins + losses
-        if prev := await self.marker.execute_read(
-                'SELECT matches FROM match_history WHERE accountId = "%s"' % accountId):
-            matches = matches - int(prev[0][0])
-        if matches < self.required_matches:
-            return
-        if accountId in self.buffered_elements:
-            return
-        self.active_tasks.append(
-            asyncio.create_task(self.async_worker(accountId, matches)))
-
-    async def async_worker(self, account_id, matches):
-        self.buffered_elements[account_id] = True
+    async def flush_manager(self):
+        """Update entries in postgres once enough tasks are done."""
         try:
-            matches_to_call = matches + 3
-            calls = int(matches_to_call / 100) + 1
-            ids = [start_id * 100 for start_id in range(calls)]
-            calls_in_progress = []
-            async with aiohttp.ClientSession() as session:
-                while ids:
-                    id = ids.pop()
-                    calls_in_progress.append(asyncio.create_task(
-                        self.handler(
-                            session=session,
-                            url=self.url % (account_id, id, id + 100)
-                        )
-                    ))
-                    await asyncio.sleep(0.1)
-                    responses = await asyncio.gather(*calls_in_progress)
-                    match_data = list(set().union(*responses))
-                    query = 'REPLACE INTO match_history (accountId, matches) VALUES (\'%s\', %s);' % (
-                        account_id, matches)
-                    await self.marker.execute_write(query)
-                    conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+            conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+            if self.completed_tasks:
+                self.logging.info("Inserting %s summoner IDs.", len(self.completed_tasks))
+                await conn.executemany('''
+                    UPDATE summoner
+                    SET account_id = $1, puuid = $2
+                    WHERE summoner_id = $3;
+                    ''', self.completed_tasks)
+                self.completed_tasks = []
+            if self.to_delete:
+                await conn.execute('''
+                    DROP FROM summoner
+                    WHERE summoner_id IN (%s);
+                    ''', ",".join(["'%s'" % id for id in self.to_delete]))
+                self.to_delete = []
 
-                    result = await conn.execute('''
-                        INSERT INTO match ("matchId")
-                        VALUES %s
-                        ON CONFLICT ("matchId")
-                        DO NOTHING;
-                    ''' % ",".join(["(%s)" % matchId for matchId in match_data]))
-                    await conn.close()
-                    self.logging.debug(result)
-
-
-        except NotFoundException:
-            return
+            await conn.close()
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
-        finally:
-            self.logging.debug("Finished task.")
-            del self.buffered_elements[account_id]
 
+    async def get_task(self):
+        """Return tasks to the async worker."""
+        while not (task := await self.redis.zpopmax('match_history_tasks', 1)) and not self.stopped:
+            await asyncio.sleep(5)
+            self.logging.info(task)
+        if self.stopped:
+            return
+        start = int(datetime.utcnow().timestamp())
+        await self.redis.zadd('summoner_id_in_progress', start, task)
+        return task
+
+    """
+    async def async_worker(self):
+        while not self.stopped:
+            try:
+                async with aiohttp.ClientSession() as session:
+
+                        id = ids.pop()
+                        calls_in_progress.append(asyncio.create_task(
+                            self.handler(
+                                session=session,
+                                url=self.url % (account_id, id, id + 100)
+                            )
+                        ))
+                        await asyncio.sleep(0.1)
+                        responses = await asyncio.gather(*calls_in_progress)
+                        match_data = list(set().union(*responses))
+                        query = 'REPLACE INTO match_history (accountId, matches) VALUES (\'%s\', %s);' % (
+                            account_id, matches)
+                        await self.marker.execute_write(query)
+                        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+
+                        result = await conn.execute('''
+                            INSERT INTO match ("matchId")
+                            VALUES %s
+                            ON CONFLICT ("matchId")
+                            DO NOTHING;
+                        ''' % ",".join(["(%s)" % matchId for matchId in match_data]))
+                        await conn.close()
+                        self.logging.debug(result)
+            except NotFoundException:
+                return
+            except Exception as err:
+                traceback.print_tb(err.__traceback__)
+                self.logging.info(err)
+            finally:
+                self.logging.debug("Finished task.")
+                del self.buffered_elements[account_id]
+    """
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
 
@@ -163,43 +168,9 @@ class Service:
             except Non200Exception:
                 await asyncio.sleep(0.1)
 
-    async def package_manager(self):
-        try:
-            self.logging.info("Starting package manager.")
-            connection = await aio_pika.connect_robust(
-                "amqp://guest:guest@rabbitmq/", loop=asyncio.get_running_loop()
-            )
-            channel = await connection.channel()
-            await channel.set_qos(prefetch_count=50)
-            queue = await channel.declare_queue(
-                name=self.server + "_SUMMONER_TO_HISTORY",
-                passive=True
-            )
-            self.logging.info("Initialized package manager.")
-            async with queue.iterator() as queue_iter:
-                async for message in queue_iter:
-                    async with message.process():
-                        await self.task_selector(message)
-
-                    while len(self.buffered_elements) >= 25 or self.rabbit.blocked:
-                        if self.active_tasks:
-                            await asyncio.gather(*self.active_tasks)
-                            self.active_tasks = []
-                        await asyncio.sleep(0.5)
-
-            self.logging.info("Exited package manager.")
-        except Exception as err:
-            traceback.print_tb(err.__traceback__)
-            self.logging.info(err)
-
     async def run(self):
         """Runner."""
         await self.init()
         self.logging.info("Initiated.")
-        manager = asyncio.create_task(self.package_manager())
         while not self.stopped:
             await asyncio.sleep(1)
-        try:
-            manager.cancel()
-        except:
-            pass
