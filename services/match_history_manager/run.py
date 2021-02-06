@@ -88,12 +88,14 @@ class Manager:
                         continue
                     if full_refreshes:
                         z_index = 9999
+                        package = {key: entry[key] for key in
+                                   ['wins', 'losses']}
+
                     else:
                         z_index = entry['wins'] + entry['losses'] - entry['wins_last_updated'] - entry[
                             'losses_last_updated']
-
-                    package = {key: entry[key] for key in
-                               ['wins', 'losses', 'wins_last_updated', 'losses_last_updated']}
+                        package = {key: entry[key] for key in
+                                   ['wins', 'losses', 'wins_last_updated', 'losses_last_updated']}
 
                     # Insert task hook
                     await self.redis.zadd('match_history_tasks', z_index, entry['account_id'])
