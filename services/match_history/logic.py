@@ -18,8 +18,6 @@ class Service:
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("MatchHistory")
         level = logging.INFO
-        if "LOGGING" in os.environ:
-            level = getattr(logging, os.environ['LOGGING'])
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)

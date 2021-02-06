@@ -26,8 +26,6 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids_manager
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
     links:
       - buffer_db:redis
       - persistent_db:postgres
@@ -46,8 +44,6 @@ services:
     links:
       - buffer_db:redis
       - persistent_db:postgres
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
     restart: always
 
   match_history_manager:
@@ -57,8 +53,6 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_history_manager
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
     links:
       - buffer_db:redis
       - persistent_db:postgres
@@ -72,17 +66,11 @@ services:
       context: services/match_history
     environment:
       - SERVER=${SERVER}
-      - WORKER=10
-      - MATCHES_TO_UPDATE=10
-      - TIME_LIMIT=1595401200
-      - STREAM=HISTORY
     volumes:
-      - ./sqlite/:/project/sqlite/
       - /backup
     links:
+      - buffer_db:redis
       - persistent_db:postgres
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
     restart: always
 
   match_details:  # MD
