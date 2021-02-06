@@ -86,7 +86,7 @@ class Manager:
                     # Each entry will always be refered to by account_id
                     if await self.redis.zscore('match_history_in_progress', entry['account_id']):
                         continue
-                    if not full_refreshes:
+                    if full_refreshes:
                         z_index = 9999
                     else:
                         z_index = entry['wins'] + entry['losses'] - entry['wins_last_updated'] - entry[
