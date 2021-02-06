@@ -56,7 +56,7 @@ class Manager:
                     LIMIT 2000;
                     ''')
                 await conn.close()
-                if len(result < min_threshold):
+                if len(result) < min_threshold:
                     self.logging.info("Not enough tasks found.")
                     await asyncio.sleep(60)
                     min_threshold = max(1, min_threshold - 1)
