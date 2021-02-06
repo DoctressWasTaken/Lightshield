@@ -63,7 +63,7 @@ class Service:
                 SET wins_last_updated = $1,
                     losses_last_updated = $2
                 WHERE account_id = $3
-                ''', keys['wins'], keys['losses'], account_id)
+                ''', int(keys['wins']), int(keys['losses']), account_id)
             await conn.close()
         except Exception as err:
             traceback.print_tb(err.__traceback__)
