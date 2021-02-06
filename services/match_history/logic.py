@@ -170,5 +170,6 @@ class Service:
         """Runner."""
         await self.init()
         self.logging.info("Initiated.")
+        await self.get_task()
         while not self.stopped:
             await asyncio.sleep(1)
