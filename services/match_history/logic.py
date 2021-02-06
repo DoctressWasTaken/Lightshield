@@ -53,11 +53,13 @@ class Service:
                     entry['gameId'], entry['queue'], entry['timestamp'] // 1000
                 ))
             conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-            await conn.execute('''
+            query = '''
                 INSERT INTO match (match_id, queue, timestamp)
                 VALUES(%s)
                 ON CONFLICT DO NOTHING;
-                ''' % ",".join(sets))
+                ''' % ",".join(sets)
+            self.logging.info(query)
+            await conn.execute(query)
             await conn.execute('''
                 UPDATE summoner
                 SET wins_last_updated = $1,
