@@ -184,13 +184,12 @@ class Service:
             raise Non200Exception()
         return await response.json(content_type=None)
 
-
-async def run(self):
-    """
-    Runner.
-    """
-    await self.init()
-    self.logging.info("Initiated.")
-    await asyncio.gather(*[
-        asyncio.create_task(self.async_worker() for _ in range(5))
-    ])
+    async def run(self):
+        """
+        Runner.
+        """
+        await self.init()
+        self.logging.info("Initiated.")
+        await asyncio.gather(*[
+            asyncio.create_task(self.async_worker() for _ in range(5))
+        ])
