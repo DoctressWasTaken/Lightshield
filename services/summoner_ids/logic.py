@@ -109,6 +109,9 @@ class Service:
                         ))
                         await asyncio.sleep(0.02)
                     await asyncio.gather(*tasks)
+                if not tasks:
+                    await asyncio.sleep(10)
+                    continue
                 await self.flush_manager()
             except Exception as err:
                 traceback.print_tb(err.__traceback__)

@@ -51,6 +51,10 @@ class Manager:
                     LIMIT 2000;
                     ''')
                 await conn.close()
+                if not result:
+                    self.logging.info("No tasks found.")
+                    await asyncio.sleep(60)
+                    continue
                 # Add new tasks
                 for entry in result:
                     if await self.redis.sismember('tasks', entry['summoner_id']):
