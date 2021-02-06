@@ -39,7 +39,7 @@ class Manager:
         If none are found a list of the user with the most new games are returned.
         """
         try:
-            conn = asyncpg.connect("postgresql://postgres@postgres/raw")
+            conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
             if result := await conn.fetch('''
                 SELECT account_id, 
                        wins, 
