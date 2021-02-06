@@ -1,19 +1,20 @@
-CREATE TABLE IF NOT EXISTS summoner (
+CREATE TABLE IF NOT EXISTS summoner
+(
 
-                                        summoner_id         VARCHAR(63) PRIMARY KEY,
-                                        account_id          VARCHAR(56),
-                                        puuid               VARCHAR(78),
+    summoner_id         VARCHAR(63) PRIMARY KEY,
+    account_id          VARCHAR(56),
+    puuid               VARCHAR(78),
 
-                                        rank                SMALLINT,
-                                        rank_history        SMALLINT[],
+    rank                SMALLINT,
+    rank_history        SMALLINT[],
 
-                                        wins                SMALLINT,
-                                        wins_last_updated   SMALLINT,
+    wins                SMALLINT,
+    wins_last_updated   SMALLINT,
 
-                                        losses              SMALLINT DEFAULT NULL,
-                                        losses_last_updated SMALLINT DEFAULT NULL,
+    losses              SMALLINT DEFAULT NULL,
+    losses_last_updated SMALLINT DEFAULT NULL,
 
-                                        priority            VARCHAR(1)
+    priority            VARCHAR(1)
 );
 
 

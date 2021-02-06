@@ -3,12 +3,12 @@ import asyncio
 import logging
 import os
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import aiohttp
 import aioredis
 import asyncpg
-from exceptions import RatelimitException, NotFoundException, Non200Exception
+from exceptions import NotFoundException
 
 
 class Service:
@@ -27,7 +27,7 @@ class Service:
 
         self.server = os.environ['SERVER']
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
-                   "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s&queue=420"
+                   "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s"
         self.stopped = False
         self.retry_after = datetime.now()
 
@@ -44,25 +44,26 @@ class Service:
         """Called on shutdown init."""
         self.stopped = True
 
-    async def flush_manager(self):
+    async def flush_manager(self, matches, account_id, keys):
         """Update entries in postgres once enough tasks are done."""
         try:
+            sets = []
+            for entry in matches:
+                sets.append("(%s, %s, TO_TIMESTAMP(%s)::timestamp)" % (
+                    entry['gameId'], entry['queue'], entry['timestamp'] // 1000
+                ))
             conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-            if self.completed_tasks:
-                self.logging.info("Inserting %s summoner IDs.", len(self.completed_tasks))
-                await conn.executemany('''
-                    UPDATE summoner
-                    SET account_id = $1, puuid = $2
-                    WHERE summoner_id = $3;
-                    ''', self.completed_tasks)
-                self.completed_tasks = []
-            if self.to_delete:
-                await conn.execute('''
-                    DROP FROM summoner
-                    WHERE summoner_id IN (%s);
-                    ''', ",".join(["'%s'" % id for id in self.to_delete]))
-                self.to_delete = []
-
+            await conn.execute('''
+                INSERT INTO match (match_id, queue, timestamp)
+                VALUES(%s)
+                ON CONFLICT DO NOTHING;
+                ''' % ",".join(sets))
+            await conn.execute('''
+                UPDATE summoner
+                SET wins_last_updated = $1,
+                    losses_last_updated = $2
+                WHERE account_id = $3
+                ''', keys['wins'], keys['losses'], account_id)
             await conn.close()
         except Exception as err:
             traceback.print_tb(err.__traceback__)
@@ -75,62 +76,98 @@ class Service:
             self.logging.info(task)
         if self.stopped:
             return
+        keys = await self.redis.hgetall('%s:%s' % (task[0], task[1]))
+        await self.redis.delete('%s:%s' % (task[0], task[1]))
         start = int(datetime.utcnow().timestamp())
-        await self.redis.zadd('summoner_id_in_progress', start, task)
-        return task
+        await self.redis.zadd('summoner_id_in_progress', start, task[0])
+        return [task[0], int(task[1])], keys
 
-    """
-    async def async_worker(self):
+    async def full_refresh(self, account_id, keys):
+        """Pull match-history data until the page is empty."""
+        empty = False
+        worker = 3
+        async with aiohttp.ClientSession() as session:
+            match_data = await asyncio.gather(*[
+                asyncio.create_task(self.worker(
+                    account_id, session=session, offset=i, worker=worker
+                )) for i in range(worker)
+            ])
+        if self.stopped:
+            return
+        matches = []
+        for data in match_data:
+            matches += data
+        await self.flush_manager(matches, account_id, keys)
+
+    async def partial_refresh(self, account_id, to_call, keys):
+        """Pull match-history data corresponding to how much"""
+        empty = False
+        worker = 3
+        pages = to_call // 100 + 1
+        async with aiohttp.ClientSession() as session:
+            match_data = await asyncio.gather(*[
+                asyncio.create_task(self.worker(
+                    account_id, session=session, offset=i, worker=worker, limit=pages
+                )) for i in range(worker)
+            ])
+        if self.stopped:
+            return
+        matches = []
+        for data in match_data:
+            matches += data
+        await self.flush_manager(matches, account_id, keys)
+
+    async def worker(self, account_id, session, offset, worker, limit=None) -> list:
+        """Multiple started per separate processor.
+        Does calls continuously until it reaches an empty page."""
+        matches = []
+        start = offset * 100
+        end = offset * 100 + 100
         while not self.stopped:
+            if limit and start > limit * 100:
+                return [match for match in matches if match['platformId'] == self.server.upper()]
             try:
-                async with aiohttp.ClientSession() as session:
-
-                        id = ids.pop()
-                        calls_in_progress.append(asyncio.create_task(
-                            self.handler(
-                                session=session,
-                                url=self.url % (account_id, id, id + 100)
-                            )
-                        ))
-                        await asyncio.sleep(0.1)
-                        responses = await asyncio.gather(*calls_in_progress)
-                        match_data = list(set().union(*responses))
-                        query = 'REPLACE INTO match_history (accountId, matches) VALUES (\'%s\', %s);' % (
-                            account_id, matches)
-                        await self.marker.execute_write(query)
-                        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-
-                        result = await conn.execute('''
-                            INSERT INTO match ("matchId")
-                            VALUES %s
-                            ON CONFLICT ("matchId")
-                            DO NOTHING;
-                        ''' % ",".join(["(%s)" % matchId for matchId in match_data]))
-                        await conn.close()
-                        self.logging.debug(result)
+                result = await self.fetch(session=session,
+                                          url=self.url % (account_id, start, end))
+                if not result['matches']:
+                    return [match for match in matches if match['platformId'] == self.server.upper()]
+                matches += result['matches']
+                start += 100 * worker
+                end += 100 * worker
+                await asyncio.sleep(0.2)
             except NotFoundException:
-                return
+                return [match for match in matches if match['platformId'] == self.server.upper()]
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
                 self.logging.info(err)
-            finally:
-                self.logging.debug("Finished task.")
-                del self.buffered_elements[account_id]
-    """
-    async def fetch(self, session, url):
-        """Execute call to external target using the proxy server.
+        return []
 
-        Receives aiohttp session as well as url to be called. Executes the request and returns
-        either the content of the response as json or raises an exeption depending on response.
+    async def async_worker(self):
+        while not self.stopped:
+            if not (data := await self.get_task()):
+                continue
+            task, keys = data
+            if task[1] == 9999:
+                await self.full_refresh(task[0], keys)
+            else:
+                await self.partial_refresh(*task, keys)
+
+    async def fetch(self, session, url) -> dict:
+        """
+        Execute call to external target using the proxy server.
+
+        Receives aiohttp session as well as url to be called.
+        Executes the request and returns either the content of the
+        response as json or raises an exeption depending on response.
         :param session: The aiohttp Clientsession used to execute the call.
         :param url: String url ready to be requested.
 
         :returns: Request response as dict.
-
         :raises RatelimitException: on 429 or 430 HTTP Code.
         :raises NotFoundException: on 404 HTTP Code.
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
+
         try:
             async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
                 await response.text()
@@ -147,29 +184,13 @@ class Service:
             raise Non200Exception()
         return await response.json(content_type=None)
 
-    async def handler(self, session, url):
-        rate_flag = False
-        while not self.stopped:
-            if datetime.now() < self.retry_after or rate_flag:
-                rate_flag = False
-                delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
-                await asyncio.sleep(delay)
-            try:
-                response = await self.fetch(session, url)
-                return [match['gameId'] for match in response['matches'] if
-                        match['queue'] == 420 and
-                        match['platformId'] == self.server and
-                        int(str(match['timestamp'])[:10]) >= self.timelimit]
 
-            except RatelimitException:
-                rate_flag = True
-            except Non200Exception:
-                await asyncio.sleep(0.1)
-
-    async def run(self):
-        """Runner."""
-        await self.init()
-        self.logging.info("Initiated.")
-        await self.get_task()
-        while not self.stopped:
-            await asyncio.sleep(1)
+async def run(self):
+    """
+    Runner.
+    """
+    await self.init()
+    self.logging.info("Initiated.")
+    await asyncio.gather(*[
+        asyncio.create_task(self.async_worker() for _ in range(5))
+    ])

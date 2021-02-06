@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 import aiohttp
 import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-from rabbit_manager_slim import RabbitManager
 from rank_manager import RankManager
 
 tiers = {
@@ -50,8 +49,6 @@ class Service:  # pylint: disable=R0902
         self.stopped = False
         self.retry_after = datetime.now()
 
-        self.rabbit = RabbitManager(exchange="RANKED")
-
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
@@ -62,7 +59,6 @@ class Service:  # pylint: disable=R0902
         Initiate the Rankmanager object.
         """
         await self.rankmanager.init()
-        await self.rabbit.init()
 
     async def async_worker(self, tier, division):
 
@@ -70,12 +66,6 @@ class Service:  # pylint: disable=R0902
         while (not self.empty or failed) and not self.stopped:
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
-
-            while self.rabbit.blocked and not self.stopped:
-                await asyncio.sleep(1)
-
-            if self.stopped:
-                return
 
             if not failed:
                 page = self.next_page
