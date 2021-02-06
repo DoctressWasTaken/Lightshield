@@ -8,7 +8,7 @@ from datetime import datetime
 import aiohttp
 import aioredis
 import asyncpg
-from exceptions import NotFoundException
+from exceptions import RatelimitException, NotFoundException, Non200Exception
 
 
 class Service:
