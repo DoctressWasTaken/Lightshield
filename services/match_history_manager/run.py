@@ -90,7 +90,6 @@ class Manager:
                         z_index = 9999
                         package = {key: entry[key] for key in
                                    ['wins', 'losses']}
-
                     else:
                         z_index = entry['wins'] + entry['losses'] - entry['wins_last_updated'] - entry[
                             'losses_last_updated']
@@ -103,7 +102,7 @@ class Manager:
                     await self.redis.hmset_dict(
                         "%s:%s" % (entry['account_id'], z_index), package
                     )
-                self.logging.info("Filled tasks to %s.", await self.redis.scard('match_history_tasks'))
+                self.logging.info("Filled tasks to %s.", await self.redis.zcard('match_history_tasks'))
 
             await asyncio.sleep(5)
 
