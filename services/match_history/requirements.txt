@@ -1,0 +1,4 @@
+aioredis
+asyncpg
+aiohttp
+uvloop
