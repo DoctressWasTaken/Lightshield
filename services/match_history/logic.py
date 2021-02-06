@@ -191,5 +191,5 @@ class Service:
         await self.init()
         self.logging.info("Initiated.")
         await asyncio.gather(*[
-            asyncio.create_task(self.async_worker() for _ in range(5))
+            asyncio.create_task(self.async_worker()) for _ in range(5)
         ])
