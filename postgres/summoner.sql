@@ -10,11 +10,10 @@ CREATE TABLE IF NOT EXISTS summoner (
                                         wins                SMALLINT,
                                         wins_last_updated   SMALLINT,
 
-                                        losses              SMALLINT DEFAULT 0,
-                                        losses_last_updated SMALLINT DEFAULT 0,
+                                        losses              SMALLINT DEFAULT NULL,
+                                        losses_last_updated SMALLINT DEFAULT NULL,
 
                                         priority            VARCHAR(1)
-                                            checked_out TIMESTAMP
 );
 
 
