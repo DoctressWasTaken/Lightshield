@@ -66,7 +66,7 @@ services:
       context: services/match_history
     environment:
       - SERVER=${SERVER}
-      - QUEUES=400,420
+      - QUEUES=420
     volumes:
       - /backup
     links:
