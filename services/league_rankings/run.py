@@ -93,17 +93,20 @@ class Service:  # pylint: disable=R0902
                     self.empty = True
         unique_tasks = {}
         for task in tasks:
-            unique_tasks[task['summonerId']] = task
-        formatted_tasks = await self.process_task(unique_tasks.values())
+            unique_tasks[task['summonerId']] = (
+                task['summonerId'],
+                str(tiers[task['tier']] * 400 + rank[task['rank']] * 100 + task['leaguePoints']),
+                task['wins'],
+                task['losses'])
         conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-        await conn.execute('''
+        await conn.executemany('''
             INSERT INTO summoner (summoner_id, rank, wins, losses)
-                VALUES %s
+                VALUES ($1, $2, $3, $4)
                 ON CONFLICT (summoner_id) DO 
                 UPDATE SET rank = EXCLUDED.rank,
                            wins = EXCLUDED.wins,
                            losses = EXCLUDED.losses  
-        ''' % ",".join(formatted_tasks))
+        ''', unique_tasks.values())
         await conn.close()
 
     async def fetch(self, session, url):
@@ -136,21 +139,6 @@ class Service:  # pylint: disable=R0902
         if response.status != 200:
             raise Non200Exception()
         return await response.json(content_type=None)
-
-    async def process_task(self, content) -> list:
-        """Process the received list of summoner.
-
-        Check for changes that would warrent it be sent on.
-         """
-        entries_serialized = []
-        for entry in content:
-            entries_serialized.append("('%s',%s,%s,%s)" % (
-                entry['summonerId'],
-                str(tiers[entry['tier']] * 400 + rank[entry['rank']] * 100 + entry['leaguePoints']),
-                entry['wins'],
-                entry['losses']
-            ))
-        return entries_serialized
 
     async def run(self):
         """Override the default run method due to special case.
