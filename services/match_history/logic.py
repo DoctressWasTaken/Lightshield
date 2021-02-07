@@ -94,8 +94,7 @@ class Service:
 
     async def full_refresh(self, account_id, keys):
         """Pull match-history data until the page is empty."""
-        empty = False
-        worker = 3
+        worker = 6
         async with aiohttp.ClientSession() as session:
             match_data = await asyncio.gather(*[
                 asyncio.create_task(self.worker(
@@ -111,7 +110,6 @@ class Service:
 
     async def partial_refresh(self, account_id, to_call, keys):
         """Pull match-history data corresponding to how much"""
-        empty = False
         worker = 3
         pages = to_call // 100 + 1
         async with aiohttp.ClientSession() as session:
