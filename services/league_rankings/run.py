@@ -95,9 +95,9 @@ class Service:  # pylint: disable=R0902
         for task in tasks:
             unique_tasks[task['summonerId']] = (
                 task['summonerId'],
-                str(tiers[task['tier']] * 400 + rank[task['rank']] * 100 + task['leaguePoints']),
-                task['wins'],
-                task['losses'])
+                int(tiers[task['tier']] * 400 + rank[task['rank']] * 100 + task['leaguePoints']),
+                int(task['wins']),
+                int(task['losses']))
         conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
         await conn.executemany('''
             INSERT INTO summoner (summoner_id, rank, wins, losses)
