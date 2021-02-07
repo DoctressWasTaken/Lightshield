@@ -13,6 +13,7 @@ from exceptions import RatelimitException, NotFoundException, Non200Exception
 
 class Service:
     """Core service worker object."""
+    queues = None
 
     def __init__(self):
         """Initiate sync elements on creation."""
@@ -26,10 +27,14 @@ class Service:
         self.logging.addHandler(handler)
 
         self.server = os.environ['SERVER']
-        self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
-                   "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s"
         self.stopped = False
         self.retry_after = datetime.now()
+        self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
+                   "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s"
+
+        if 'QUEUES' in os.environ:
+            self.queues = [int(queue) for queue in os.environ['QUEUES'].split(',')]
+            self.url = self.url + "&queue=" + os.environ['QUEUES']
 
         self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
 
@@ -49,6 +54,8 @@ class Service:
         try:
             sets = []
             for entry in matches:
+                if self.queues and int(entry['queue']) not in self.queues:
+                    continue
                 sets.append("(%s, %s, TO_TIMESTAMP(%s)::timestamp)" % (
                     entry['gameId'], entry['queue'], entry['timestamp'] // 1000
                 ))
