@@ -63,6 +63,7 @@ class Service:  # pylint: disable=R0902
     async def async_worker(self, tier, division):
 
         failed = None
+        tasks = []
         while (not self.empty or failed) and not self.stopped:
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
@@ -81,11 +82,23 @@ class Service:  # pylint: disable=R0902
                         self.logging.info("Page %s is empty.", page)
                         self.empty = True
                         return
-                    await self.process_task(content)
+                    tasks += await self.process_task(content)
                 except (RatelimitException, Non200Exception):
                     failed = page
                 except NotFoundException:
                     self.empty = True
+
+        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+
+        await conn.execute('''
+            INSERT INTO summoner (summoner_id, rank, wins, losses)
+                VALUES %s
+                ON CONFLICT (summoner_id) DO 
+                UPDATE SET rank = EXCLUDED.rank,
+                           wins = EXCLUDED.wins,
+                           losses = EXCLUDED.losses  
+        ''' % ",".join(tasks))
+        await conn.close()
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
@@ -132,18 +145,8 @@ class Service:  # pylint: disable=R0902
                 entry['wins'],
                 entry['losses']
             ))
+        return entries_serialized
 
-        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-
-        await conn.execute('''
-            INSERT INTO summoner (summoner_id, rank, wins, losses)
-                VALUES %s
-                ON CONFLICT (summoner_id) DO 
-                UPDATE SET rank = EXCLUDED.rank,
-                           wins = EXCLUDED.wins,
-                           losses = EXCLUDED.losses  
-        ''' % ",".join(entries_serialized))
-        await conn.close()
 
     async def run(self):
         """Override the default run method due to special case.
