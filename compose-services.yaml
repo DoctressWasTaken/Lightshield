@@ -5,7 +5,7 @@ services:
   league_rankings:
     hostname: league_rankings
     mem_limit: 150m
-    cpus: 0.25
+    cpus: 0.15
     build:
       dockerfile: Dockerfile
       context: services/league_rankings
