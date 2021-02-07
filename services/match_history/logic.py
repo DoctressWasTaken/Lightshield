@@ -23,7 +23,7 @@ class Service:
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(
-            logging.Formatter('%(asctime)s [Subscriber] %(message)s'))
+            logging.Formatter('%(asctime)s [MatchHistory] %(message)s'))
         self.logging.addHandler(handler)
 
         self.server = os.environ['SERVER']
@@ -80,7 +80,6 @@ class Service:
         """Return tasks to the async worker."""
         while not (task := await self.redis.zpopmax('match_history_tasks', 1)) and not self.stopped:
             await asyncio.sleep(5)
-            self.logging.info(task)
         if self.stopped:
             return
         keys = await self.redis.hgetall('%s:%s' % (task[0], task[1]))
@@ -205,6 +204,4 @@ class Service:
         """
         await self.init()
         self.logging.info("Initiated.")
-        await asyncio.gather(*[
-            asyncio.create_task(self.async_worker()) for _ in range(5)
-        ])
+        await self.async_worker()
