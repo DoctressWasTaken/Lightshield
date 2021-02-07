@@ -56,15 +56,19 @@ class Service:
             for entry in matches:
                 if self.queues and int(entry['queue']) not in self.queues:
                     continue
-                sets.append("(%s, %s, TO_TIMESTAMP(%s)::timestamp)" % (
-                    entry['gameId'], entry['queue'], entry['timestamp'] // 1000
+                sets.append((
+                    int(entry['gameId']),
+                    int(entry['queue']),
+                    entry['timestamp'] // 1000
                 ))
             conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-            await conn.execute('''
-                INSERT INTO match (match_id, queue, timestamp)
-                VALUES %s
-                ON CONFLICT DO NOTHING;
-                ''' % ",".join(sets))
+            if sets:
+                await conn.executemany('''
+                    INSERT INTO match (match_id, queue, timestamp)
+                    VALUES ($1, $2, TO_TIMESTAMP($3)::timestamp)
+                    ON CONFLICT DO NOTHING;
+                    ''', sets)
+                self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
             await conn.execute('''
                 UPDATE summoner
                 SET wins_last_updated = $1,
@@ -178,7 +182,6 @@ class Service:
         :raises NotFoundException: on 404 HTTP Code.
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
-
         try:
             async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
                 await response.text()
@@ -203,5 +206,4 @@ class Service:
         Runner.
         """
         await self.init()
-        self.logging.info("Initiated.")
         await self.async_worker()
