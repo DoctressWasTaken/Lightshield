@@ -182,7 +182,9 @@ class Service:
             self.logging.info(response.status)
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
-                self.retry_after = datetime.now() + timedelta(seconds=delay)
+            else:
+                delay = 1
+            self.retry_after = datetime.now() + timedelta(seconds=delay)
             raise RatelimitException()
         if response.status == 404:
             raise NotFoundException()
