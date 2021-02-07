@@ -38,8 +38,8 @@ class Manager:
         If there are non-initialized user found only those will be selected.
         If none are found a list of the user with the most new games are returned.
         """
+        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
         try:
-            conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
             if result := await conn.fetch('''
                 SELECT account_id, 
                        wins, 
