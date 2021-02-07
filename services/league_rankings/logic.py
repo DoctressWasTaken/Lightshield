@@ -82,14 +82,16 @@ class Service:  # pylint: disable=R0902
                         self.logging.info("Page %s is empty.", page)
                         self.empty = True
                         return
-                    tasks += await self.process_task(content)
+                    tasks += content
                 except (RatelimitException, Non200Exception):
                     failed = page
                 except NotFoundException:
                     self.empty = True
-
+        unique_tasks = {}
+        for task in tasks:
+            unique_tasks[task['summonerId']] = task
+        formatted_tasks = await self.process_task(unique_tasks.values())
         conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-
         await conn.execute('''
             INSERT INTO summoner (summoner_id, rank, wins, losses)
                 VALUES %s
@@ -97,7 +99,7 @@ class Service:  # pylint: disable=R0902
                 UPDATE SET rank = EXCLUDED.rank,
                            wins = EXCLUDED.wins,
                            losses = EXCLUDED.losses  
-        ''' % ",".join(tasks))
+        ''' % ",".join(formatted_tasks))
         await conn.close()
 
     async def fetch(self, session, url):
@@ -131,7 +133,7 @@ class Service:  # pylint: disable=R0902
             raise Non200Exception()
         return await response.json(content_type=None)
 
-    async def process_task(self, content) -> None:
+    async def process_task(self, content) -> list:
         """Process the received list of summoner.
 
         Check for changes that would warrent it be sent on.
@@ -146,7 +148,6 @@ class Service:  # pylint: disable=R0902
                 entry['losses']
             ))
         return entries_serialized
-
 
     async def run(self):
         """Override the default run method due to special case.
