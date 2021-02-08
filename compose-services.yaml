@@ -48,7 +48,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_history
-    image: match_history
+    image: lightshield_match_history
     environment:
       - SERVER=${SERVER}
       - QUEUES=420
@@ -61,7 +61,7 @@ services:
     build:
       context: postgres
       dockerfile: Dockerfile
-    image: persistent_db
+    image: lightshield_persistent_db
     volumes:
       - postgres:/var/lib/postgresql/data
     networks:
