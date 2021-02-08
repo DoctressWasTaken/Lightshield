@@ -56,18 +56,18 @@ class Service:
             for entry in matches:
                 if self.queues and int(entry['queue']) not in self.queues:
                     continue
-                sets.append((
-                    int(entry['gameId']),
-                    int(entry['queue']),
-                    entry['timestamp'] // 1000
-                ))
+                sets.append("(%s,%s,TO_TIMESTAMP(%s)::timestamp)" %
+                            (entry['gameId'],
+                             entry['queue'],
+                             entry['timestamp'] // 1000
+                             ))
             conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
             if sets:
-                await conn.executemany('''
+                await conn.execute('''
                     INSERT INTO match (match_id, queue, timestamp)
-                    VALUES ($1, $2, TO_TIMESTAMP($3)::timestamp)
+                    VALUES %s
                     ON CONFLICT DO NOTHING;
-                    ''', sets)
+                    ''' % ",".join(sets))
                 self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
             await conn.execute('''
                 UPDATE summoner
