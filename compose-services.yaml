@@ -4,10 +4,10 @@ services:
 
   league_rankings:
     hostname: league_rankings
-    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/league_rankings
+    image: lightshield_league_rankings
     environment:
       - SERVER=${SERVER}
       - UPDATE_INTERVAL=1
@@ -20,20 +20,20 @@ services:
 
   summoner_ids_manager:
     hostname: summoner_ids
-    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids_manager
+    image: lightshield_summoner_ids_manager
     links:
       - buffer_db:redis
       - persistent_db:postgres
 
   summoner_ids: # SI
     hostname: summoner_ids
-    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids
+    image: lightshield_summoner_ids
     environment:
       - SERVER=${SERVER}
     volumes:
@@ -45,20 +45,20 @@ services:
 
   match_history_manager:
     hostname: match_history
-    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/match_history_manager
+    image: lightshield_match_history_manager
     links:
       - buffer_db:redis
       - persistent_db:postgres
 
   match_history: # MH
     hostname: match_history
-    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/match_history
+    image: match_history
     environment:
       - SERVER=${SERVER}
       - QUEUES=420
@@ -69,7 +69,42 @@ services:
       - persistent_db:postgres
     restart: always
 
-  match_details:  # MD
+  persistent_db:
+    container_name: ${COMPOSE_PROJECT_NAME}_persistent_db
+    build:
+      context: postgres
+      dockerfile: Dockerfile
+    image: persistent_db
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    restart: always
+
+  buffer_db:
+    image: redis:6.0
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - redis:/data
+    restart: always
+
+volumes:
+  postgres:
+    name: ${SERVER}_lightshield_persistent
+  redis:
+    name: ${SERVER}_lightshield_buffer
+  ranking_progress:
+    name: ${SERVER}_ranking_progress
+
+
+networks:
+  default:
+    external:
+      name: lightshield
+
+
+x-disabled:
+  match_details: # MD
     hostname: match_details
     image: python:3.8
     build:
@@ -107,8 +142,8 @@ services:
     logging:
       driver: "json-file"
       options:
-       max-file: "5"
-       max-size: "10m"
+        max-file: "5"
+        max-size: "10m"
 
   processor_summoner:
     image: python:3.8
@@ -127,38 +162,5 @@ services:
     logging:
       driver: "json-file"
       options:
-       max-file: "5"
-       max-size: "10m"
-
-  persistent_db:
-    container_name: ${COMPOSE_PROJECT_NAME}_persistent_db
-    image: postgres:13.1
-    build:
-      context: postgres
-      dockerfile: Dockerfile
-    volumes:
-      - postgres:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_HOST_AUTH_METHOD=trust
-    restart: always
-
-  buffer_db:
-    image: redis:6.0
-    command: [ "redis-server", "--appendonly", "yes" ]
-    volumes:
-      - redis:/data
-    restart: always
-
-volumes:
-  postgres:
-    name: ${SERVER}_lightshield_persistent
-  redis:
-    name: ${SERVER}_lightshield_buffer
-  ranking_progress:
-    name: ${SERVER}_ranking_progress
-
-
-networks:
-  default:
-    external:
-      name: lightshield
+        max-file: "5"
+        max-size: "10m"
