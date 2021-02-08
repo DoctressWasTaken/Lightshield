@@ -1,6 +1,6 @@
 version: '3.7'
 services:
-### Services
+  ### Services
 
   league_rankings:
     hostname: league_rankings
@@ -12,8 +12,6 @@ services:
       - SERVER=${SERVER}
       - UPDATE_INTERVAL=1
       - WORKER=5
-    links:
-      - persistent_db:postgres
     restart: always
     volumes:
       - ranking_progress:/project/configs/
@@ -24,9 +22,6 @@ services:
       dockerfile: Dockerfile
       context: services/summoner_ids_manager
     image: lightshield_summoner_ids_manager
-    links:
-      - buffer_db:redis
-      - persistent_db:postgres
 
   summoner_ids: # SI
     hostname: summoner_ids
@@ -38,9 +33,6 @@ services:
       - SERVER=${SERVER}
     volumes:
       - /backup
-    links:
-      - buffer_db:redis
-      - persistent_db:postgres
     restart: always
 
   match_history_manager:
@@ -49,9 +41,7 @@ services:
       dockerfile: Dockerfile
       context: services/match_history_manager
     image: lightshield_match_history_manager
-    links:
-      - buffer_db:redis
-      - persistent_db:postgres
+
 
   match_history: # MH
     hostname: match_history
@@ -64,9 +54,6 @@ services:
       - QUEUES=420
     volumes:
       - /backup
-    links:
-      - buffer_db:redis
-      - persistent_db:postgres
     restart: always
 
   persistent_db:
@@ -77,6 +64,10 @@ services:
     image: persistent_db
     volumes:
       - postgres:/var/lib/postgresql/data
+    networks:
+      default:
+        aliases:
+          - postgres
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
     restart: always
@@ -86,6 +77,10 @@ services:
     command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
       - redis:/data
+    networks:
+      default:
+        aliases:
+          - redis
     restart: always
 
 volumes:
