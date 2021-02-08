@@ -1,11 +1,10 @@
-version: '2.3'
+version: '3.7'
 services:
 ### Services
 
   league_rankings:
     hostname: league_rankings
-    mem_limit: 150m
-    cpus: 0.15
+    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/league_rankings
@@ -21,8 +20,7 @@ services:
 
   summoner_ids_manager:
     hostname: summoner_ids
-    mem_limit: 100m
-    cpus: 0.1
+    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids_manager
@@ -32,8 +30,7 @@ services:
 
   summoner_ids: # SI
     hostname: summoner_ids
-    mem_limit: 100m
-    cpus: 0.15
+    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids
@@ -48,8 +45,7 @@ services:
 
   match_history_manager:
     hostname: match_history
-    mem_limit: 100m
-    cpus: 0.1
+    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/match_history_manager
@@ -59,8 +55,7 @@ services:
 
   match_history: # MH
     hostname: match_history
-    mem_limit: 150m
-    cpus: 0.25
+    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/match_history
@@ -76,8 +71,7 @@ services:
 
   match_details:  # MD
     hostname: match_details
-    mem_limit: 150m
-    cpus: 0.25
+    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/match_details
@@ -95,6 +89,7 @@ services:
     restart: always
 
   processor_match:
+    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/processor_match
@@ -116,6 +111,7 @@ services:
        max-size: "10m"
 
   processor_summoner:
+    image: python:3.8
     build:
       dockerfile: Dockerfile
       context: services/processor_summoner
@@ -136,6 +132,7 @@ services:
 
   persistent_db:
     container_name: ${COMPOSE_PROJECT_NAME}_persistent_db
+    image: postgres:13.1
     build:
       context: postgres
       dockerfile: Dockerfile
