@@ -44,6 +44,8 @@ class Manager:
                 SELECT match_id
                 FROM match
                 WHERE details_pulled IS NULL
+                AND DATE(timestamp) >= '2021-01-01' 
+                ORDER BY timestamp DESC
                 LIMIT 2000;
                 ''')
         finally:
