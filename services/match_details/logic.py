@@ -116,8 +116,8 @@ class Service:
                         participant['participantId'],
                         participant['player']['summonerId'],
                         [participant['spell1Id'], participant['spell2Id']],
-                        tree_ids[(participant['stats']['perkPrimaryStyle'] - 8000) / 100 - 1],
-                        tree_ids[(participant['stats']['perkSubStyle'] - 8000) / 100 - 1],
+                        tree_ids[(participant['stats']['perkPrimaryStyle'] - 8000) // 100 - 1],
+                        tree_ids[(participant['stats']['perkSubStyle'] - 8000) // 100 - 1],
                         self.rune_ids[participant['stats']['perk0']] +
                         self.rune_ids[participant['stats']['perk1']] +
                         self.rune_ids[participant['stats']['perk2']] +
