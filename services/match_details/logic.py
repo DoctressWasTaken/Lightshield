@@ -71,7 +71,7 @@ class Service:
                 SELECT DISTINCT match_id
                 FROM team
                 WHERE match_id IN (%s);
-                ''' % ",".join([str(_id) for _id in match_ids]))]
+                ''' % ",".join(match_ids))]
             team_sets = []
             participant_sets = []
             update_sets = []
@@ -90,7 +90,7 @@ class Service:
                 for team in details['teams']:
                     bans = [ban['championId'] for ban in team['bans']]
                     team_sets.append((
-                        match[0],
+                        int(match[0]),
                         team['teamId'] == 200,
                         bans,
                         team['towerKills'],
@@ -112,7 +112,7 @@ class Service:
                 for i in range(1, 11):
                     participant = participants[i]
                     participant_sets.append((
-                        match[0],
+                        int(match[0]),
                         participant['participantId'],
                         participant['player']['summonerId'],
                         [participant['spell1Id'], participant['spell2Id']],
