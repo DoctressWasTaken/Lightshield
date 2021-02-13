@@ -53,6 +53,7 @@ class Service:
         """Initiate timelimit for pulled matches."""
         self.redis = await aioredis.create_redis_pool(
             ('redis', 6379), encoding='utf-8')
+        self.logging.info("Initialized.")
 
     def shutdown(self):
         """Called on shutdown init."""
@@ -204,8 +205,8 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        while not (tasks := await self.redis.spop('match_details_tasks', 25)) and not self.stopped:
-            await asyncio.sleep(5)
+        if not (tasks := await self.redis.spop('match_details_tasks', 25)):
+            return tasks
         if self.stopped:
             return
         start = int(datetime.utcnow().timestamp())
