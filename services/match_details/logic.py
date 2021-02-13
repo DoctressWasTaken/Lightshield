@@ -245,6 +245,7 @@ class Service:
             async with aiohttp.ClientSession() as session:
                 results = await asyncio.gather(*[asyncio.create_task(self.worker(
                     matchId=matchId, session=session) for matchId in range(tasks))])
+            self.logging.info("Received tasks.")
             await self.flush_manager(results)
 
     async def fetch(self, session, url) -> dict:
