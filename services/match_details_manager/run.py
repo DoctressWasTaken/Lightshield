@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import signal
+import traceback
 from datetime import datetime, timedelta
 
 import aioredis
@@ -53,33 +54,37 @@ class Manager:
 
     async def run(self):
         await self.init()
-
-        while not self.stopped:
-            # Drop timed out tasks
-            limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
-            await self.redis.zremrangebyscore('match_details_in_progress', max=limit)
-            # Check remaining buffer size
-            if (size := await self.redis.scard('match_details_tasks')) < 1000:
-                self.logging.info("%s tasks remaining.", size)
-                # Pull new tasks
-                result = await self.get_tasks()
-                if not result:
-                    self.logging.info("No tasks found.")
-                    await asyncio.sleep(60)
-                    continue
-                # Add new tasks
-                for entry in result:
-                    # Each entry will always be refered to by account_id
-                    if await self.redis.zscore('match_details_in_progress', entry['match_id']):
+        try:
+            while not self.stopped:
+                # Drop timed out tasks
+                limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
+                await self.redis.zremrangebyscore('match_details_in_progress', max=limit)
+                # Check remaining buffer size
+                if (size := await self.redis.scard('match_details_tasks')) < 1000:
+                    self.logging.info("%s tasks remaining.", size)
+                    # Pull new tasks
+                    result = await self.get_tasks()
+                    if not result:
+                        self.logging.info("No tasks found.")
+                        await asyncio.sleep(60)
                         continue
-                    # Insert task hook
-                    await self.redis.sadd('match_details_tasks', entry['match_id'])
+                    # Add new tasks
+                    for entry in result:
+                        # Each entry will always be refered to by account_id
+                        if await self.redis.zscore('match_details_in_progress', entry['match_id']):
+                            continue
+                        # Insert task hook
+                        await self.redis.sadd('match_details_tasks', entry['match_id'])
 
-                self.logging.info("Filled tasks to %s.", await self.redis.scard('match_details_tasks'))
+                    self.logging.info("Filled tasks to %s.", await self.redis.scard('match_details_tasks'))
 
-            await asyncio.sleep(5)
+                await asyncio.sleep(5)
 
-        await self.redis.close()
+            await self.redis.close()
+
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
 
 
 async def main():
