@@ -65,7 +65,7 @@ services:
   match_details: # MH
     hostname: match_details
     build:
-      dockerfile: services/match_details/old/Dockerfile
+      dockerfile: Dockerfile
       context: services/match_details
     image: lightshield_match_details
     environment:
