@@ -10,6 +10,7 @@ def get_ids(name='runesReforged.json'):
             modifier = pow(10, 3 - index)
             for position, rune in enumerate(key['runes']):
                 keys[rune['id']] = (position + 1) * modifier
+
     return keys
 
 
