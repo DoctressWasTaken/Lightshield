@@ -168,7 +168,7 @@ class Service:
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 ON CONFLICT DO NOTHING;
                 ''', team_sets)
-
+                self.logging.info("Inserted %s team entries.", len(team_sets))
             if participant_sets:
                 await conn.executemany('''
                 INSERT INTO participant
@@ -188,6 +188,7 @@ class Service:
                         $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
                         $31, $32, $33, $34, $35, $36, $37, $38)
                 ''', participant_sets)
+                self.logging.info("Inserted %s participant entries.", len(participant_sets))
             if update_sets:
                 await conn.executemany('''
                     UPDATE match
