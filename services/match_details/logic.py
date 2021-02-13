@@ -234,15 +234,15 @@ class Service:
         return [matchId, None]
 
     async def async_worker(self):
+        afk_alert = False
         while not self.stopped:
-            afk_alert = False
             if not (tasks := await self.get_task()):
                 if not afk_alert:
                     self.logging.info("Found no tasks.")
                     afk_alert = True
                 await asyncio.sleep(10)
                 continue
-
+            afk_alert = False
             async with aiohttp.ClientSession() as session:
                 results = await asyncio.gather(*[asyncio.create_task(self.worker(
                     matchId=matchId, session=session) for matchId in range(tasks))])
