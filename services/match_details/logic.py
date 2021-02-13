@@ -245,7 +245,7 @@ class Service:
             afk_alert = False
             async with aiohttp.ClientSession() as session:
                 results = await asyncio.gather(*[asyncio.create_task(self.worker(
-                    matchId=matchId, session=session) for matchId in tasks)])
+                    matchId=matchId, session=session)) for matchId in tasks])
             self.logging.info("Received tasks.")
             await self.flush_manager(results)
 
