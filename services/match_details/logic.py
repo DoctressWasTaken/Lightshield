@@ -109,11 +109,12 @@ class Service:
                 for entry in details['participantIdentities']:
                     participants[entry['participantId']].update(entry)
 
-                for participant in participants.values():
+                for i in range(1, 11):
+                    participant = participants[i]
                     participant_sets.append((
                         match[0],
                         participant['participantId'],
-                        participant['summonerId'],
+                        participant['player']['summonerId'],
                         [participant['spell1Id'], participant['spell2Id']],
                         tree_ids[(participant['stats']['perkPrimaryStyle'] - 8000) / 100 - 1],
                         tree_ids[(participant['stats']['perkSubStyle'] - 8000) / 100 - 1],
