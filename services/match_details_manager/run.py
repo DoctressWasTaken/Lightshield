@@ -26,8 +26,8 @@ class Manager:
     async def init(self):
         self.redis = await aioredis.create_redis(
             ('redis', 6379))
-        await self.redis.delete('match_history_in_progress')
-        await self.redis.delete('match_history_tasks')
+        await self.redis.delete('match_details_in_progress')
+        await self.redis.delete('match_details_tasks')
 
     def shutdown(self):
         self.stopped = True
@@ -40,28 +40,12 @@ class Manager:
         """
         conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
         try:
-            if result := await conn.fetch('''
-                SELECT account_id, 
-                       wins, 
-                       losses
-                FROM summoner
-                WHERE wins_last_updated IS NULL 
-                AND account_id IS NOT NULL
-                LIMIT 2000;
-                '''):
-                return result, True
             return await conn.fetch('''
-                SELECT account_id, 
-                       wins, 
-                       losses, 
-                       wins_last_updated, 
-                       losses_last_updated
-                FROM summoner
-                WHERE wins_last_updated IS NOT NULL
-                AND account_id IS NOT NULL
-                ORDER BY (wins + losses - wins_last_updated - losses_last_updated) DESC
+                SELECT match_id
+                FROM match
+                WHERE details_pulled IS NULL
                 LIMIT 2000;
-                '''), False
+                ''')
         finally:
             await conn.close()
 
@@ -71,12 +55,12 @@ class Manager:
         while not self.stopped:
             # Drop timed out tasks
             limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
-            await self.redis.zremrangebyscore('match_history_in_progress', max=limit)
+            await self.redis.zremrangebyscore('match_details_in_progress', max=limit)
             # Check remaining buffer size
-            if (size := await self.redis.zcard('match_history_tasks')) < 1000:
+            if (size := await self.redis.scard('match_details_tasks')) < 1000:
                 self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
-                result, full_refreshes = await self.get_tasks()
+                result = await self.get_tasks()
                 if not result:
                     self.logging.info("No tasks found.")
                     await asyncio.sleep(60)
@@ -84,25 +68,12 @@ class Manager:
                 # Add new tasks
                 for entry in result:
                     # Each entry will always be refered to by account_id
-                    if await self.redis.zscore('match_history_in_progress', entry['account_id']):
+                    if await self.redis.zscore('match_details_in_progress', entry['match_id']):
                         continue
-                    if full_refreshes:
-                        z_index = 9999
-                        package = {key: entry[key] for key in
-                                   ['wins', 'losses']}
-                    else:
-                        z_index = entry['wins'] + entry['losses'] - entry['wins_last_updated'] - entry[
-                            'losses_last_updated']
-                        package = {key: entry[key] for key in
-                                   ['wins', 'losses', 'wins_last_updated', 'losses_last_updated']}
-
                     # Insert task hook
-                    await self.redis.zadd('match_history_tasks', z_index, entry['account_id'])
-                    # Insert task hash
-                    await self.redis.hmset_dict(
-                        "%s:%s" % (entry['account_id'], z_index), package
-                    )
-                self.logging.info("Filled tasks to %s.", await self.redis.zcard('match_history_tasks'))
+                    await self.redis.sadd('match_details_tasks', entry['match_id'])
+
+                self.logging.info("Filled tasks to %s.", await self.redis.scard('match_details_tasks'))
 
             await asyncio.sleep(5)
 
