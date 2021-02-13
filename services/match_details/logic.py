@@ -151,7 +151,7 @@ class Service:
                         participant['stats']['magicalDamageTaken'],
                         participant['stats']['trueDamageTaken'],
                         participant['stats']['damageSelfMitigated'],
-                        participant['stats']['physicalDamageDealtToChampion'],
+                        participant['stats']['physicalDamageDealtToChampions'],
                         participant['stats']['magicDamageDealtToChampions'],
                         participant['stats']['trueDamageDealtToChampions'],
                         participant['stats']['damageDealtToTurrets'],
