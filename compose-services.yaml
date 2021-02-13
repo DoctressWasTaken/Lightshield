@@ -42,7 +42,6 @@ services:
       context: services/match_history_manager
     image: lightshield_match_history_manager
 
-
   match_history: # MH
     hostname: match_history
     build:
@@ -62,6 +61,17 @@ services:
       dockerfile: Dockerfile
       context: services/match_details_manager
     image: lightshield_match_details_manager
+
+  match_details: # MH
+    hostname: match_details
+    build:
+      dockerfile: services/match_details/old/Dockerfile
+      context: services/match_details
+    image: lightshield_match_details
+    environment:
+      - SERVER=${SERVER}
+      - QUEUES=420
+    restart: always
 
   persistent_db:
     container_name: ${COMPOSE_PROJECT_NAME}_persistent_db
