@@ -59,6 +59,7 @@ class Manager:
                 FROM summoner
                 WHERE wins_last_updated IS NOT NULL
                 AND account_id IS NOT NULL
+                AND (wins + losses - wins_last_updated - losses_last_updated) >= 10
                 ORDER BY (wins + losses - wins_last_updated - losses_last_updated) DESC
                 LIMIT 2000;
                 '''), False
