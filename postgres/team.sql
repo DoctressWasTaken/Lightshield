@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS team
 (
-    match_id          BIGINT PRIMARY KEY,
-    side              BOOLEAN DEFAULT NULL, -- False: Blue | True: Red
+    match_id          BIGINT UNIQUE,
+    side              BOOLEAN UNIQUE, -- False: Blue | True: Red
     tower_kills       SMALLINT,
     inhibitor_kills   SMALLINT,
 
@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS team
 
     rift_herald_kills SMALLINT,
     dragon_kills      SMALLINT,
-    baron_kills       SMALLINT
+    baron_kills       SMALLINT,
 
+    PRIMARY KEY (match_id, side)
 )

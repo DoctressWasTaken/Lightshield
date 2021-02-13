@@ -56,6 +56,13 @@ services:
       - /backup
     restart: always
 
+  match_details_manager:
+    hostname: match_details
+    build:
+      dockerfile: Dockerfile
+      context: services/match_details_manager
+    image: lightshield_match_details_manager
+
   persistent_db:
     container_name: ${COMPOSE_PROJECT_NAME}_persistent_db
     build:
