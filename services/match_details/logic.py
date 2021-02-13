@@ -70,8 +70,8 @@ class Service:
             existing_ids = [match['match_id'] for match in await conn.fetch('''
                 SELECT DISTINCT match_id
                 FROM team
-                WHERE match_id = ($1::BIGINT[]);
-                ''', match_ids)]
+                WHERE match_id IN (%s);
+                ''' % ",".join([str(_id) for _id in match_ids]))]
             team_sets = []
             participant_sets = []
             update_sets = []
