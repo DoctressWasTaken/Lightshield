@@ -109,8 +109,7 @@ class Service:
                 for entry in details['participantIdentities']:
                     participants[entry['participantId']].update(entry)
 
-                for i in range(1, 11):
-                    participant = participants[i]
+                for participant in participants.values():
                     participant_sets.append((
                         int(match[0]),
                         participant['participantId'],
@@ -172,6 +171,8 @@ class Service:
                 ''', team_sets)
                 self.logging.info("Inserted %s team entries.", len(team_sets))
             if participant_sets:
+                for participant in participant_sets:
+                    self.logging.info(participant[:4])
                 await conn.executemany('''
                 INSERT INTO participant
                 (match_id, participant_id, summoner_id, summoner_spell,
