@@ -29,13 +29,13 @@ class Service:
 
     def __init__(self, rune_ids):
         """Initiate sync elements on creation."""
-        self.logging = logging.getLogger("MatchHistory")
+        self.logging = logging.getLogger("MatchDetails")
         level = logging.INFO
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(
-            logging.Formatter('%(asctime)s [MatchHistory] %(message)s'))
+            logging.Formatter('%(asctime)s [MatchDetails] %(message)s'))
         self.logging.addHandler(handler)
 
         self.rune_ids = rune_ids
@@ -167,8 +167,8 @@ class Service:
                 self.logging.info(template)
                 for line in team_sets:
                     self.logging.info(line)
-                    self.logging.info([str(param) if type(param) == list else param for param in line])
-                    lines.append(template % [str(param) if type(param) == list else param for param in line])
+                    self.logging.info([str(param) if type(param) in (list, bool) else param for param in line])
+                    lines.append(template % [str(param) if type(param) in (list, bool) else param for param in line])
                 values = ",".join(lines)
                 self.logging.info(values)
                 await conn.execute('''
