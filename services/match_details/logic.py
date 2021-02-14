@@ -181,9 +181,9 @@ class Service:
                 self.logging.info("Inserted %s team entries.", len(team_sets))
 
             if participant_sets:
-                template = await format_queue(team_sets[0])
+                template = await format_queue(participant_sets[0])
                 lines = []
-                for line in team_sets:
+                for line in participant_sets:
                     lines.append(
                         template % tuple([str(param) if type(param) in (list, bool) else param for param in line]))
                 values = ",".join(lines)
