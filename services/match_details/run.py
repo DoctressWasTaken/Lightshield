@@ -3,12 +3,11 @@ import signal
 
 import uvloop
 from logic import Service
-from runes import get_ids
 
 uvloop.install()
 
 if __name__ == "__main__":
-    service = Service(get_ids())
+    service = Service()
 
     def shutdown_handler():
         service.shutdown()

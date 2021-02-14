@@ -10,8 +10,7 @@ import aioredis
 import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from helper import format_queue
-
-tree_ids = ['P', 'D', 'S', 'I', 'R']
+from runes import get_ids, get_trees
 
 shard_id = {
     5001: 1,
@@ -27,7 +26,7 @@ class Service:
     """Core service worker object."""
     queues = None
 
-    def __init__(self, rune_ids):
+    def __init__(self):
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("MatchDetails")
         level = logging.INFO
@@ -38,7 +37,8 @@ class Service:
             logging.Formatter('%(asctime)s [MatchDetails] %(message)s'))
         self.logging.addHandler(handler)
 
-        self.rune_ids = rune_ids
+        self.rune_ids = get_ids()
+        self.rune_tree = get_trees()
 
         self.server = os.environ['SERVER']
         self.stopped = False
@@ -117,8 +117,8 @@ class Service:
                             participant['participantId'],
                             participant['player']['summonerId'],
                             str([participant['spell1Id'], participant['spell2Id']]),
-                            tree_ids[(participant['stats']['perkPrimaryStyle'] - 8000) // 100 - 1],
-                            tree_ids[(participant['stats']['perkSubStyle'] - 8000) // 100 - 1],
+                            self.rune_tree[participant['stats']['perk0']],
+                            self.rune_tree[participant['stats']['perk4']],
                             self.rune_ids[participant['stats']['perk0']] +
                             self.rune_ids[participant['stats']['perk1']] +
                             self.rune_ids[participant['stats']['perk2']] +
