@@ -2,12 +2,10 @@ async def format_queue(params):
     template_elements = []
 
     for param in params:
-        if type(param) == int:
-            template_elements.append("%s")
-        elif type(param) == list:
-            template_elements.append("%s")
-        else:
+        if type(param) == str:
             template_elements.append("'%s'")
+        else:
+            template_elements.append("%s")
     return "(" \
-           + ",".join(template_elements) \
+           + ", ".join(template_elements) \
            + ")"
