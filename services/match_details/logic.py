@@ -175,8 +175,8 @@ class Service:
                 INSERT INTO participant
                 (match_id, participant_id, summoner_id, summoner_spell,
                  rune_main_tree, rune_sec_tree, rune_main_select,
-                 rune_sec_select, rune_shards, item, trinket, champ_level,
-                 champ_id, kills, deaths, assists, gold_earned,
+                 rune_sec_select, rune_shards, item, -- 10 
+                 trinket, champ_level, champ_id, kills, deaths, assists, gold_earned,
                  neutral_minions_killed, neutral_minions_killed_enemy, 
                  neutral_minions_killed_team, total_minions_killed, 
                  vision_score, vision_wards_bought, wards_placed,
@@ -188,6 +188,7 @@ class Service:
                         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                         $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
                         $31, $32, $33, $34, $35, $36, $37, $38)
+                ON CONFLICT DO NOTHING;
                 ''', participant_sets)
                 self.logging.info("Inserted %s participant entries.", len(participant_sets))
             if update_sets:

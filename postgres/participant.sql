@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS participant
     assists                      SMALLINT,
 
     -- Gold income
-    gold_earned                  SMALLINT,
+    gold_earned                  INT,
     neutral_minions_killed       SMALLINT,
     neutral_minions_killed_enemy SMALLINT,
     neutral_minions_killed_team  SMALLINT,
