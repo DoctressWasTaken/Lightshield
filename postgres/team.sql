@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS team
 (
-    match_id          BIGINT UNIQUE,
-    side              BOOLEAN UNIQUE, -- False: Blue | True: Red
+    match_id          BIGINT,
+    side              BOOLEAN, -- False: Blue | True: Red
 
     bans              SMALLINT[5],
 

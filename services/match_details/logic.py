@@ -85,7 +85,7 @@ class Service:
                 update_sets.append((
                     details['gameDuration'],
                     details['teams'][0]['win'] == 'Win',
-                    match[0]
+                    int(match[0])
                 ))
                 for team in details['teams']:
                     bans = [ban['championId'] for ban in team['bans']]
@@ -171,8 +171,6 @@ class Service:
                 ''', team_sets)
                 self.logging.info("Inserted %s team entries.", len(team_sets))
             if participant_sets:
-                for participant in participant_sets:
-                    self.logging.info(participant[:4])
                 await conn.executemany('''
                 INSERT INTO participant
                 (match_id, participant_id, summoner_id, summoner_spell,

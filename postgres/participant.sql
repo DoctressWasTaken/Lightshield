@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS participant
 (
-    match_id                     BIGINT UNIQUE,
-    participant_id               SMALLINT UNIQUE,
+    match_id                     BIGINT,
+    participant_id               SMALLINT,
     summoner_id                  VARCHAR(63), -- current summoner id
 
     summoner_spell               SMALLINT[2],
