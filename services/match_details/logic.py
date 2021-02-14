@@ -164,14 +164,10 @@ class Service:
             if team_sets:
                 template = await format_queue(team_sets[0])
                 lines = []
-                self.logging.info(template)
                 for line in team_sets:
-                    self.logging.info(line)
-                    self.logging.info([str(param) if type(param) in (list, bool) else param for param in line])
                     lines.append(
                         template % tuple([str(param) if type(param) in (list, bool) else param for param in line]))
                 values = ",".join(lines)
-                self.logging.info(values)
                 query = '''
                 INSERT INTO team 
                 (match_id, side, bans, tower_kills, inhibitor_kills,
@@ -179,7 +175,7 @@ class Service:
                  rift_herald_kills, dragon_kills, baron_kills)
                 VALUES %s
                 ON CONFLICT DO NOTHING;
-                ''' % team_sets
+                ''' % values
                 self.logging.info(query)
                 await conn.execute(query)
                 self.logging.info("Inserted %s team entries.", len(team_sets))
