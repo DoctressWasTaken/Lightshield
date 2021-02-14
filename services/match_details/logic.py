@@ -93,7 +93,7 @@ class Service:
                     team_sets.append((
                         int(match[0]),
                         team['teamId'] == 200,
-                        str(bans),
+                        bans,
                         team['towerKills'],
                         team['inhibitorKills'],
                         team['firstTower'],
@@ -115,7 +115,7 @@ class Service:
                         int(match[0]),
                         participant['participantId'],
                         participant['player']['summonerId'],
-                        str([participant['spell1Id'], participant['spell2Id']]),
+                        [participant['spell1Id'], participant['spell2Id']],
                         tree_ids[(participant['stats']['perkPrimaryStyle'] - 8000) // 100 - 1],
                         tree_ids[(participant['stats']['perkSubStyle'] - 8000) // 100 - 1],
                         self.rune_ids[participant['stats']['perk0']] +
@@ -127,11 +127,11 @@ class Service:
                         shard_id[participant['stats']['statPerk0']] * 100 +
                         shard_id[participant['stats']['statPerk1']] * 10 +
                         shard_id[participant['stats']['statPerk2']],
-                        str([
+                        [
                             participant['stats']['item0'], participant['stats']['item1'],
                             participant['stats']['item2'], participant['stats']['item3'],
                             participant['stats']['item4'], participant['stats']['item5'],
-                        ]),
+                        ],
                         participant['stats']['item6'],
                         participant['stats']['champLevel'],
                         participant['championId'],
@@ -164,8 +164,8 @@ class Service:
             if team_sets:
                 template = await format_queue(team_sets[0])
                 lines = []
-                for entry in team_sets:
-                    lines.append(template % entry)
+                for line in team_sets:
+                    lines.append(template % [str(param) if type(param) == list else param for param in line])
                 values = ",".join(lines)
                 self.logging.info(values)
                 await conn.execute('''
