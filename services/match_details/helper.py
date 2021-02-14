@@ -4,7 +4,7 @@ async def format_queue(params):
     for param in params:
         if type(param) == int:
             template_elements.append("%s")
-        if type(param) == list:
+        elif type(param) == list:
             template_elements.append("%s")
         else:
             template_elements.append("'%s'")
