@@ -24,7 +24,6 @@ def get_trees(name='runesReforged.json'):
         for index, key in enumerate(slots):
             for position, rune in enumerate(key['runes']):
                 keys[rune['id']] = tree_id
-
     return keys
 
 
