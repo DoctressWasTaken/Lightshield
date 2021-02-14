@@ -19,7 +19,7 @@ def get_trees(name='runesReforged.json'):
     keys = {}
     tree_ids = ['P', 'D', 'S', 'I', 'R']
     for tree in runes:
-        tree_id = tree_ids[tree['id'] - 8000 // 100 - 1]
+        tree_id = tree_ids[(tree['id'] - 8000) // 100 - 1]
         slots = tree['slots']
         for index, key in enumerate(slots):
             for position, rune in enumerate(key['runes']):
