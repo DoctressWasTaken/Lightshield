@@ -181,7 +181,13 @@ class Service:
                 self.logging.info("Inserted %s team entries.", len(team_sets))
 
             if participant_sets:
-                await conn.executemany('''
+                template = await format_queue(team_sets[0])
+                lines = []
+                for line in team_sets:
+                    lines.append(
+                        template % tuple([str(param) if type(param) in (list, bool) else param for param in line]))
+                values = ",".join(lines)
+                query = '''
                 INSERT INTO participant
                 (match_id, participant_id, summoner_id, summoner_spell,
                  rune_main_tree, rune_sec_tree, rune_main_select,
@@ -194,12 +200,10 @@ class Service:
                  damage_mitigated, physical_dealt, magical_dealt, 
                  true_dealt, turret_dealt, objective_dealt, total_heal,
                  total_units_healed, time_cc_others, total_cc_dealt)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
-                        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                        $31, $32, $33, $34, $35, $36, $37, $38)
+                VALUES %s
                 ON CONFLICT DO NOTHING;
-                ''', participant_sets)
+                ''' % values.replace('[', '{').replace(']', '}')
+                await conn.executemany(query)
                 self.logging.info("Inserted %s participant entries.", len(participant_sets))
             if update_sets:
                 await conn.executemany('''
