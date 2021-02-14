@@ -203,7 +203,7 @@ class Service:
                 VALUES %s
                 ON CONFLICT DO NOTHING;
                 ''' % values.replace('[', '{').replace(']', '}')
-                await conn.executemany(query)
+                await conn.execute(query)
                 self.logging.info("Inserted %s participant entries.", len(participant_sets))
             if update_sets:
                 await conn.executemany('''
