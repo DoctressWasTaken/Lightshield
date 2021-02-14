@@ -9,6 +9,7 @@ import aiohttp
 import aioredis
 import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
+from helper import format_queue
 
 tree_ids = ['P', 'D', 'S', 'I', 'R']
 
@@ -161,15 +162,22 @@ class Service:
                         participant['stats']['totalTimeCrowdControlDealt']
                     ))
             if team_sets:
-                await conn.executemany('''
+                template = await format_queue(team_sets[0])
+                lines = []
+                for entry in team_sets:
+                    lines.append(template % entry)
+                values = ",".join(lines)
+                self.logging.info(values)
+                await conn.execute('''
                 INSERT INTO team 
                 (match_id, side, bans, tower_kills, inhibitor_kills,
                  first_tower, first_rift_herald, first_dragon, first_baron, 
                  rift_herald_kills, dragon_kills, baron_kills)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                VALUES %s
                 ON CONFLICT DO NOTHING;
-                ''', team_sets)
+                ''' % team_sets)
                 self.logging.info("Inserted %s team entries.", len(team_sets))
+
             if participant_sets:
                 await conn.executemany('''
                 INSERT INTO participant
