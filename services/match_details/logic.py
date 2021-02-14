@@ -111,56 +111,60 @@ class Service:
                     participants[entry['participantId']].update(entry)
 
                 for participant in participants.values():
-                    participant_sets.append((
-                        int(match[0]),
-                        participant['participantId'],
-                        participant['player']['summonerId'],
-                        str([participant['spell1Id'], participant['spell2Id']]),
-                        tree_ids[(participant['stats']['perkPrimaryStyle'] - 8000) // 100 - 1],
-                        tree_ids[(participant['stats']['perkSubStyle'] - 8000) // 100 - 1],
-                        self.rune_ids[participant['stats']['perk0']] +
-                        self.rune_ids[participant['stats']['perk1']] +
-                        self.rune_ids[participant['stats']['perk2']] +
-                        self.rune_ids[participant['stats']['perk3']],
-                        self.rune_ids[participant['stats']['perk4']] +
-                        self.rune_ids[participant['stats']['perk5']],
-                        shard_id[participant['stats']['statPerk0']] * 100 +
-                        shard_id[participant['stats']['statPerk1']] * 10 +
-                        shard_id[participant['stats']['statPerk2']],
-                        str([
-                            participant['stats']['item0'], participant['stats']['item1'],
-                            participant['stats']['item2'], participant['stats']['item3'],
-                            participant['stats']['item4'], participant['stats']['item5'],
-                        ]),
-                        participant['stats']['item6'],
-                        participant['stats']['champLevel'],
-                        participant['championId'],
-                        participant['stats']['kills'],
-                        participant['stats']['deaths'],
-                        participant['stats']['assists'],
-                        participant['stats']['goldEarned'],
-                        participant['stats']['neutralMinionsKilled'],
-                        participant['stats']['neutralMinionsKilledEnemyJungle'],
-                        participant['stats']['neutralMinionsKilledTeamJungle'],
-                        participant['stats']['totalMinionsKilled'],
-                        participant['stats']['visionScore'],
-                        participant['stats']['visionWardsBoughtInGame'],
-                        participant['stats']['wardsPlaced'],
-                        participant['stats']['wardsKilled'],
-                        participant['stats']['physicalDamageTaken'],
-                        participant['stats']['magicalDamageTaken'],
-                        participant['stats']['trueDamageTaken'],
-                        participant['stats']['damageSelfMitigated'],
-                        participant['stats']['physicalDamageDealtToChampions'],
-                        participant['stats']['magicDamageDealtToChampions'],
-                        participant['stats']['trueDamageDealtToChampions'],
-                        participant['stats']['damageDealtToTurrets'],
-                        participant['stats']['damageDealtToObjectives'],
-                        participant['stats']['totalHeal'],
-                        participant['stats']['totalUnitsHealed'],
-                        participant['stats']['timeCCingOthers'],
-                        participant['stats']['totalTimeCrowdControlDealt']
-                    ))
+                    try:
+                        participant_sets.append((
+                            int(match[0]),
+                            participant['participantId'],
+                            participant['player']['summonerId'],
+                            str([participant['spell1Id'], participant['spell2Id']]),
+                            tree_ids[(participant['stats']['perkPrimaryStyle'] - 8000) // 100 - 1],
+                            tree_ids[(participant['stats']['perkSubStyle'] - 8000) // 100 - 1],
+                            self.rune_ids[participant['stats']['perk0']] +
+                            self.rune_ids[participant['stats']['perk1']] +
+                            self.rune_ids[participant['stats']['perk2']] +
+                            self.rune_ids[participant['stats']['perk3']],
+                            self.rune_ids[participant['stats']['perk4']] +
+                            self.rune_ids[participant['stats']['perk5']],
+                            shard_id[participant['stats']['statPerk0']] * 100 +
+                            shard_id[participant['stats']['statPerk1']] * 10 +
+                            shard_id[participant['stats']['statPerk2']],
+                            str([
+                                participant['stats']['item0'], participant['stats']['item1'],
+                                participant['stats']['item2'], participant['stats']['item3'],
+                                participant['stats']['item4'], participant['stats']['item5'],
+                            ]),
+                            participant['stats']['item6'],
+                            participant['stats']['champLevel'],
+                            participant['championId'],
+                            participant['stats']['kills'],
+                            participant['stats']['deaths'],
+                            participant['stats']['assists'],
+                            participant['stats']['goldEarned'],
+                            participant['stats']['neutralMinionsKilled'],
+                            participant['stats']['neutralMinionsKilledEnemyJungle'],
+                            participant['stats']['neutralMinionsKilledTeamJungle'],
+                            participant['stats']['totalMinionsKilled'],
+                            participant['stats']['visionScore'],
+                            participant['stats']['visionWardsBoughtInGame'],
+                            participant['stats']['wardsPlaced'],
+                            participant['stats']['wardsKilled'],
+                            participant['stats']['physicalDamageTaken'],
+                            participant['stats']['magicalDamageTaken'],
+                            participant['stats']['trueDamageTaken'],
+                            participant['stats']['damageSelfMitigated'],
+                            participant['stats']['physicalDamageDealtToChampions'],
+                            participant['stats']['magicDamageDealtToChampions'],
+                            participant['stats']['trueDamageDealtToChampions'],
+                            participant['stats']['damageDealtToTurrets'],
+                            participant['stats']['damageDealtToObjectives'],
+                            participant['stats']['totalHeal'],
+                            participant['stats']['totalUnitsHealed'],
+                            participant['stats']['timeCCingOthers'],
+                            participant['stats']['totalTimeCrowdControlDealt']
+                        ))
+                    except Exception as err:
+                        self.logging.info(int(match[0]))
+                        raise err
             if team_sets:
                 template = await format_queue(team_sets[0])
                 lines = []
