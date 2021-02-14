@@ -167,6 +167,7 @@ class Service:
                 self.logging.info(template)
                 for line in team_sets:
                     self.logging.info(line)
+                    self.logging.info([str(param) if type(param) == list else param for param in line])
                     lines.append(template % [str(param) if type(param) == list else param for param in line])
                 values = ",".join(lines)
                 self.logging.info(values)
