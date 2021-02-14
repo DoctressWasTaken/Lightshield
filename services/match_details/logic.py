@@ -175,7 +175,7 @@ class Service:
                  rift_herald_kills, dragon_kills, baron_kills)
                 VALUES %s
                 ON CONFLICT DO NOTHING;
-                ''' % values
+                ''' % values.replace('[', '{').replace(']', '}')
                 self.logging.info(query)
                 await conn.execute(query)
                 self.logging.info("Inserted %s team entries.", len(team_sets))
