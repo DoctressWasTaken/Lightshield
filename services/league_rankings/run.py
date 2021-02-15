@@ -103,7 +103,7 @@ class Service:  # pylint: disable=R0902
     async def async_worker(self, tier, division, offset, worker):
         failed = False
         empty = False
-        page = offset
+        page = offset + 1
         tasks = []
         while (not empty or failed) and not self.stopped:
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
