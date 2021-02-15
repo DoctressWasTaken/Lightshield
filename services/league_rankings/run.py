@@ -83,7 +83,8 @@ class Service:  # pylint: disable=R0902
             AND rank <= $2
         ''', min_rank, min_rank + 100)
         for line in latest:
-            if (task := tasks[line['summoner_id']]):
+            if line['summoner_id'] in tasks:
+                task = tasks[line['summoner_id']]
                 if task == (line['summoner_id'],
                             int(line['rank']),
                             int(line['wins']),
