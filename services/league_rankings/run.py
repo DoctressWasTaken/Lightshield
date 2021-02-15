@@ -73,6 +73,7 @@ class Service:  # pylint: disable=R0902
             tasks = {**tasks, **entry}
 
         min_rank = tiers[tier] * 400 + rank[division] * 100
+        self.logging.info("Found %s unique user.", len(tasks))
 
         conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
         latest = await conn.fetch('''
@@ -88,7 +89,7 @@ class Service:  # pylint: disable=R0902
                             int(line['wins']),
                             int(line['losses'])):
                     del tasks[line['summoner_id']]
-
+        self.logging.info("Upserting %s changed user.", len(tasks))
         await conn.execute('''
             INSERT INTO summoner (summoner_id, rank, wins, losses)
                 VALUES %s
@@ -107,25 +108,25 @@ class Service:  # pylint: disable=R0902
         while (not empty or failed) and not self.stopped:
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
-
-            if not failed:
-                page += worker
-            else:
-                page = failed
-                failed = None
             async with aiohttp.ClientSession() as session:
                 try:
+                    self.logging.info("Pulling page.", page)
                     content = await self.fetch(session, url=self.url % (
                         tier, division, page))
                     if len(content) == 0:
                         self.logging.info("Page %s is empty.", page)
                         empty = True
-                        return
+                        continue
                     tasks += content
                 except (RatelimitException, Non200Exception):
                     failed = page
                 except NotFoundException:
                     empty = True
+            if not failed:
+                page += worker
+            else:
+                page = failed
+                failed = None
         unique_tasks = {}
         for task in tasks:
             unique_tasks[task['summonerId']] = (
