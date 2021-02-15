@@ -64,17 +64,52 @@ class Service:  # pylint: disable=R0902
         """
         await self.rankmanager.init()
 
-    async def async_worker(self, tier, division):
+    async def process_rank(self, tier, division, worker=5):
 
+        task_sets = await asyncio.gather(
+            *[asyncio.create_task(self.async_worker(tier, division, offset=i, worker=worker)) for i in range(worker)])
+        tasks = {}
+        for entry in task_sets:
+            tasks = {**tasks, **entry}
+
+        min_rank = tiers[tier] * 400 + rank[division] * 100
+
+        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+        latest = await conn.fetch('''
+            SELECT summoner_id, rank, wins, losses
+            FROM summoner
+            WHERE rank >= $1 
+            AND rank <= $2
+        ''', min_rank, min_rank + 100)
+        for line in latest:
+            if (task := tasks[line['summoner_id']]):
+                if task == (line['summoner_id'],
+                            int(line['rank']),
+                            int(line['wins']),
+                            int(line['losses'])):
+                    del tasks[line['summoner_id']]
+
+        await conn.execute('''
+            INSERT INTO summoner (summoner_id, rank, wins, losses)
+                VALUES %s
+                ON CONFLICT (summoner_id) DO 
+                UPDATE SET rank = EXCLUDED.rank,
+                           wins = EXCLUDED.wins,
+                           losses = EXCLUDED.losses  
+        ''' % ",".join(["('%s', %s, %s, %s)" % task for task in tasks.values()]))
+        await conn.close()
+
+    async def async_worker(self, tier, division, offset, worker):
         failed = None
+        empty = False
+        page = offset
         tasks = []
-        while (not self.empty or failed) and not self.stopped:
+        while (not empty or failed) and not self.stopped:
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
 
             if not failed:
-                page = self.next_page
-                self.next_page += 1
+                page += worker
             else:
                 page = failed
                 failed = None
@@ -84,13 +119,13 @@ class Service:  # pylint: disable=R0902
                         tier, division, page))
                     if len(content) == 0:
                         self.logging.info("Page %s is empty.", page)
-                        self.empty = True
+                        empty = True
                         return
                     tasks += content
                 except (RatelimitException, Non200Exception):
                     failed = page
                 except NotFoundException:
-                    self.empty = True
+                    empty = True
         unique_tasks = {}
         for task in tasks:
             unique_tasks[task['summonerId']] = (
@@ -98,16 +133,7 @@ class Service:  # pylint: disable=R0902
                 int(tiers[task['tier']] * 400 + rank[task['rank']] * 100 + task['leaguePoints']),
                 int(task['wins']),
                 int(task['losses']))
-        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-        await conn.executemany('''
-            INSERT INTO summoner (summoner_id, rank, wins, losses)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (summoner_id) DO 
-                UPDATE SET rank = EXCLUDED.rank,
-                           wins = EXCLUDED.wins,
-                           losses = EXCLUDED.losses  
-        ''', unique_tasks.values())
-        await conn.close()
+        return unique_tasks
 
     async def fetch(self, session, url):
         """Execute call to external target using the proxy server.
@@ -150,7 +176,7 @@ class Service:  # pylint: disable=R0902
             tier, division = await self.rankmanager.get_next()
             self.empty = False
             self.next_page = 1
-            await asyncio.gather(*[asyncio.create_task(self.async_worker(tier, division)) for i in range(5)])
+            await self.process_rank(tier, division, worker=5)
             await self.rankmanager.update(key=(tier, division))
 
 
