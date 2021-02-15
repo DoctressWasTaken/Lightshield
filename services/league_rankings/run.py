@@ -110,7 +110,7 @@ class Service:  # pylint: disable=R0902
                 await asyncio.sleep(delay)
             async with aiohttp.ClientSession() as session:
                 try:
-                    self.logging.info("Pulling page.", page)
+                    self.logging.info("Pulling page %s.", page)
                     content = await self.fetch(session, url=self.url % (
                         tier, division, page))
                     if len(content) == 0:
