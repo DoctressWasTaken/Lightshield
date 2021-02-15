@@ -101,7 +101,7 @@ class Service:  # pylint: disable=R0902
         await conn.close()
 
     async def async_worker(self, tier, division, offset, worker):
-        failed = None
+        failed = False
         empty = False
         page = offset
         tasks = []
@@ -119,14 +119,13 @@ class Service:  # pylint: disable=R0902
                         continue
                     tasks += content
                 except (RatelimitException, Non200Exception):
-                    failed = page
+                    failed = True
                 except NotFoundException:
                     empty = True
             if not failed:
                 page += worker
-            else:
-                page = failed
-                failed = None
+            failed = False
+
         unique_tasks = {}
         for task in tasks:
             unique_tasks[task['summonerId']] = (
