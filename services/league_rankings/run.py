@@ -110,7 +110,6 @@ class Service:  # pylint: disable=R0902
                 await asyncio.sleep(delay)
             async with aiohttp.ClientSession() as session:
                 try:
-                    self.logging.info("Pulling page %s.", page)
                     content = await self.fetch(session, url=self.url % (
                         tier, division, page))
                     if len(content) == 0:
@@ -152,14 +151,14 @@ class Service:  # pylint: disable=R0902
         try:
             async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
                 await response.text()
-                if response.status != 200:
-                    self.logging.info(response.status)
+                if response.status == 429:
+                    self.logging.info(429)
         except aiohttp.ClientConnectionError as err:
             self.logging.info("Error %s", err)
             raise Non200Exception()
         if response.status in [429, 430]:
             if "Retry-After" in response.headers:
-                delay = int(response.headers['Retry-After'])
+                delay = max(1, int(response.headers['Retry-After']))
                 self.retry_after = datetime.now() + timedelta(seconds=delay)
             raise RatelimitException()
         if response.status == 404:
