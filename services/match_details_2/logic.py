@@ -116,7 +116,7 @@ class Service:
                             int(match[0]),
                             participant['participantId'],
                             participant['player']['summonerId'],
-                            str([participant['spell1Id'], participant['spell2Id']]),
+                            [participant['spell1Id'], participant['spell2Id']],
                             self.rune_tree[participant['stats']['perk0']],
                             self.rune_tree[participant['stats']['perk4']],
                             self.rune_ids[participant['stats']['perk0']] +
@@ -128,11 +128,11 @@ class Service:
                             shard_id[participant['stats']['statPerk0']] * 100 +
                             shard_id[participant['stats']['statPerk1']] * 10 +
                             shard_id[participant['stats']['statPerk2']],
-                            str([
+                            [
                                 participant['stats']['item0'], participant['stats']['item1'],
                                 participant['stats']['item2'], participant['stats']['item3'],
                                 participant['stats']['item4'], participant['stats']['item5'],
-                            ]),
+                            ],
                             participant['stats']['item6'],
                             participant['stats']['champLevel'],
                             participant['championId'],
