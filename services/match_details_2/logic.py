@@ -208,13 +208,15 @@ class Service:
                 await participant_insert.executemany(participant_sets)
                 self.logging.info("Inserted %s participant entries.", len(participant_sets))
             if update_sets:
-                await conn.executemany('''
-                    UPDATE match
+                match_update = await conn.prepare('''
+                UPDATE match
                     SET duration = $1,
                         win = $2,
                         details_pulled = TRUE
                     WHERE match_id = $3
-                    ''', update_sets)
+                    
+                ''')
+                match_update.executemany(update_sets)
             await conn.close()
         except Exception as err:
             traceback.print_tb(err.__traceback__)
