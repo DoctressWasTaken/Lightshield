@@ -73,8 +73,8 @@ services:
       - QUEUES=420
     restart: always
 
-    match_details_2: # MH
-      hostname: match_details_2
+    match_details_x: # MH
+      hostname: match_details_x
       build:
         dockerfile: Dockerfile
         context: services/match_details_2
