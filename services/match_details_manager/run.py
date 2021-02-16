@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import signal
 import traceback
 from datetime import datetime, timedelta
@@ -23,6 +24,7 @@ class Manager:
         handler.setFormatter(
             logging.Formatter('%(asctime)s %(message)s'))
         self.logging.addHandler(handler)
+        self.limit = os.environ['LIMIT']
 
     async def init(self):
         self.redis = await aioredis.create_redis(
@@ -47,8 +49,8 @@ class Manager:
                 WHERE details_pulled IS NULL
                 AND DATE(timestamp) >= '2021-01-01' 
                 ORDER BY timestamp DESC
-                LIMIT 2000;
-                ''')
+                LIMIT $1;
+                ''', self.limit * 2)
         finally:
             await conn.close()
 
@@ -60,7 +62,7 @@ class Manager:
                 limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
                 await self.redis.zremrangebyscore('match_details_in_progress', max=limit)
                 # Check remaining buffer size
-                if (size := await self.redis.scard('match_details_tasks')) < 1000:
+                if (size := await self.redis.scard('match_details_tasks')) < self.limit:
                     self.logging.info("%s tasks remaining.", size)
                     # Pull new tasks
                     result = await self.get_tasks()
@@ -77,7 +79,8 @@ class Manager:
                         await self.redis.sadd('match_details_tasks', entry['match_id'])
 
                     self.logging.info("Filled tasks to %s.", await self.redis.scard('match_details_tasks'))
-
+                    await asyncio.sleep(1)
+                    continue
                 await asyncio.sleep(5)
 
             await self.redis.close()
