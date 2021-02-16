@@ -24,7 +24,7 @@ class Manager:
         handler.setFormatter(
             logging.Formatter('%(asctime)s %(message)s'))
         self.logging.addHandler(handler)
-        self.limit = os.environ['LIMIT']
+        self.limit = int(os.environ['LIMIT'])
 
     async def init(self):
         self.redis = await aioredis.create_redis(
