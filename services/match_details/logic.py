@@ -218,7 +218,7 @@ class Service:
                         details_pulled = TRUE
                     WHERE match_id = $3
                 ''')
-                match_update.executemany(update_sets)
+                await match_update.executemany(update_sets)
             await conn.close()
         except Exception as err:
             traceback.print_tb(err.__traceback__)
