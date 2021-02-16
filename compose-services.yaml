@@ -73,6 +73,7 @@ services:
     environment:
       - SERVER=${SERVER}
       - QUEUES=420
+      - BATCH_SIZE=50
     restart: always
 
   persistent_db:

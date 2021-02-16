@@ -41,6 +41,7 @@ class Service:
         self.rune_tree = get_trees()
 
         self.server = os.environ['SERVER']
+        self.batch_size = os.environ['BATCH_SIZE']
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
@@ -225,7 +226,7 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        if not (tasks := await self.redis.spop('match_details_tasks', 25)):
+        if not (tasks := await self.redis.spop('match_details_tasks', self.batch_size)):
             return tasks
         if self.stopped:
             return
