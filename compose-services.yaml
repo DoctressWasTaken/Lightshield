@@ -73,16 +73,16 @@ services:
       - QUEUES=420
     restart: always
 
-    match_details_x: # MH
-      hostname: match_details_x
-      build:
-        dockerfile: Dockerfile
-        context: services/match_details_2
-      image: lightshield_match_details_x
-      environment:
-        - SERVER=${SERVER}
-        - QUEUES=420
-      restart: always
+  match_details_2: # MH
+    hostname: match_details_2
+    build:
+      dockerfile: Dockerfile
+      context: services/match_details_2
+    image: lightshield_match_details_2
+    environment:
+      - SERVER=${SERVER}
+      - QUEUES=420
+    restart: always
 
   persistent_db:
     container_name: ${COMPOSE_PROJECT_NAME}_persistent_db
