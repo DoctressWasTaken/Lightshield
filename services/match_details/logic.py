@@ -291,7 +291,8 @@ class Service:
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
         if response.status in [429, 430]:
-            self.logging.info(response.status)
+            if response.status == 429:
+                self.logging.info(response.status)
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
             else:
