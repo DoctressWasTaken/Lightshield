@@ -1,0 +1,40 @@
+version: '3.7'
+services:
+  ### Databases
+  persistent_db:
+    container_name: ${COMPOSE_PROJECT_NAME}_persistent_db
+    build:
+      context: postgres
+      dockerfile: Dockerfile
+    image: lightshield_persistent_db
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    networks:
+      default:
+        aliases:
+          - postgres
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    restart: always
+
+  buffer_db:
+    image: redis:6.0
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - redis:/data
+    networks:
+      default:
+        aliases:
+          - redis
+    restart: always
+
+volumes:
+  postgres:
+    name: ${SERVER}_lightshield_persistent
+  redis:
+    name: ${SERVER}_lightshield_buffer
+
+networks:
+  default:
+    external:
+      name: lightshield
