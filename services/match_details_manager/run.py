@@ -59,7 +59,7 @@ class Manager:
         try:
             while not self.stopped:
                 # Drop timed out tasks
-                limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
+                limit = int((datetime.utcnow() - timedelta(minutes=2)).timestamp())
                 await self.redis.zremrangebyscore('match_details_in_progress', max=limit)
                 # Check remaining buffer size
                 if (size := await self.redis.scard('match_details_tasks')) < self.limit:
