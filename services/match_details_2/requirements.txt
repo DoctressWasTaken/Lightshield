@@ -1,4 +1,4 @@
 aioredis
-asyncpg
+asyncpg=0.22.0
 aiohttp
 uvloop
