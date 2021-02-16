@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import signal
 from datetime import datetime, timedelta
 
@@ -21,6 +22,7 @@ class Manager:
         handler.setLevel(level)
         handler.setFormatter(
             logging.Formatter('%(asctime)s %(message)s'))
+        self.min_matches = os.environ['MIN_MATCHES']
         self.logging.addHandler(handler)
 
     async def init(self):
@@ -59,10 +61,10 @@ class Manager:
                 FROM summoner
                 WHERE wins_last_updated IS NOT NULL
                 AND account_id IS NOT NULL
-                AND (wins + losses - wins_last_updated - losses_last_updated) >= 10
+                AND (wins + losses - wins_last_updated - losses_last_updated) >= $1
                 ORDER BY (wins + losses - wins_last_updated - losses_last_updated) DESC
                 LIMIT 2000;
-                '''), False
+                ''', self.min_matches), False
         finally:
             await conn.close()
 
