@@ -41,7 +41,7 @@ class Service:
         self.rune_tree = get_trees()
 
         self.server = os.environ['SERVER']
-        self.batch_size = os.environ['BATCH_SIZE']
+        self.batch_size = int(os.environ['BATCH_SIZE'])
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
@@ -238,9 +238,10 @@ class Service:
             await self.redis.zadd('match_details_in_progress', start, entry)
         return tasks
 
-    async def worker(self, matchId, session) -> list:
+    async def worker(self, matchId, session, delay) -> list:
         """Multiple started per separate processor.
         Does calls continuously until it reaches an empty page."""
+        await asyncio.sleep(0.8 / self.batch_size * delay)
         while not self.stopped:
             if datetime.now() < self.retry_after:
                 delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
@@ -271,7 +272,7 @@ class Service:
             afk_alert = False
             async with aiohttp.ClientSession() as session:
                 results = await asyncio.gather(*[asyncio.create_task(self.worker(
-                    matchId=matchId, session=session)) for matchId in tasks])
+                    matchId=matchId, session=session, delay=index)) for index, matchId in enumerate(tasks)])
             self.logging.info("Received tasks.")
             await self.flush_manager(results, conn)
         await conn.close()
