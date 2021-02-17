@@ -260,7 +260,7 @@ class Service:
     async def async_worker(self):
         afk_alert = False
         conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
-
+        await self.prepare_calls(conn)
         while not self.stopped:
             if not (tasks := await self.get_task()):
                 if not afk_alert:
