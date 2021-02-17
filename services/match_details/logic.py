@@ -299,9 +299,10 @@ class Service:
         if response.status in [429, 430]:
             if response.status == 429:
                 self.logging.info(response.status)
+            delay = 0.1
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
-            else:
+            elif response.status == 429:
                 delay = 1
             self.retry_after = datetime.now() + timedelta(seconds=delay)
             raise RatelimitException()
