@@ -61,14 +61,53 @@ class Service:
         """Called on shutdown init."""
         self.stopped = True
 
-    async def flush_manager(self, match_details):
+    async def prepare_calls(self, conn):
+        template = '''
+        INSERT INTO team
+            (match_id, side, bans, tower_kills, inhibitor_kills,
+             first_tower, first_rift_herald, first_dragon, first_baron, 
+             rift_herald_kills, dragon_kills, baron_kills)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ON CONFLICT DO NOTHING;
+        '''
+        self.team_insert = await conn.prepare(template)
+
+        template = '''
+                        INSERT INTO participant
+        (match_id, participant_id, summoner_id, summoner_spell,
+         rune_main_tree, rune_sec_tree, rune_main_select,
+         rune_sec_select, rune_shards, item, -- 10 
+         trinket, champ_level, champ_id, kills, deaths, assists, gold_earned,
+         neutral_minions_killed, neutral_minions_killed_enemy, 
+         neutral_minions_killed_team, total_minions_killed, 
+         vision_score, vision_wards_bought, wards_placed,
+         wards_killed, physical_taken, magical_taken, true_taken, 
+         damage_mitigated, physical_dealt, magical_dealt, 
+         true_dealt, turret_dealt, objective_dealt, total_heal,
+         total_units_healed, time_cc_others, total_cc_dealt)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+                $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
+                $31,$32,$33,$34,$35,$36,$37,$38)
+        ON CONFLICT DO NOTHING
+        '''
+        self.participant_insert = await conn.prepare(template)
+
+        self.match_update = await conn.prepare('''
+        UPDATE match
+            SET duration = $1,
+                win = $2,
+                details_pulled = TRUE
+            WHERE match_id = $3
+        ''')
+
+    async def flush_manager(self, match_details, conn):
         """Update entries in postgres once enough tasks are done."""
         try:
             match_ids = []
             for match in match_details:
                 match_ids.append(match[0])
 
-            conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
             existing_ids = [match['match_id'] for match in await conn.fetch('''
                 SELECT DISTINCT match_id
                 FROM team
@@ -168,16 +207,7 @@ class Service:
                         raise err
             if team_sets:
                 lines = []
-                template = '''
-                INSERT INTO team
-                    (match_id, side, bans, tower_kills, inhibitor_kills,
-                     first_tower, first_rift_herald, first_dragon, first_baron, 
-                     rift_herald_kills, dragon_kills, baron_kills)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                ON CONFLICT DO NOTHING;
-                '''
-                team_insert = await conn.prepare(template)
-                await team_insert.executemany(team_sets)
+                await self.team_insert.executemany(team_sets)
                 self.logging.info("Inserted %s team entries.", len(team_sets))
 
             if participant_sets:
@@ -187,39 +217,12 @@ class Service:
                     lines.append(
                         template % tuple([str(param) if type(param) in (list, bool) else param for param in line]))
                 values = ",".join(lines)
-                template = '''
-                                INSERT INTO participant
-                (match_id, participant_id, summoner_id, summoner_spell,
-                 rune_main_tree, rune_sec_tree, rune_main_select,
-                 rune_sec_select, rune_shards, item, -- 10 
-                 trinket, champ_level, champ_id, kills, deaths, assists, gold_earned,
-                 neutral_minions_killed, neutral_minions_killed_enemy, 
-                 neutral_minions_killed_team, total_minions_killed, 
-                 vision_score, vision_wards_bought, wards_placed,
-                 wards_killed, physical_taken, magical_taken, true_taken, 
-                 damage_mitigated, physical_dealt, magical_dealt, 
-                 true_dealt, turret_dealt, objective_dealt, total_heal,
-                 total_units_healed, time_cc_others, total_cc_dealt)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-                        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-                        $31,$32,$33,$34,$35,$36,$37,$38)
-                ON CONFLICT DO NOTHING
-                '''
-                participant_insert = await conn.prepare(template)
-                await participant_insert.executemany(participant_sets)
+
+                await self.participant_insert.executemany(participant_sets)
                 self.logging.info("Inserted %s participant entries.", len(participant_sets))
 
             if update_sets:
-                match_update = await conn.prepare('''
-                UPDATE match
-                    SET duration = $1,
-                        win = $2,
-                        details_pulled = TRUE
-                    WHERE match_id = $3
-                ''')
-                await match_update.executemany(update_sets)
-            await conn.close()
+                await self.match_update.executemany(update_sets)
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
@@ -256,6 +259,8 @@ class Service:
 
     async def async_worker(self):
         afk_alert = False
+        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+
         while not self.stopped:
             if not (tasks := await self.get_task()):
                 if not afk_alert:
@@ -268,7 +273,8 @@ class Service:
                 results = await asyncio.gather(*[asyncio.create_task(self.worker(
                     matchId=matchId, session=session)) for matchId in tasks])
             self.logging.info("Received tasks.")
-            await self.flush_manager(results)
+            await self.flush_manager(results, conn)
+        await conn.close()
 
     async def fetch(self, session, url) -> dict:
         """
