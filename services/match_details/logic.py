@@ -208,7 +208,6 @@ class Service:
             if team_sets:
                 lines = []
                 await self.team_insert.executemany(team_sets)
-                self.logging.info("Inserted %s team entries.", len(team_sets))
 
             if participant_sets:
                 template = await format_queue(participant_sets[0])
@@ -219,10 +218,11 @@ class Service:
                 values = ",".join(lines)
 
                 await self.participant_insert.executemany(participant_sets)
-                self.logging.info("Inserted %s participant entries.", len(participant_sets))
 
             if update_sets:
                 await self.match_update.executemany(update_sets)
+            self.logging.info("Inserted %s match_details.", len(update_sets))
+
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
@@ -273,7 +273,6 @@ class Service:
             async with aiohttp.ClientSession() as session:
                 results = await asyncio.gather(*[asyncio.create_task(self.worker(
                     matchId=matchId, session=session, delay=index)) for index, matchId in enumerate(tasks)])
-            self.logging.info("Received tasks.")
             await self.flush_manager(results, conn)
         await conn.close()
 
