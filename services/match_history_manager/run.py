@@ -22,7 +22,7 @@ class Manager:
         handler.setLevel(level)
         handler.setFormatter(
             logging.Formatter('%(asctime)s %(message)s'))
-        self.min_matches = os.environ['MIN_MATCHES']
+        self.min_matches = int(os.environ['MIN_MATCHES'])
         self.logging.addHandler(handler)
 
     async def init(self):
