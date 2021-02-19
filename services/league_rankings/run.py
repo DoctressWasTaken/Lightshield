@@ -75,7 +75,7 @@ class Service:  # pylint: disable=R0902
         min_rank = tiers[tier] * 400 + rank[division] * 100
         self.logging.info("Found %s unique user.", len(tasks))
 
-        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+        conn = await asyncpg.connect("postgresql://172.17.0.1:5432@postgres/%s" % self.server.lower())
         latest = await conn.fetch('''
             SELECT summoner_id, rank, wins, losses
             FROM summoner
@@ -91,14 +91,15 @@ class Service:  # pylint: disable=R0902
                             int(line['losses'])):
                     del tasks[line['summoner_id']]
         self.logging.info("Upserting %s changed user.", len(tasks))
-        await conn.execute('''
-            INSERT INTO summoner (summoner_id, rank, wins, losses)
-                VALUES %s
-                ON CONFLICT (summoner_id) DO 
-                UPDATE SET rank = EXCLUDED.rank,
-                           wins = EXCLUDED.wins,
-                           losses = EXCLUDED.losses  
-        ''' % ",".join(["('%s', %s, %s, %s)" % task for task in tasks.values()]))
+        if tasks:
+            await conn.execute('''
+                INSERT INTO summoner (summoner_id, rank, wins, losses)
+                    VALUES %s
+                    ON CONFLICT (summoner_id) DO 
+                    UPDATE SET rank = EXCLUDED.rank,
+                               wins = EXCLUDED.wins,
+                               losses = EXCLUDED.losses  
+            ''' % ",".join(["('%s', %s, %s, %s)" % task for task in tasks.values()]))
         await conn.close()
 
     async def async_worker(self, tier, division, offset, worker):
