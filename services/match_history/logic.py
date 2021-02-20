@@ -58,7 +58,7 @@ class Service:
                     continue
                 sets.append([entry['gameId'],
                              entry['queue'],
-                             entry['timestamp'] // 1000
+                             datetime.fromtimestamp(entry['timestamp'] // 1000).strftime('%Y-%m-%d %H:%M:%S')
                              ])
             self.logging.info(type(sets))
             conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
@@ -66,7 +66,7 @@ class Service:
             if sets:
                 query = '''
                     INSERT INTO match (match_id, queue, timestamp)
-                    VALUES ($1,$2,TO_TIMESTAMP($3))
+                    VALUES ($1,$2,$3)
                     ON CONFLICT DO NOTHING;
                     '''
                 prepared_query = await conn.prepare(query)
