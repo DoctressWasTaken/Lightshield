@@ -69,6 +69,7 @@ class Service:
                     '''
                 prepared_query = await conn.prepare(query)
                 await prepared_query.executemany(sets)
+                self.logging.info(type(sets))
                 self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
 
             await conn.execute('''
