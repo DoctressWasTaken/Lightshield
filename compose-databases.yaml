@@ -17,7 +17,7 @@ services:
 
 volumes:
   redis:
-    name: ${SERVER}_lightshield_buffer
+    name: lightshield_buffer
 
 networks:
   lightshield:
