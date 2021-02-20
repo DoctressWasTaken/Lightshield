@@ -91,6 +91,7 @@ class Service:
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
                 self.logging.info(err)
+            await asyncio.sleep(0.01)
         self.logging.info("Stopped worker.")
 
     async def fetch(self, session, url):
