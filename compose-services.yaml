@@ -83,17 +83,6 @@ services:
       - BATCH_SIZE=30
     restart: always
 
-  buffer_db:
-    image: redis:6.0
-    command: [ "redis-server", "--appendonly", "yes" ]
-    volumes:
-      - redis:/data
-    networks:
-      default:
-        aliases:
-          - redis
-    restart: always
-
 volumes:
   postgres:
     name: ${SERVER}_lightshield_persistent
@@ -110,6 +99,19 @@ networks:
 
 
 x-disabled:
+
+  buffer_db:
+    image: redis:6.0
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - redis:/data
+    networks:
+      default:
+        aliases:
+          - redis
+    restart: always
+
+
   match_details: # MD
     hostname: match_details
     image: python:3.8
