@@ -30,8 +30,8 @@ class Manager:
     async def init(self):
         self.redis = await aioredis.create_redis(
             ('redis', 6379))
-        await self.redis.delete('match_details_in_progress')
-        await self.redis.delete('match_details_tasks')
+        await self.redis.delete('%s_match_details_in_progress' % self.server)
+        await self.redis.delete('%s_match_details_tasks' % self.server)
 
     def shutdown(self):
         self.stopped = True
@@ -61,9 +61,9 @@ class Manager:
             while not self.stopped:
                 # Drop timed out tasks
                 limit = int((datetime.utcnow() - timedelta(minutes=2)).timestamp())
-                await self.redis.zremrangebyscore('match_details_in_progress', max=limit)
+                await self.redis.zremrangebyscore('%s_match_details_in_progress' % self.server, max=limit)
                 # Check remaining buffer size
-                if (size := await self.redis.scard('match_details_tasks')) < self.limit:
+                if (size := await self.redis.scard('%s_match_details_tasks' % self.server)) < self.limit:
                     self.logging.info("%s tasks remaining.", size)
                     # Pull new tasks
                     result = await self.get_tasks()
@@ -74,12 +74,13 @@ class Manager:
                     # Add new tasks
                     for entry in result:
                         # Each entry will always be refered to by account_id
-                        if await self.redis.zscore('match_details_in_progress', entry['match_id']):
+                        if await self.redis.zscore('%s_match_details_in_progress' % self.server, entry['match_id']):
                             continue
                         # Insert task hook
-                        await self.redis.sadd('match_details_tasks', entry['match_id'])
+                        await self.redis.sadd('%s_match_details_tasks' % self.server, entry['match_id'])
 
-                    self.logging.info("Filled tasks to %s.", await self.redis.scard('match_details_tasks'))
+                    self.logging.info("Filled tasks to %s.",
+                                      await self.redis.scard('%s_match_details_tasks' % self.server))
                     await asyncio.sleep(1)
                     continue
                 await asyncio.sleep(5)

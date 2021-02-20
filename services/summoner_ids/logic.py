@@ -71,11 +71,11 @@ class Service:
     async def get_task(self):
         """Return tasks to the async worker."""
 
-        task = await self.redis.spop('summoner_id_tasks')
+        task = await self.redis.spop('%s_summoner_id_tasks' % self.server)
         if not task or self.stopped:
             return
         start = int(datetime.utcnow().timestamp())
-        await self.redis.zadd('summoner_id_in_progress', start, task)
+        await self.redis.zadd('%s_summoner_id_in_progress' % self.server, start, task)
         return task
 
     async def fetch_manager(self, session, summoner_id):

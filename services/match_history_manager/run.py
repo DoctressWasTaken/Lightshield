@@ -29,8 +29,8 @@ class Manager:
     async def init(self):
         self.redis = await aioredis.create_redis(
             ('redis', 6379))
-        await self.redis.delete('match_history_in_progress')
-        await self.redis.delete('match_history_tasks')
+        await self.redis.delete('%s_match_history_in_progress' % self.server)
+        await self.redis.delete('%s_match_history_tasks' % self.server)
 
     def shutdown(self):
         self.stopped = True
@@ -75,9 +75,9 @@ class Manager:
         while not self.stopped:
             # Drop timed out tasks
             limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
-            await self.redis.zremrangebyscore('match_history_in_progress', max=limit)
+            await self.redis.zremrangebyscore('%s_match_history_in_progress' % self.server, max=limit)
             # Check remaining buffer size
-            if (size := await self.redis.zcard('match_history_tasks')) < 1000:
+            if (size := await self.redis.zcard('%s_match_history_tasks' % self.server)) < 1000:
                 self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
                 result, full_refreshes = await self.get_tasks()
@@ -88,7 +88,7 @@ class Manager:
                 # Add new tasks
                 for entry in result:
                     # Each entry will always be refered to by account_id
-                    if await self.redis.zscore('match_history_in_progress', entry['account_id']):
+                    if await self.redis.zscore('%s_match_history_in_progress' % self.server, entry['account_id']):
                         continue
                     if full_refreshes:
                         z_index = 9999
@@ -101,12 +101,12 @@ class Manager:
                                    ['wins', 'losses', 'wins_last_updated', 'losses_last_updated']}
 
                     # Insert task hook
-                    await self.redis.zadd('match_history_tasks', z_index, entry['account_id'])
+                    await self.redis.zadd('%s_match_history_tasks' % self.server, z_index, entry['account_id'])
                     # Insert task hash
                     await self.redis.hmset_dict(
-                        "%s:%s" % (entry['account_id'], z_index), package
+                        "%s:%s:%s" % (self.server, entry['account_id'], z_index), package
                     )
-                self.logging.info("Filled tasks to %s.", await self.redis.zcard('match_history_tasks'))
+                self.logging.info("Filled tasks to %s.", await self.redis.zcard('%s_match_history_tasks' % self.server))
 
             await asyncio.sleep(5)
 

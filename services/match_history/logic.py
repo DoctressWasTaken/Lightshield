@@ -87,12 +87,12 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        while not (task := await self.redis.zpopmax('match_history_tasks', 1)) and not self.stopped:
+        while not (task := await self.redis.zpopmax('%s_match_history_tasks' % self.server, 1)) and not self.stopped:
             await asyncio.sleep(5)
         if self.stopped:
             return
-        keys = await self.redis.hgetall('%s:%s' % (task[0], task[1]))
-        await self.redis.delete('%s:%s' % (task[0], task[1]))
+        keys = await self.redis.hgetall('%s:%s:%s' % (self.server, task[0], task[1]))
+        await self.redis.delete('%s:%s:%s' % (self.server, task[0], task[1]))
         start = int(datetime.utcnow().timestamp())
         await self.redis.zadd('match_history_in_progress', start, task[0])
         return [task[0], int(task[1])], keys

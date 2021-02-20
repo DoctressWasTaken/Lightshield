@@ -229,13 +229,13 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        if not (tasks := await self.redis.spop('match_details_tasks', self.batch_size)):
+        if not (tasks := await self.redis.spop('%s_match_details_tasks' % self.server, self.batch_size)):
             return tasks
         if self.stopped:
             return
         start = int(datetime.utcnow().timestamp())
         for entry in tasks:
-            await self.redis.zadd('match_details_in_progress', start, entry)
+            await self.redis.zadd('%s_match_details_in_progress' % self.server, start, entry)
         return tasks
 
     async def worker(self, matchId, session, delay) -> list:

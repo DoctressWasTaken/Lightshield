@@ -28,13 +28,8 @@ class Manager:
     async def init(self):
         self.redis = await aioredis.create_redis(
             ('redis', 6379))
-        await self.redis.delete('summoner_id_in_progress')
-        await self.redis.delete('summoner_id_tasks')
-        try:
-            await self.redis.delete('tasks')
-            await self.redis.delete('in_progress')
-        except:
-            pass
+        await self.redis.delete('%s_summoner_id_in_progress' % self.server)
+        await self.redis.delete('%s_summoner_id_tasks' % self.server)
 
     def shutdown(self):
         self.stopped = True
@@ -45,9 +40,9 @@ class Manager:
         while not self.stopped:
             # Drop timed out tasks
             limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
-            await self.redis.zremrangebyscore('summoner_id_in_progress', max=limit)
+            await self.redis.zremrangebyscore('%s_summoner_id_in_progress' % self.server, max=limit)
             # Check remaining buffer size
-            if (size := await self.redis.scard('summoner_id_tasks')) < 1000:
+            if (size := await self.redis.scard('%s_summoner_id_tasks' % self.server)) < 1000:
                 self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
                 conn = await asyncpg.connect(
@@ -66,12 +61,12 @@ class Manager:
                     continue
                 # Add new tasks
                 for entry in result:
-                    if await self.redis.sismember('summoner_id_tasks', entry['summoner_id']):
+                    if await self.redis.sismember('%s_summoner_id_tasks' % self.server, entry['summoner_id']):
                         continue
-                    await self.redis.sadd('summoner_id_tasks', entry['summoner_id'])
-                    if await self.redis.scard('summoner_id_tasks') >= 2000:
+                    await self.redis.sadd('%s_summoner_id_tasks' % self.server, entry['summoner_id'])
+                    if await self.redis.scard('%s_summoner_id_tasks' % self.server) >= 2000:
                         break
-                self.logging.info("Filled tasks to %s.", await self.redis.scard('summoner_id_tasks'))
+                self.logging.info("Filled tasks to %s.", await self.redis.scard('%s_summoner_id_tasks' % self.server))
 
             await asyncio.sleep(5)
         await self.redis.close()
