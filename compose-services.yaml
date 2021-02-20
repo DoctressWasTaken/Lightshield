@@ -22,6 +22,8 @@ services:
       dockerfile: Dockerfile
       context: services/summoner_ids_manager
     image: lightshield_summoner_ids_manager
+    environment:
+      - SERVER=${SERVER}
 
   summoner_ids: # SI
     hostname: summoner_ids

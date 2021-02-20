@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import signal
 from datetime import datetime, timedelta
 
@@ -22,6 +23,7 @@ class Manager:
         handler.setFormatter(
             logging.Formatter('%(asctime)s %(message)s'))
         self.logging.addHandler(handler)
+        self.server = os.environ['SERVER']
 
     async def init(self):
         self.redis = await aioredis.create_redis(
