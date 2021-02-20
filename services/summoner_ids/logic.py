@@ -50,11 +50,12 @@ class Service:
             conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
             if self.completed_tasks:
                 self.logging.info("Inserting %s summoner IDs.", len(self.completed_tasks))
-                await conn.executemany('''
+                prep = await conn.prepare('''
                     UPDATE summoner
                     SET account_id = $1, puuid = $2
                     WHERE summoner_id = $3;
-                    ''', self.completed_tasks)
+                    ''')
+                await prep.executemany(self.completed_tasks)
                 self.completed_tasks = []
             if self.to_delete:
                 await conn.execute('''
