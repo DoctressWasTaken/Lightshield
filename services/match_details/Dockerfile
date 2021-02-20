@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.8-slim
 
 WORKDIR /project
 COPY *.sh ./
@@ -9,4 +9,4 @@ RUN pip install -r requirements.txt
 
 COPY *.py ./
 
-CMD . ./startup.sh
+ENTRYPOINT ["/project/startup.sh"]

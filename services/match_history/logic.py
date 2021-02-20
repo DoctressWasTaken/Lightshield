@@ -167,6 +167,7 @@ class Service:
                 await self.full_refresh(task[0], keys)
             else:
                 await self.partial_refresh(*task, keys)
+            await asyncio.sleep(0.01)
 
     async def fetch(self, session, url) -> dict:
         """

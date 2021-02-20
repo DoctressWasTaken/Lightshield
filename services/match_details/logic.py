@@ -274,6 +274,7 @@ class Service:
                 results = await asyncio.gather(*[asyncio.create_task(self.worker(
                     matchId=matchId, session=session, delay=index)) for index, matchId in enumerate(tasks)])
             await self.flush_manager(results, conn)
+            await asyncio.sleep(0.01)
         await conn.close()
 
     async def fetch(self, session, url) -> dict:
