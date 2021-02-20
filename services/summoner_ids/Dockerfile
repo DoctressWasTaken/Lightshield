@@ -8,4 +8,4 @@ RUN pip install -r requirements.txt
 
 COPY *.py ./
 
-CMD . ./startup.sh
+ENTRYPOINT ["exec", "startup.sh"]

@@ -46,10 +46,10 @@ class Service:
 
     async def insert(self, task):
         """Update entry in postgres."""
-        await self.prep_insert.execute(task)
+        await self.prep_insert.executemany([task])
 
     async def drop(self, task):
-        await self.prep_drop(task)
+        await self.prep_drop.executemany([task])
 
     async def get_task(self):
         """Return tasks to the async worker."""
