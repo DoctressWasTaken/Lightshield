@@ -23,6 +23,7 @@ class Manager:
         handler.setFormatter(
             logging.Formatter('%(asctime)s %(message)s'))
         self.min_matches = int(os.environ['MIN_MATCHES'])
+        self.server = os.environ['SERVER']
         self.logging.addHandler(handler)
 
     async def init(self):
@@ -40,7 +41,7 @@ class Manager:
         If there are non-initialized user found only those will be selected.
         If none are found a list of the user with the most new games are returned.
         """
-        conn = await asyncpg.connect("postgresql://postgres@postgres/raw")
+        conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
         try:
             if result := await conn.fetch('''
                 SELECT account_id, 
