@@ -20,6 +20,8 @@ volumes:
     name: ${SERVER}_lightshield_buffer
 
 networks:
+  lightshield:
+    external: true
   default:
     external:
       name: lightshield
