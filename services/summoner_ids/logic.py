@@ -44,30 +44,12 @@ class Service:
         """Called on shutdown init."""
         self.stopped = True
 
-    async def flush_manager(self):
-        """Update entries in postgres once enough tasks are done."""
-        try:
-            conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
-            if self.completed_tasks:
-                self.logging.info("Inserting %s summoner IDs.", len(self.completed_tasks))
-                prep = await conn.prepare('''
-                    UPDATE summoner
-                    SET account_id = $1, puuid = $2
-                    WHERE summoner_id = $3;
-                    ''')
-                await prep.executemany(self.completed_tasks)
-                self.completed_tasks = []
-            if self.to_delete:
-                await conn.execute('''
-                    DROP FROM summoner
-                    WHERE summoner_id IN (%s);
-                    ''', ",".join(["'%s'" % id for id in self.to_delete]))
-                self.to_delete = []
+    async def insert(self, task):
+        """Update entry in postgres."""
+        await self.prep_insert.execute(task)
 
-            await conn.close()
-        except Exception as err:
-            traceback.print_tb(err.__traceback__)
-            self.logging.info(err)
+    async def drop(self, task):
+        await self.prep_drop(task)
 
     async def get_task(self):
         """Return tasks to the async worker."""
@@ -79,41 +61,33 @@ class Service:
         await self.redis.zadd('%s_summoner_id_in_progress' % self.server, start, task)
         return task
 
-    async def fetch_manager(self, session, summoner_id):
-        """Manage the fetch response."""
-
-        try:
-            response = await self.fetch(session, self.url % summoner_id)
-            self.completed_tasks.append(
-                (response['accountId'], response['puuid'], summoner_id))
-        except NotFoundException:
-            self.to_delete.append(summoner_id)
-        except (RatelimitException, Non200Exception):
-            return
-
-    async def async_worker(self):
+    async def async_worker(self, delay):
         """Create only a new call if the summoner is not yet in the db."""
+        await asyncio.sleep(delay)
         self.logging.info("Started worker.")
+        failed = None
         while not self.stopped:
             if datetime.now() < self.retry_after:
                 delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
                 await asyncio.sleep(delay)
             try:
-                tasks = []
                 async with aiohttp.ClientSession() as session:
-                    for i in range(50):
+                    if failed:
+                        summoner_id = failed
+                        failed = None
+                    else:
                         summoner_id = await self.get_task()
-                        if not summoner_id:
-                            continue
-                        tasks.append(asyncio.create_task(
-                            self.fetch_manager(session, summoner_id)
-                        ))
-                        await asyncio.sleep(0.02)
-                    await asyncio.gather(*tasks)
-                if not tasks:
-                    await asyncio.sleep(10)
-                    continue
-                await self.flush_manager()
+                    if not summoner_id:
+                        continue
+                    response = await self.fetch(session, self.url % summoner_id)
+                    async with self.conn_lock:
+                        await self.insert([response['accountId'], response['puuid'], summoner_id])
+            except NotFoundException:
+                async with self.conn_lock:
+                    await self.drop(summoner_id)
+            except (RatelimitException, Non200Exception):
+                failed = summoner_id
+                continue
             except Exception as err:
                 traceback.print_tb(err.__traceback__)
                 self.logging.info(err)
@@ -157,8 +131,20 @@ class Service:
         """
         self.redis = await aioredis.create_redis_pool(
             ('redis', 6379), encoding='utf-8')
+        self.conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
+        self.prep_insert = await self.conn.prepare('''
+            UPDATE summoner
+            SET account_id = $1, puuid = $2
+            WHERE summoner_id = $3;
+            ''')
+        self.prep_drop = await self.conn.prepare('''
+                    DROP FROM summoner
+                    WHERE summoner_id = $1;
+                    ''')
+        self.conn_lock = asyncio.Lock()
 
     async def run(self):
         """Runner."""
         await self.init()
-        await self.async_worker()
+        await asyncio.gather(*[asyncio.create_task(self.async_worker(delay=i)) for i in range(5)])
+        await self.conn.close()
