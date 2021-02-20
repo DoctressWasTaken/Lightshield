@@ -58,20 +58,18 @@ class Service:
                     continue
                 sets.append((entry['gameId'],
                              entry['queue'],
-                             datetime.fromtimestamp(entry['timestamp'] // 1000).strftime('%Y-%m-%d %H:%M:%S')
+                             datetime.fromtimestamp(entry['timestamp'] // 1000)
                              ))
             conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
             if sets:
                 query = '''
                     INSERT INTO match (match_id, queue, timestamp)
-                    VALUES %s
+                    VALUES ($1, $2, $3)
                     ON CONFLICT DO NOTHING;
                     '''
-                lines = ["(%s, %s, '%s')" % set for set in sets]
 
-                # prepared_query = await conn.prepare(query)
-                # await prepared_query.executemany(sets)
-                await conn.execute(query % ",".join(lines))
+                prepared_query = await conn.prepare(query)
+                await prepared_query.executemany(sets)
                 self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
 
             await conn.execute('''

@@ -54,8 +54,6 @@ services:
     environment:
       - SERVER=${SERVER}
       - QUEUES=420
-    volumes:
-      - /backup
     restart: always
 
   match_details_manager:

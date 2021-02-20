@@ -1,10 +1,9 @@
 import asyncio
 import signal
 
-import uvloop
 from logic import Service
 
-uvloop.install()
+# uvloop.install()
 
 if __name__ == "__main__":
     service = Service()
