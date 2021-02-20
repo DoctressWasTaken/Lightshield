@@ -62,6 +62,7 @@ class Service:
                              ))
             self.logging.info(type(sets))
             conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
+            self.logging.info(type(sets))
             if sets:
                 query = '''
                     INSERT INTO match (match_id, queue, timestamp)
@@ -69,7 +70,9 @@ class Service:
                     ON CONFLICT DO NOTHING;
                     '''
                 prepared_query = await conn.prepare(query)
+                self.logging.info(type(sets))
                 await prepared_query.executemany(sets)
+                self.logging.info(type(sets))
                 self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
 
             await conn.execute('''
