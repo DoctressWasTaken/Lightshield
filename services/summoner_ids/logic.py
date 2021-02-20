@@ -138,7 +138,7 @@ class Service:
             WHERE summoner_id = $3;
             ''')
         self.prep_drop = await self.conn.prepare('''
-                    DROP FROM summoner
+                    DELETE FROM summoner
                     WHERE summoner_id = $1;
                     ''')
         self.conn_lock = asyncio.Lock()
