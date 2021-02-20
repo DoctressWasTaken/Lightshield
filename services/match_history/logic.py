@@ -60,19 +60,17 @@ class Service:
                              entry['queue'],
                              datetime.fromtimestamp(entry['timestamp'] // 1000)
                              ])
-            self.logging.info(type(sets))
             conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
-            self.logging.info(type(sets))
             if sets:
                 query = '''
                     INSERT INTO match (match_id, queue, timestamp)
                     VALUES ($1,$2,$3)
                     ON CONFLICT DO NOTHING;
                     '''
-                prepared_query = await conn.prepare(query)
+                # prepared_query = await conn.prepare(query)
                 self.logging.info(sets[:50])
                 try:
-                    await prepared_query.executemany(sets)
+                    await conn.executemany(query, sets)
                 except Exception as err:
                     traceback.print_tb(err.__traceback__)
                     self.logging.info(err)
