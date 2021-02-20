@@ -75,7 +75,7 @@ class Service:  # pylint: disable=R0902
         min_rank = tiers[tier] * 400 + rank[division] * 100
         self.logging.info("Found %s unique user.", len(tasks))
 
-        conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
+        conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
         latest = await conn.fetch('''
             SELECT summoner_id, rank, wins, losses
             FROM summoner

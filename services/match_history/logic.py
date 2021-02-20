@@ -60,7 +60,7 @@ class Service:
                              entry['queue'],
                              datetime.fromtimestamp(entry['timestamp'] // 1000).strftime('%Y-%m-%d %H:%M:%S')
                              ))
-            conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
+            conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
             if sets:
                 query = '''
                     INSERT INTO match (match_id, queue, timestamp)

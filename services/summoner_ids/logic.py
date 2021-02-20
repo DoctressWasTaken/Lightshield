@@ -47,7 +47,7 @@ class Service:
     async def flush_manager(self):
         """Update entries in postgres once enough tasks are done."""
         try:
-            conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
+            conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
             if self.completed_tasks:
                 self.logging.info("Inserting %s summoner IDs.", len(self.completed_tasks))
                 await conn.executemany('''

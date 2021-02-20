@@ -50,7 +50,8 @@ class Manager:
             if (size := await self.redis.scard('summoner_id_tasks')) < 1000:
                 self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
-                conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
+                conn = await asyncpg.connect(
+                    "postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
                 result = await conn.fetch('''
                     SELECT summoner_id
                     FROM summoner
