@@ -56,21 +56,26 @@ class Service:
             for entry in matches:
                 if self.queues and int(entry['queue']) not in self.queues:
                     continue
-                sets.append([entry['gameId'],
+                sets.append((entry['gameId'],
                              entry['queue'],
-                             datetime.fromtimestamp(entry['timestamp'] // 1000)
-                             ])
+                             datetime.fromtimestamp(entry['timestamp'] // 1000).strftime('%Y-%m-%d %H:%M:%S')
+                             ))
+            self.logging.info(type(sets))
             conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
+            self.logging.info(type(sets))
             if sets:
                 query = '''
                     INSERT INTO match (match_id, queue, timestamp)
-                    VALUES ($1,$2,$3)
+                    VALUES %s
                     ON CONFLICT DO NOTHING;
                     '''
+                lines = ["(%s, %s, '%s')" % set for set in sets]
+
                 # prepared_query = await conn.prepare(query)
                 self.logging.info(sets[:50])
                 try:
-                    await conn.executemany(query, sets)
+                    # await prepared_query.executemany(sets)
+                    await conn.execute(query % ",".join(lines))
                 except Exception as err:
                     traceback.print_tb(err.__traceback__)
                     self.logging.info(err)
