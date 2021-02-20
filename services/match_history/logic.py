@@ -58,7 +58,7 @@ class Service:
                     continue
                 sets.append([entry['gameId'],
                              entry['queue'],
-                             datetime.fromtimestamp(entry['timestamp'] // 1000).strftime('%Y-%m-%d %H:%M:%S')
+                             datetime.fromtimestamp(entry['timestamp'] // 1000)
                              ])
             self.logging.info(type(sets))
             conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
