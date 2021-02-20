@@ -70,7 +70,7 @@ class Service:
                     ON CONFLICT DO NOTHING;
                     '''
                 prepared_query = await conn.prepare(query)
-                self.logging.info(type(sets))
+                self.logging.info(sets[:50])
                 await prepared_query.executemany(sets)
                 self.logging.info(type(sets))
                 self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
