@@ -60,6 +60,7 @@ class Service:
                              entry['queue'],
                              entry['timestamp'] // 1000
                              ))
+            self.logging.info(type(sets))
             conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
             if sets:
                 query = '''
@@ -69,7 +70,6 @@ class Service:
                     '''
                 prepared_query = await conn.prepare(query)
                 await prepared_query.executemany(sets)
-                self.logging.info(type(sets))
                 self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
 
             await conn.execute('''
