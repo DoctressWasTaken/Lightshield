@@ -13,8 +13,6 @@ services:
     restart: always
 
 volumes:
-  postgres:
-    name: ${SERVER}_lightshield_persistent
   redis:
     name: ${SERVER}_lightshield_buffer
 
