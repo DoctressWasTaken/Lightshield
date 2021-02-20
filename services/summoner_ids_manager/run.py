@@ -46,7 +46,7 @@ class Manager:
                 self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
                 conn = await asyncpg.connect(
-                    "postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
+                    "postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
                 result = await conn.fetch('''
                     SELECT summoner_id
                     FROM summoner

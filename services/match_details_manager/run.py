@@ -42,7 +42,7 @@ class Manager:
         If there are non-initialized user found only those will be selected.
         If none are found a list of the user with the most new games are returned.
         """
-        conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
+        conn = await asyncpg.connect("postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
         try:
             return await conn.fetch('''
                 SELECT match_id

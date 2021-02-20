@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-./wait-for-it.sh 192.168.0.1:5432
+./wait-for-it.sh lightshield.dev:5432
 ./wait-for-it.sh buffer_db:6379
 ./wait-for-it.sh redis:6379
 

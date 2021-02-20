@@ -260,7 +260,7 @@ class Service:
 
     async def async_worker(self):
         afk_alert = False
-        conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
+        conn = await asyncpg.connect("postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
         await self.prepare_calls(conn)
         while not self.stopped:
             if not (tasks := await self.get_task()):

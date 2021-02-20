@@ -132,7 +132,8 @@ class Service:
         """
         self.redis = await aioredis.create_redis_pool(
             ('redis', 6379), encoding='utf-8')
-        self.conn = await asyncpg.connect("postgresql://%s@192.168.0.1/%s" % (self.server.lower(), self.server.lower()))
+        self.conn = await asyncpg.connect(
+            "postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
         self.prep_insert = await self.conn.prepare('''
             UPDATE summoner
             SET account_id = $1, puuid = $2
