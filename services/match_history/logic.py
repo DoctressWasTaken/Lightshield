@@ -60,9 +60,7 @@ class Service:
                              entry['queue'],
                              datetime.fromtimestamp(entry['timestamp'] // 1000).strftime('%Y-%m-%d %H:%M:%S')
                              ))
-            self.logging.info(type(sets))
             conn = await asyncpg.connect("postgresql://na1@192.168.0.1/%s" % self.server.lower())
-            self.logging.info(type(sets))
             if sets:
                 query = '''
                     INSERT INTO match (match_id, queue, timestamp)
@@ -72,15 +70,8 @@ class Service:
                 lines = ["(%s, %s, '%s')" % set for set in sets]
 
                 # prepared_query = await conn.prepare(query)
-                self.logging.info(sets[:50])
-                try:
-                    # await prepared_query.executemany(sets)
-                    await conn.execute(query % ",".join(lines))
-                except Exception as err:
-                    traceback.print_tb(err.__traceback__)
-                    self.logging.info(err)
-                    raise err
-                self.logging.info(type(sets))
+                # await prepared_query.executemany(sets)
+                await conn.execute(query % ",".join(lines))
                 self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
 
             await conn.execute('''
