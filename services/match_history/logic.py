@@ -71,7 +71,12 @@ class Service:
                     '''
                 prepared_query = await conn.prepare(query)
                 self.logging.info(sets[:50])
-                await prepared_query.executemany(sets)
+                try:
+                    await prepared_query.executemany(sets)
+                except Exception as err:
+                    traceback.print_tb(err.__traceback__)
+                    self.logging.info(err)
+                    raise err
                 self.logging.info(type(sets))
                 self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
 
