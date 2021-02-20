@@ -33,8 +33,6 @@ services:
     image: lightshield_summoner_ids
     environment:
       - SERVER=${SERVER}
-    volumes:
-      - /backup
     restart: always
 
   match_history_manager:
@@ -70,7 +68,6 @@ services:
       - LIMIT=5000
       - SERVER=${SERVER}
 
-
   match_details: # MH
     hostname: match_details
     build:
@@ -87,84 +84,7 @@ volumes:
   ranking_progress:
     name: ${SERVER}_ranking_progress
 
-
 networks:
   default:
     external:
       name: lightshield
-
-
-x-disabled:
-
-  buffer_db:
-    image: redis:6.0
-    command: [ "redis-server", "--appendonly", "yes" ]
-    volumes:
-      - redis:/data
-    networks:
-      default:
-        aliases:
-          - redis
-    restart: always
-
-
-  match_details: # MD
-    hostname: match_details
-    image: python:3.8
-    build:
-      dockerfile: Dockerfile
-      context: services/match_details
-    environment:
-      - SERVER=${SERVER}
-      - WORKER=45
-      - MAX_TASK_BUFFER=1000
-      - STREAM=DETAILS
-    volumes:
-      - /backup
-    links:
-      - persistent_db:postgres
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
-    restart: always
-
-  processor_match:
-    image: python:3.8
-    build:
-      dockerfile: Dockerfile
-      context: services/processor_match
-    environment:
-      - SERVER=${SERVER}
-      - STREAM="placeholder"
-      - MAX_TASK_BUFFER=111
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
-    links:
-      - persistent_db:postgres
-    volumes:
-      - ./lol_dto:/project/lol_dto
-    restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-file: "5"
-        max-size: "10m"
-
-  processor_summoner:
-    image: python:3.8
-    build:
-      dockerfile: Dockerfile
-      context: services/processor_summoner
-    environment:
-      - SERVER=${SERVER}
-    external_links:
-      - lightshield_rabbitmq:rabbitmq
-    links:
-      - persistent_db:postgres
-    volumes:
-      - ./lol_dto:/project/lol_dto
-    restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-file: "5"
-        max-size: "10m"
