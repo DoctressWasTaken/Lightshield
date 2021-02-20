@@ -10,6 +10,9 @@ services:
       default:
         aliases:
           - redis
+      lightshield:
+        aliases:
+          - redis
     restart: always
 
 volumes:
