@@ -25,6 +25,7 @@ class Service:
         handler.setFormatter(
             logging.Formatter('%(asctime)s [MatchHistory] %(message)s'))
         self.logging.addHandler(handler)
+        self.db_host = os.environ['DB_HOST']
 
         self.server = os.environ['SERVER']
         self.stopped = False
@@ -61,7 +62,7 @@ class Service:
                              datetime.fromtimestamp(entry['timestamp'] // 1000)
                              ))
             conn = await asyncpg.connect(
-                "postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
+                "postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
             if sets:
                 query = '''
                     INSERT INTO match (match_id, queue, timestamp)

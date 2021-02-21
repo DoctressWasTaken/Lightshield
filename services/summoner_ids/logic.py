@@ -30,7 +30,7 @@ class Service:
         handler.setFormatter(
             logging.Formatter('%(asctime)s [SummonerIDs] %(message)s'))
         self.logging.addHandler(handler)
-
+        self.db_host = os.environ['DB_HOST']
         self.server = os.environ['SERVER']
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
                    "summoner/v4/summoners/%s"
@@ -133,7 +133,7 @@ class Service:
         self.redis = await aioredis.create_redis_pool(
             ('redis', 6379), encoding='utf-8')
         self.conn = await asyncpg.connect(
-            "postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
+            "postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
         self.prep_insert = await self.conn.prepare('''
             UPDATE summoner
             SET account_id = $1, puuid = $2

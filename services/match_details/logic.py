@@ -39,6 +39,7 @@ class Service:
 
         self.rune_ids = get_ids()
         self.rune_tree = get_trees()
+        self.db_host = os.environ['DB_HOST']
 
         self.server = os.environ['SERVER']
         self.batch_size = int(os.environ['BATCH_SIZE'])
@@ -260,7 +261,7 @@ class Service:
 
     async def async_worker(self):
         afk_alert = False
-        conn = await asyncpg.connect("postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
+        conn = await asyncpg.connect("postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
         await self.prepare_calls(conn)
         while not self.stopped:
             if not (tasks := await self.get_task()):

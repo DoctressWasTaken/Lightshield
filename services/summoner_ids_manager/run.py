@@ -24,6 +24,7 @@ class Manager:
             logging.Formatter('%(asctime)s %(message)s'))
         self.logging.addHandler(handler)
         self.server = os.environ['SERVER']
+        self.db_host = os.environ['DB_HOST']
 
     async def init(self):
         self.redis = await aioredis.create_redis(
@@ -46,7 +47,7 @@ class Manager:
                 self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
                 conn = await asyncpg.connect(
-                    "postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
+                    "postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
                 result = await conn.fetch('''
                     SELECT summoner_id
                     FROM summoner

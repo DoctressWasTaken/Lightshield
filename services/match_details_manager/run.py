@@ -26,6 +26,7 @@ class Manager:
         self.logging.addHandler(handler)
         self.limit = int(os.environ['LIMIT'])
         self.server = os.environ['SERVER']
+        self.db_host = os.environ['DB_HOST']
 
     async def init(self):
         self.redis = await aioredis.create_redis(
@@ -42,7 +43,7 @@ class Manager:
         If there are non-initialized user found only those will be selected.
         If none are found a list of the user with the most new games are returned.
         """
-        conn = await asyncpg.connect("postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
+        conn = await asyncpg.connect("postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
         try:
             return await conn.fetch('''
                 SELECT match_id
