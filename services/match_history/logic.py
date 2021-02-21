@@ -194,7 +194,6 @@ class Service:
         if response.status in [429, 430]:
             if response.status == 429:
                 self.logging.info(response.status)
-            self.logging.info(response.status)
             if "Retry-After" in response.headers:
                 delay = int(response.headers['Retry-After'])
             else:
