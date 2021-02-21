@@ -48,6 +48,7 @@ class Service:  # pylint: disable=R0902
         self.logging.addHandler(handler)
 
         self.server = os.environ['SERVER']
+        self.db_host = os.environ['DB_HOST']
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
                    "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         self.rankmanager = RankManager()
@@ -75,7 +76,7 @@ class Service:  # pylint: disable=R0902
         min_rank = tiers[tier] * 400 + rank[division] * 100
         self.logging.info("Found %s unique user.", len(tasks))
 
-        conn = await asyncpg.connect("postgresql://%s@lightshield.dev/%s" % (self.server.lower(), self.server.lower()))
+        conn = await asyncpg.connect("postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
         latest = await conn.fetch('''
             SELECT summoner_id, rank, wins, losses
             FROM summoner

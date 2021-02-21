@@ -12,6 +12,8 @@ services:
       - SERVER=${SERVER}
       - UPDATE_INTERVAL=1
       - WORKER=5
+    env_file:
+      - secrets.env
     restart: always
     volumes:
       - ranking_progress:/project/configs/
@@ -24,6 +26,8 @@ services:
     image: lightshield_summoner_ids_manager
     environment:
       - SERVER=${SERVER}
+    env_file:
+      - secrets.env
 
   summoner_ids: # SI
     hostname: summoner_ids
@@ -33,6 +37,8 @@ services:
     image: lightshield_summoner_ids
     environment:
       - SERVER=${SERVER}
+    env_file:
+      - secrets.env
     restart: always
 
   match_history_manager:
@@ -44,6 +50,8 @@ services:
       dockerfile: Dockerfile
       context: services/match_history_manager
     image: lightshield_match_history_manager
+    env_file:
+      - secrets.env
 
   match_history: # MH
     hostname: match_history
@@ -55,6 +63,8 @@ services:
       - SERVER=${SERVER}
       - QUEUES=420
     restart: always
+    env_file:
+      - secrets.env
 
   match_details_manager:
     hostname: match_details
@@ -65,6 +75,8 @@ services:
     environment:
       - LIMIT=5000
       - SERVER=${SERVER}
+    env_file:
+      - secrets.env
 
   match_details: # MH
     hostname: match_details
@@ -77,6 +89,8 @@ services:
       - QUEUES=420
       - BATCH_SIZE=30
     restart: always
+    env_file:
+      - secrets.env
 
 volumes:
   ranking_progress:
