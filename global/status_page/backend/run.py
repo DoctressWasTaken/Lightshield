@@ -25,7 +25,7 @@ class Server:
         conn = await asyncpg.connect(
             "postgresql://%s@%s/%s" % (server.lower(), self.db_host, server.lower()))
         data = {"server": server}
-        res = conn.fetch(''' 
+        res = await conn.fetch(''' 
             SELECT COUNT(summoner_id),
                     CASE WHEN puuid IS NULL THEN 'outstanding'
                     ELSE 'pulled' END AS status
@@ -36,7 +36,7 @@ class Server:
         for line in res:
             data['summoner'][line['status']] = line['count']
 
-        res = conn.fetch(''' 
+        res = await conn.fetch(''' 
             SELECT COUNT(match_id),
             CASE WHEN details_pulled IS NULL THEN 'outstanding'
             ELSE 'pulled' END AS status
@@ -46,6 +46,7 @@ class Server:
         data['match'] = {}
         for line in res:
             data['match'][line['status']] = line['count']
+        await conn.close()
         return data
 
     async def generate_file(self):
