@@ -94,7 +94,7 @@ async def start_gunicorn():
 
 async def main():
     server = Server()
-    asyncio.run(server.generate_file())
+    await asyncio.run(server.generate_file())
     await asyncio.gather(
         web._run_app(server.make_app(), port=8000),
         server.generate_file(repeat=60)
