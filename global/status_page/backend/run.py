@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 from datetime import datetime, timedelta
 
@@ -56,6 +57,7 @@ class Server:
         ])
 
         with open('status.json', 'w+') as data:
+            logging.info(tasks)
             data.write(json.dumps(tasks))
 
     async def return_status(self, request):
