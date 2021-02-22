@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import asyncpg
 from aiohttp import web
@@ -76,8 +76,6 @@ class Server:
             await asyncio.sleep(repeat)
 
     async def return_status(self, request):
-        if self.last + timedelta(seconds=15) < datetime.now():
-            await self.generate_file()
         with open('status.json', 'r') as data:
             return web.Response(text=data.read(), headers={'Access-Control-Allow-Origin': '*'})
 
