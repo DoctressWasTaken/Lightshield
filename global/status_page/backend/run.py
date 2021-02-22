@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 from datetime import datetime
 
 import asyncpg
@@ -89,3 +90,15 @@ async def start_gunicorn():
     await server.generate_file()
     task = asyncio.create_task(server.generate_file(repeat=60))
     return await server.make_app()
+
+
+def updater():
+    asyncio.run(server.generate_file())
+    asyncio.run(server.generate_file(repeat=60))
+
+
+if __name__ == '__main__':
+    server = Server()
+    t = threading.Thread(target=updater)
+    t.start()
+    web.run_app(server.make_app())
