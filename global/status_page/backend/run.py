@@ -37,6 +37,8 @@ class Server:
         data['summoner'] = {}
         for line in res:
             data['summoner'][line['status']] = line['count']
+        if not data['summoner']['outstanding']:
+            data['summoner']['outstanding'] = 0
 
         res = await conn.fetch(''' 
             SELECT COUNT(match_id),
@@ -48,10 +50,13 @@ class Server:
         data['match'] = {}
         for line in res:
             data['match'][line['status']] = line['count']
+        if not data['match']['outstanding']:
+            data['match']['outstanding'] = 0
+
         await conn.close()
         return data
 
-    async def generate_file(self):
+    async def generate_file(self, repeat=0):
         tasks = await asyncio.gather(*[
             self.get_data(server) for server in self.server
         ])
@@ -59,6 +64,16 @@ class Server:
         with open('status.json', 'w+') as data:
             logging.info(tasks)
             data.write(json.dumps(tasks))
+
+        while repeat > 0:
+            tasks = await asyncio.gather(*[
+                self.get_data(server) for server in self.server
+            ])
+
+            with open('status.json', 'w+') as data:
+                logging.info(tasks)
+                data.write(json.dumps(tasks))
+            await asyncio.sleep(repeat)
 
     async def return_status(self, request):
         if self.last + timedelta(seconds=15) < datetime.now():
@@ -74,4 +89,5 @@ async def start_gunicorn():
     """
     server = Server()
     await server.generate_file()
+    task = asyncio.create_task(server.generate_file(repeat=60))
     return await server.make_app()
