@@ -46,9 +46,13 @@ class Service:
 
     async def insert(self, task):
         """Update entry in postgres."""
+        if self.conn.is_closed():
+            await self.open_db()
         await self.prep_insert.executemany([task])
 
     async def drop(self, task):
+        if self.conn.is_closed():
+            await self.open_db()
         await self.prep_drop.executemany([task])
 
     async def get_task(self):
@@ -125,13 +129,7 @@ class Service:
             raise Non200Exception()
         return await response.json(content_type=None)
 
-    async def init(self):
-        """Override of the default init function.
-
-        Initiate the Rankmanager object.
-        """
-        self.redis = await aioredis.create_redis_pool(
-            ('redis', 6379), encoding='utf-8')
+    async def open_db(self):
         self.conn = await asyncpg.connect(
             "postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
         self.prep_insert = await self.conn.prepare('''
@@ -143,7 +141,16 @@ class Service:
                     DELETE FROM summoner
                     WHERE summoner_id = $1;
                     ''')
+
+    async def init(self):
+        """Override of the default init function.
+
+        Initiate the Rankmanager object.
+        """
+        self.redis = await aioredis.create_redis_pool(
+            ('redis', 6379), encoding='utf-8')
         self.conn_lock = asyncio.Lock()
+        await self.open_db()
 
     async def run(self):
         """Runner."""

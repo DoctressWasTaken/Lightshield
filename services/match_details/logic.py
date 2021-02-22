@@ -274,6 +274,10 @@ class Service:
             async with aiohttp.ClientSession() as session:
                 results = await asyncio.gather(*[asyncio.create_task(self.worker(
                     matchId=matchId, session=session, delay=index)) for index, matchId in enumerate(tasks)])
+            if conn.is_closed():
+                conn = await asyncpg.connect(
+                    "postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
+                await self.prepare_calls(conn)
             await self.flush_manager(results, conn)
             await asyncio.sleep(0.01)
         await conn.close()
