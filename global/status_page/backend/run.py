@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-import threading
 from datetime import datetime
 
 import asyncpg
@@ -93,16 +92,14 @@ async def start_gunicorn():
     return await server.make_app()
 
 
-def updater():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    asyncio.run(server.generate_file(repeat=60))
+async def main():
+    server = Server()
+    asyncio.run(server.generate_file())
+    await asyncio.gather(
+        web._run_app(server.make_app(), port=8000),
+        server.generate_file(repeat=60)
+    )
 
 
 if __name__ == '__main__':
-    server = Server()
-    asyncio.set_event_loop(asyncio.get_event_loop())
-    asyncio.run(server.generate_file())
-    t = threading.Thread(target=updater)
-    t.start()
-    web.run_app(server.make_app(), port=8000)
+    asyncio.run(main())
