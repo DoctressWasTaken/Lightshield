@@ -1,0 +1,45 @@
+<div class="container">
+  <div class="row">
+    <ng-container *ngFor="let s of data.status">
+
+      <div class="card blue-grey darken-1">
+        <div class="card-content white-text">
+          <span class="card-title">{{s.server}}</span>
+        </div>
+        <div class="card-action">
+          <table style="border-collapse: unset">
+            <tr>
+              <td style="width:20%; padding: 0;">
+                <a href="#">Summoner:</a>
+              </td>
+              <td style=" padding: 0;">
+                <b>{{s.summoner.pulled}} total.</b>
+              </td>
+              <td style=" padding: 0;">
+                <i>{{s.summoner.outstanding}} incomplete.</i>
+              </td>
+            </tr>
+          </table>
+        </div>
+        <div class="card-action">
+          <table style="border-collapse: unset">
+            <tr>
+              <td style="width:20%; padding: 0;">
+                <a href="#">Matches:</a>
+              </td>
+              <td style=" padding: 0;">
+                <b>{{s.match.pulled}} total.</b>
+              </td>
+              <td style=" padding: 0;">
+                <i>{{s.match.outstanding}} incomplete.</i>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+      </div>
+
+
+    </ng-container>
+  </div>
+</div>
