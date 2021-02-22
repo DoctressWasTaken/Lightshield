@@ -1,3 +1,4 @@
 asyncpg
 uvloop
+aiohttp
 gunicorn
