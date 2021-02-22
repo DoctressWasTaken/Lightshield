@@ -58,7 +58,7 @@ class Server:
         with open('status.json', 'w+') as data:
             data.write(json.dumps(tasks))
 
-    async def return_status(self):
+    async def return_status(self, request):
         if self.last + timedelta(seconds=15) < datetime.now():
             await self.generate_file()
         with open('status.json', 'r').read() as data:
