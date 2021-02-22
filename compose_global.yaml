@@ -15,6 +15,18 @@ services:
           - redis
     restart: always
 
+  status_checker_backend:
+    image: lightshield_status_page
+    build:
+      dockerfile: Dockerfile
+      context: global/status_page/backend
+    restart: always
+    environment:
+      - SERVER=NA1,EUW1,KR
+    env_file:
+      - secrets.env
+
+
 volumes:
   redis:
     name: lightshield_buffer
