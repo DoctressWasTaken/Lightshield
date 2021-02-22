@@ -15,7 +15,7 @@ services:
           - redis
     restart: always
 
-  status_checker_backend:
+  status_page:
     image: lightshield_status_page
     build:
       dockerfile: Dockerfile
