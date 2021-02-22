@@ -25,7 +25,8 @@ services:
       - SERVER=NA1,EUW1,KR
     env_file:
       - secrets.env
-
+    ports:
+      - 8003:8000
 
 volumes:
   redis:
