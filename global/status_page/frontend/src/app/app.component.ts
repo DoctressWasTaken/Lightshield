@@ -16,7 +16,7 @@ export class AppComponent {
   }
 
   ngOnInit(): void {
-    this.data.update_data.bind(this.data);
+    this.data.update_data();
     setInterval(this.data.update_data.bind(this.data), 60000);
   }
 }
