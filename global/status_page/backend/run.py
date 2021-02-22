@@ -94,12 +94,12 @@ async def start_gunicorn():
 
 
 def updater():
-    asyncio.run(server.generate_file())
     asyncio.run(server.generate_file(repeat=60))
 
 
 if __name__ == '__main__':
     server = Server()
+    asyncio.run(server.generate_file())
     t = threading.Thread(target=updater)
     t.start()
     web.run_app(server.make_app(), port=8000)
