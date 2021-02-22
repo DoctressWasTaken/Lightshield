@@ -102,4 +102,4 @@ if __name__ == '__main__':
     server = Server()
     t = threading.Thread(target=updater)
     t.start()
-    web.run_app(server.make_app())
+    web.run_app(server.make_app(), port=8000)
