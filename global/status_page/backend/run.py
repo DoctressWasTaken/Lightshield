@@ -37,7 +37,7 @@ class Server:
         data['summoner'] = {}
         for line in res:
             data['summoner'][line['status']] = line['count']
-        if not data['summoner']['outstanding']:
+        if not 'outstanding' in data['summoner']:
             data['summoner']['outstanding'] = 0
 
         res = await conn.fetch(''' 
@@ -50,7 +50,7 @@ class Server:
         data['match'] = {}
         for line in res:
             data['match'][line['status']] = line['count']
-        if not data['match']['outstanding']:
+        if not 'outstanding' in data['match']:
             data['match']['outstanding'] = 0
 
         await conn.close()
