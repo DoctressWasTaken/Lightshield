@@ -20,6 +20,7 @@ class Server:
         app.add_routes([
             web.get('/api/status', self.return_status)
         ])
+        return app
 
     async def get_data(self, server):
         conn = await asyncpg.connect(
