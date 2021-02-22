@@ -77,6 +77,7 @@ class Server:
             await asyncio.sleep(repeat)
 
     async def return_status(self, request):
+        print("requested")
         with open('status.json', 'r') as data:
             return web.Response(text=data.read(), headers={'Access-Control-Allow-Origin': '*'})
 
