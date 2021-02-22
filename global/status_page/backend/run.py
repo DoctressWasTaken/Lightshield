@@ -53,11 +53,9 @@ class Server:
         tasks = await asyncio.gather(*[
             self.get_data(server) for server in self.server
         ])
-        status = {}
-        for server, data in tasks:
-            status[server] = data
+
         with open('status.json', 'w+') as data:
-            data.write(json.dumps(status))
+            data.write(json.dumps(tasks))
 
     async def return_status(self):
         if self.last + timedelta(seconds=15) < datetime.now():
