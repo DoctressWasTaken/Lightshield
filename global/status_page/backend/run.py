@@ -62,7 +62,7 @@ class Server:
         if self.last + timedelta(seconds=15) < datetime.now():
             await self.generate_file()
         with open('status.json', 'r') as data:
-            return web.Response(text=data.read(), headers={'Access-Control-Allow-Orogin': 'lightshield.dev'})
+            return web.Response(text=data.read(), headers={'Access-Control-Allow-Origin': '*'})
 
 
 async def start_gunicorn():
