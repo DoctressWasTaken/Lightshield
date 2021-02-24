@@ -7,7 +7,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/league_rankings
-    image: lightshield_league_rankings
+    image: lightshield.dev:5000/lightshield_league_rankings:latest
     environment:
       - SERVER=${SERVER}
       - UPDATE_INTERVAL=1
@@ -23,7 +23,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids_manager
-    image: lightshield_summoner_ids_manager
+    image: lightshield.dev:5000/lightshield_summoner_ids_manager:latest
     environment:
       - SERVER=${SERVER}
     env_file:
@@ -34,7 +34,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids
-    image: lightshield_summoner_ids
+    image: lightshield.dev:5000/lightshield_summoner_ids:latest
     environment:
       - SERVER=${SERVER}
     env_file:
@@ -49,7 +49,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_history_manager
-    image: lightshield_match_history_manager
+    image: lightshield.dev:5000/lightshield_match_history_manager:latest
     env_file:
       - secrets.env
 
@@ -58,7 +58,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_history
-    image: lightshield_match_history
+    image: lightshield.dev:5000/lightshield_match_history:latest
     environment:
       - SERVER=${SERVER}
       - QUEUES=420
@@ -71,7 +71,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_details_manager
-    image: lightshield_match_details_manager
+    image: lightshield.dev:5000/lightshield_match_details_manager:latest
     environment:
       - LIMIT=5000
       - SERVER=${SERVER}
@@ -83,7 +83,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_details
-    image: lightshield_match_details
+    image: lightshield.dev:5000/lightshield_match_details:latest
     environment:
       - SERVER=${SERVER}
       - QUEUES=420
