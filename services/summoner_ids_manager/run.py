@@ -24,6 +24,7 @@ class Manager:
         self.logging.addHandler(handler)
         self.server = os.environ["SERVER"]
         self.db_host = os.environ["DB_HOST"]
+        self.db_database = os.environ["DB_DATABASE"]
 
     async def init(self):
         self.redis = await aioredis.create_redis(("redis", 6379))
@@ -50,15 +51,16 @@ class Manager:
                 # Pull new tasks
                 conn = await asyncpg.connect(
                     "postgresql://%s@%s/%s"
-                    % (self.server.lower(), self.db_host, self.server.lower())
+                    % (self.server.lower(), self.db_host, self.db_database.lower())
                 )
                 result = await conn.fetch(
                     """
-                    SELECT summoner_id
+                    SELECT %s.summoner_id
                     FROM summoner
                     WHERE account_id IS NULL
                     LIMIT 2000;
                     """
+                    % self.server.lower()
                 )
                 await conn.close()
                 if len(result) < min_threshold:

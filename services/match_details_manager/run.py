@@ -26,6 +26,7 @@ class Manager:
         self.limit = int(os.environ["LIMIT"])
         self.server = os.environ["SERVER"]
         self.db_host = os.environ["DB_HOST"]
+        self.db_database = os.environ["DB_DATABASE"]
 
     async def init(self):
         self.redis = await aioredis.create_redis(("redis", 6379))
@@ -43,18 +44,19 @@ class Manager:
         """
         conn = await asyncpg.connect(
             "postgresql://%s@%s/%s"
-            % (self.server.lower(), self.db_host, self.server.lower())
+            % (self.server.lower(), self.db_host, self.db_database.lower())
         )
         try:
             return await conn.fetch(
                 """
                 SELECT match_id
-                FROM match
+                FROM %s.match
                 WHERE details_pulled IS NULL
                 AND DATE(timestamp) >= '2021-01-01' 
                 ORDER BY timestamp DESC
                 LIMIT $1;
-                """,
+                """
+                % self.server.lower(),
                 self.limit * 2,
             )
         finally:

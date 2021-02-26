@@ -28,6 +28,7 @@ class Service:
         )
         self.logging.addHandler(handler)
         self.db_host = os.environ["DB_HOST"]
+        self.db_database = os.environ["DB_DATABASE"]
 
         self.server = os.environ["SERVER"]
         self.stopped = False
@@ -71,14 +72,17 @@ class Service:
                 )
             conn = await asyncpg.connect(
                 "postgresql://%s@%s/%s"
-                % (self.server.lower(), self.db_host, self.server.lower())
+                % (self.server.lower(), self.db_host, self.db_database.lower())
             )
             if sets:
-                query = """
-                    INSERT INTO match (match_id, queue, timestamp)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT DO NOTHING;
-                    """
+                query = (
+                        """
+                        INSERT INTO %s.match (match_id, queue, timestamp)
+                        VALUES ($1, $2, $3)
+                        ON CONFLICT DO NOTHING;
+                        """
+                        % self.server.lower()
+                )
 
                 prepared_query = await conn.prepare(query)
                 await prepared_query.executemany(sets)
@@ -86,11 +90,12 @@ class Service:
 
             await conn.execute(
                 """
-                UPDATE summoner
+                UPDATE %s.summoner
                 SET wins_last_updated = $1,
                     losses_last_updated = $2
                 WHERE account_id = $3
-                """,
+                """
+                % self.server.lower(),
                 int(keys["wins"]),
                 int(keys["losses"]),
                 account_id,

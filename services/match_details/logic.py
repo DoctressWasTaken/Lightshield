@@ -35,6 +35,7 @@ class Service:
         self.rune_ids = get_ids()
         self.rune_tree = get_trees()
         self.db_host = os.environ["DB_HOST"]
+        self.db_database = os.environ["DB_DATABASE"]
 
         self.server = os.environ["SERVER"]
         self.batch_size = int(os.environ["BATCH_SIZE"])
@@ -61,45 +62,52 @@ class Service:
         self.stopped = True
 
     async def prepare_calls(self, conn):
-        template = """
-        INSERT INTO team
-            (match_id, side, bans, tower_kills, inhibitor_kills,
-             first_tower, first_rift_herald, first_dragon, first_baron, 
-             rift_herald_kills, dragon_kills, baron_kills)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        ON CONFLICT DO NOTHING;
-        """
+        template = (
+                """
+            INSERT INTO %s.team
+                (match_id, side, bans, tower_kills, inhibitor_kills,
+                 first_tower, first_rift_herald, first_dragon, first_baron, 
+                 rift_herald_kills, dragon_kills, baron_kills)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT DO NOTHING;
+            """
+                % self.server.lower()
+        )
         self.team_insert = await conn.prepare(template)
 
-        template = """
-                        INSERT INTO participant
-        (match_id, participant_id, summoner_id, summoner_spell,
-         rune_main_tree, rune_sec_tree, rune_main_select,
-         rune_sec_select, rune_shards, item, -- 10 
-         trinket, champ_level, champ_id, kills, deaths, assists, gold_earned,
-         neutral_minions_killed, neutral_minions_killed_enemy, 
-         neutral_minions_killed_team, total_minions_killed, 
-         vision_score, vision_wards_bought, wards_placed,
-         wards_killed, physical_taken, magical_taken, true_taken, 
-         damage_mitigated, physical_dealt, magical_dealt, 
-         true_dealt, turret_dealt, objective_dealt, total_heal,
-         total_units_healed, time_cc_others, total_cc_dealt)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-                $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-                $31,$32,$33,$34,$35,$36,$37,$38)
-        ON CONFLICT DO NOTHING
-        """
+        template = (
+                """
+                            INSERT INTO %s.participant
+            (match_id, participant_id, summoner_id, summoner_spell,
+             rune_main_tree, rune_sec_tree, rune_main_select,
+             rune_sec_select, rune_shards, item, -- 10 
+             trinket, champ_level, champ_id, kills, deaths, assists, gold_earned,
+             neutral_minions_killed, neutral_minions_killed_enemy, 
+             neutral_minions_killed_team, total_minions_killed, 
+             vision_score, vision_wards_bought, wards_placed,
+             wards_killed, physical_taken, magical_taken, true_taken, 
+             damage_mitigated, physical_dealt, magical_dealt, 
+             true_dealt, turret_dealt, objective_dealt, total_heal,
+             total_units_healed, time_cc_others, total_cc_dealt)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                    $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+                    $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
+                    $31,$32,$33,$34,$35,$36,$37,$38)
+            ON CONFLICT DO NOTHING
+            """
+                % self.server.lower()
+        )
         self.participant_insert = await conn.prepare(template)
 
         self.match_update = await conn.prepare(
             """
-        UPDATE match
+        UPDATE %s.match
             SET duration = $1,
                 win = $2,
                 details_pulled = TRUE
             WHERE match_id = $3
         """
+            % self.server.lower()
         )
 
     async def flush_manager(self, match_details, conn):
@@ -114,10 +122,10 @@ class Service:
                 for match in await conn.fetch(
                     """
                 SELECT DISTINCT match_id
-                FROM team
+                FROM %s.team
                 WHERE match_id IN (%s);
                 """
-                    % ",".join(match_ids)
+                    % (self.server.lower(), ",".join(match_ids))
                 )
             ]
             team_sets = []
@@ -293,7 +301,7 @@ class Service:
         afk_alert = False
         conn = await asyncpg.connect(
             "postgresql://%s@%s/%s"
-            % (self.server.lower(), self.db_host, self.server.lower())
+            % (self.server.lower(), self.db_host, self.db_database.lower())
         )
         await self.prepare_calls(conn)
         while not self.stopped:
@@ -316,7 +324,7 @@ class Service:
             if conn.is_closed():
                 conn = await asyncpg.connect(
                     "postgresql://%s@%s/%s"
-                    % (self.server.lower(), self.db_host, self.server.lower())
+                    % (self.server.lower(), self.db_host, self.db_database.lower())
                 )
                 await self.prepare_calls(conn)
             await self.flush_manager(results, conn)

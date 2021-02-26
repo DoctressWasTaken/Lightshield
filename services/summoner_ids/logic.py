@@ -31,6 +31,7 @@ class Service:
         self.logging.addHandler(handler)
         self.db_host = os.environ["DB_HOST"]
         self.server = os.environ["SERVER"]
+        self.db_database = os.environ["DB_DATABASE"]
         self.url = (
                 f"http://{self.server.lower()}.api.riotgames.com/lol/"
                 + "summoner/v4/summoners/%s"
@@ -137,20 +138,22 @@ class Service:
     async def open_db(self):
         self.conn = await asyncpg.connect(
             "postgresql://%s@%s/%s"
-            % (self.server.lower(), self.db_host, self.server.lower())
+            % (self.server.lower(), self.db_host, self.db_database.lower())
         )
         self.prep_insert = await self.conn.prepare(
             """
-            UPDATE summoner
+            UPDATE %s.summoner
             SET account_id = $1, puuid = $2
             WHERE summoner_id = $3;
             """
+            % self.server.lower()
         )
         self.prep_drop = await self.conn.prepare(
             """
-                    DELETE FROM summoner
+                    DELETE FROM %s.summoner
                     WHERE summoner_id = $1;
                     """
+            % self.server.lower()
         )
 
     async def init(self):

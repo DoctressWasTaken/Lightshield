@@ -7,11 +7,10 @@ from datetime import datetime, timedelta
 
 import aiohttp
 import asyncpg
-import uvloop
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from rank_manager import RankManager
 
-uvloop.install()
+# uvloop.install()
 
 tiers = {
     "IRON": 0,
@@ -46,6 +45,7 @@ class Service:  # pylint: disable=R0902
 
         self.server = os.environ["SERVER"]
         self.db_host = os.environ["DB_HOST"]
+        self.db_database = os.environ["DB_DATABASE"]
         self.url = (
                 f"http://{self.server.lower()}.api.riotgames.com/lol/"
                 + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
@@ -83,15 +83,16 @@ class Service:  # pylint: disable=R0902
 
         conn = await asyncpg.connect(
             "postgresql://%s@%s/%s"
-            % (self.server.lower(), self.db_host, self.server.lower())
+            % (self.server.lower(), self.db_host, self.db_database.lower())
         )
         latest = await conn.fetch(
             """
             SELECT summoner_id, rank, wins, losses
-            FROM summoner
+            FROM %s.summoner
             WHERE rank >= $1 
             AND rank <= $2
-        """,
+        """
+            % self.server.lower(),
             min_rank,
             min_rank + 100,
         )
@@ -107,17 +108,17 @@ class Service:  # pylint: disable=R0902
                     del tasks[line["summoner_id"]]
         self.logging.info("Upserting %s changed user.", len(tasks))
         if tasks:
-            await conn.execute(
-                """
-                INSERT INTO summoner (summoner_id, rank, wins, losses)
-                    VALUES %s
+            prepared = await conn.prepare(
+                """                INSERT INTO %s.summoner (summoner_id, rank, wins, losses)
+                    VALUES ($1, $2, $3, $4)
                     ON CONFLICT (summoner_id) DO 
                     UPDATE SET rank = EXCLUDED.rank,
                                wins = EXCLUDED.wins,
                                losses = EXCLUDED.losses  
-            """
-                % ",".join(["('%s', %s, %s, %s)" % task for task in tasks.values()])
+                """
+                % self.server.lower()
             )
+            await prepared.executemany(tasks.values())
         await conn.close()
 
     async def async_worker(self, tier, division, offset, worker):

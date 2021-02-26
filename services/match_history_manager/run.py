@@ -25,6 +25,7 @@ class Manager:
         self.server = os.environ["SERVER"]
         self.logging.addHandler(handler)
         self.db_host = os.environ["DB_HOST"]
+        self.db_database = os.environ["DB_DATABASE"]
 
     async def init(self):
         self.redis = await aioredis.create_redis(("redis", 6379))
@@ -42,19 +43,20 @@ class Manager:
         """
         conn = await asyncpg.connect(
             "postgresql://%s@%s/%s"
-            % (self.server.lower(), self.db_host, self.server.lower())
+            % (self.server.lower(), self.db_host, self.db_database.lower())
         )
         try:
             if result := await conn.fetch(
                     """
-                    SELECT account_id, 
-                           wins, 
-                           losses
-                    FROM summoner
-                    WHERE wins_last_updated IS NULL 
-                    AND account_id IS NOT NULL
-                    LIMIT 2000;
-                    """
+                        SELECT account_id, 
+                               wins, 
+                               losses
+                        FROM %s.summoner
+                        WHERE wins_last_updated IS NULL 
+                        AND account_id IS NOT NULL
+                        LIMIT 2000;
+                        """
+                    % self.server.lower()
             ):
                 return result, True
             return (
@@ -65,13 +67,14 @@ class Manager:
                        losses, 
                        wins_last_updated, 
                        losses_last_updated
-                FROM summoner
+                FROM %s.summoner
                 WHERE wins_last_updated IS NOT NULL
                 AND account_id IS NOT NULL
                 AND (wins + losses - wins_last_updated - losses_last_updated) >= $1
                 ORDER BY (wins + losses - wins_last_updated - losses_last_updated) DESC
                 LIMIT 2000;
-                """,
+                """
+                    % self.server.lower(),
                     self.min_matches,
                 ),
                 False,
