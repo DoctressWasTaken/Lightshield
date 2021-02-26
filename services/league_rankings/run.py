@@ -22,17 +22,15 @@ tiers = {
     "DIAMOND": 5,
     "MASTER": 6,
     "GRANDMASTER": 6,
-    "CHALLENGER": 6}
+    "CHALLENGER": 6,
+}
 
-rank = {
-    "IV": 0,
-    "III": 1,
-    "II": 2,
-    "I": 3}
+rank = {"IV": 0, "III": 1, "II": 2, "I": 3}
 
 
 class Service:  # pylint: disable=R0902
     """Core service worker object."""
+
     empty = False
     stopped = False
     next_page = 1
@@ -43,14 +41,15 @@ class Service:  # pylint: disable=R0902
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
-        handler.setFormatter(
-            logging.Formatter('%(asctime)s [Subscriber] %(message)s'))
+        handler.setFormatter(logging.Formatter("%(asctime)s [Subscriber] %(message)s"))
         self.logging.addHandler(handler)
 
-        self.server = os.environ['SERVER']
-        self.db_host = os.environ['DB_HOST']
-        self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
-                   "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+        self.server = os.environ["SERVER"]
+        self.db_host = os.environ["DB_HOST"]
+        self.url = (
+                f"http://{self.server.lower()}.api.riotgames.com/lol/"
+                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+        )
         self.rankmanager = RankManager()
         self.retry_after = datetime.now()
 
@@ -68,7 +67,13 @@ class Service:  # pylint: disable=R0902
     async def process_rank(self, tier, division, worker=5):
 
         task_sets = await asyncio.gather(
-            *[asyncio.create_task(self.async_worker(tier, division, offset=i, worker=worker)) for i in range(worker)])
+            *[
+                asyncio.create_task(
+                    self.async_worker(tier, division, offset=i, worker=worker)
+                )
+                for i in range(worker)
+            ]
+        )
         tasks = {}
         for entry in task_sets:
             tasks = {**tasks, **entry}
@@ -76,31 +81,43 @@ class Service:  # pylint: disable=R0902
         min_rank = tiers[tier] * 400 + rank[division] * 100
         self.logging.info("Found %s unique user.", len(tasks))
 
-        conn = await asyncpg.connect("postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
-        latest = await conn.fetch('''
+        conn = await asyncpg.connect(
+            "postgresql://%s@%s/%s"
+            % (self.server.lower(), self.db_host, self.server.lower())
+        )
+        latest = await conn.fetch(
+            """
             SELECT summoner_id, rank, wins, losses
             FROM summoner
             WHERE rank >= $1 
             AND rank <= $2
-        ''', min_rank, min_rank + 100)
+        """,
+            min_rank,
+            min_rank + 100,
+        )
         for line in latest:
-            if line['summoner_id'] in tasks:
-                task = tasks[line['summoner_id']]
-                if task == (line['summoner_id'],
-                            int(line['rank']),
-                            int(line['wins']),
-                            int(line['losses'])):
-                    del tasks[line['summoner_id']]
+            if line["summoner_id"] in tasks:
+                task = tasks[line["summoner_id"]]
+                if task == (
+                        line["summoner_id"],
+                        int(line["rank"]),
+                        int(line["wins"]),
+                        int(line["losses"]),
+                ):
+                    del tasks[line["summoner_id"]]
         self.logging.info("Upserting %s changed user.", len(tasks))
         if tasks:
-            await conn.execute('''
+            await conn.execute(
+                """
                 INSERT INTO summoner (summoner_id, rank, wins, losses)
                     VALUES %s
                     ON CONFLICT (summoner_id) DO 
                     UPDATE SET rank = EXCLUDED.rank,
                                wins = EXCLUDED.wins,
                                losses = EXCLUDED.losses  
-            ''' % ",".join(["('%s', %s, %s, %s)" % task for task in tasks.values()]))
+            """
+                % ",".join(["('%s', %s, %s, %s)" % task for task in tasks.values()])
+            )
         await conn.close()
 
     async def async_worker(self, tier, division, offset, worker):
@@ -113,8 +130,9 @@ class Service:  # pylint: disable=R0902
                 await asyncio.sleep(delay)
             async with aiohttp.ClientSession() as session:
                 try:
-                    content = await self.fetch(session, url=self.url % (
-                        tier, division, page))
+                    content = await self.fetch(
+                        session, url=self.url % (tier, division, page)
+                    )
                     if len(content) == 0:
                         self.logging.info("Page %s is empty.", page)
                         empty = True
@@ -130,11 +148,16 @@ class Service:  # pylint: disable=R0902
 
         unique_tasks = {}
         for task in tasks:
-            unique_tasks[task['summonerId']] = (
-                task['summonerId'],
-                int(tiers[task['tier']] * 400 + rank[task['rank']] * 100 + task['leaguePoints']),
-                int(task['wins']),
-                int(task['losses']))
+            unique_tasks[task["summonerId"]] = (
+                task["summonerId"],
+                int(
+                    tiers[task["tier"]] * 400
+                    + rank[task["rank"]] * 100
+                    + task["leaguePoints"]
+                ),
+                int(task["wins"]),
+                int(task["losses"]),
+            )
         return unique_tasks
 
     async def fetch(self, session, url):
@@ -152,7 +175,9 @@ class Service:  # pylint: disable=R0902
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
+            async with session.get(
+                    url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+            ) as response:
                 await response.text()
                 if response.status == 429:
                     self.logging.info(429)
@@ -161,7 +186,7 @@ class Service:  # pylint: disable=R0902
             raise Non200Exception()
         if response.status in [429, 430]:
             if "Retry-After" in response.headers:
-                delay = max(1, int(response.headers['Retry-After']))
+                delay = max(1, int(response.headers["Retry-After"]))
                 self.retry_after = datetime.now() + timedelta(seconds=delay)
             raise RatelimitException()
         if response.status == 404:

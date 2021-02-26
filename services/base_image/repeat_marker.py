@@ -22,7 +22,8 @@ class RepeatMarker:
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
         handler.setFormatter(
-            logging.Formatter('%(asctime)s [RepeatMarker] %(message)s'))
+            logging.Formatter("%(asctime)s [RepeatMarker] %(message)s")
+        )
         self.logging.addHandler(handler)
 
         self.connection = None
@@ -52,12 +53,12 @@ class RepeatMarker:
         Number of connections is determined by the connections parameter supplied in the
         __init__ method.
         """
-        dbname = "sqlite/%s_%s.db" % (os.environ['SERVER'], socket.gethostname())
+        dbname = "sqlite/%s_%s.db" % (os.environ["SERVER"], socket.gethostname())
         self.connection = await aiosqlite.connect(dbname)
 
     async def build(self, query):
         """Try to create SQL tables."""
-        dbname = "sqlite/%s_%s.db" % (os.environ['SERVER'], socket.gethostname())
+        dbname = "sqlite/%s_%s.db" % (os.environ["SERVER"], socket.gethostname())
         if not os.path.exists(dbname):
             self.logging.info("No DB File found. Creating.")
             async with aiosqlite.connect(dbname) as db:

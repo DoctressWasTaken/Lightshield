@@ -1,7 +1,0 @@
-aiohttp
-sqlalchemy==1.4.0b1
-pika
-asyncpg
-aio-pika
-psycopg2
-uvloop

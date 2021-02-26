@@ -23,17 +23,18 @@ class Service:
         self.logging = logging.getLogger("SummonerIDs")
         level = logging.INFO
         if "LOGGING" in os.environ:
-            level = getattr(logging, os.environ['LOGGING'])
+            level = getattr(logging, os.environ["LOGGING"])
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
-        handler.setFormatter(
-            logging.Formatter('%(asctime)s [SummonerIDs] %(message)s'))
+        handler.setFormatter(logging.Formatter("%(asctime)s [SummonerIDs] %(message)s"))
         self.logging.addHandler(handler)
-        self.db_host = os.environ['DB_HOST']
-        self.server = os.environ['SERVER']
-        self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
-                   "summoner/v4/summoners/%s"
+        self.db_host = os.environ["DB_HOST"]
+        self.server = os.environ["SERVER"]
+        self.url = (
+                f"http://{self.server.lower()}.api.riotgames.com/lol/"
+                + "summoner/v4/summoners/%s"
+        )
         self.stopped = False
         self.retry_after = datetime.now()
 
@@ -58,11 +59,11 @@ class Service:
     async def get_task(self):
         """Return tasks to the async worker."""
 
-        task = await self.redis.spop('%s_summoner_id_tasks' % self.server)
+        task = await self.redis.spop("%s_summoner_id_tasks" % self.server)
         if not task or self.stopped:
             return
         start = int(datetime.utcnow().timestamp())
-        await self.redis.zadd('%s_summoner_id_in_progress' % self.server, start, task)
+        await self.redis.zadd("%s_summoner_id_in_progress" % self.server, start, task)
         return task
 
     async def async_worker(self, delay):
@@ -85,7 +86,9 @@ class Service:
                         continue
                     response = await self.fetch(session, self.url % summoner_id)
                     async with self.conn_lock:
-                        await self.insert([response['accountId'], response['puuid'], summoner_id])
+                        await self.insert(
+                            [response["accountId"], response["puuid"], summoner_id]
+                        )
             except NotFoundException:
                 async with self.conn_lock:
                     await self.drop(summoner_id)
@@ -113,7 +116,9 @@ class Service:
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
+            async with session.get(
+                    url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+            ) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
@@ -121,7 +126,7 @@ class Service:
             if response.status == 429:
                 self.logging.info(response.status)
             if "Retry-After" in response.headers:
-                delay = int(response.headers['Retry-After'])
+                delay = int(response.headers["Retry-After"])
                 self.retry_after = datetime.now() + timedelta(seconds=delay)
         if response.status == 404:
             raise NotFoundException()
@@ -131,29 +136,36 @@ class Service:
 
     async def open_db(self):
         self.conn = await asyncpg.connect(
-            "postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
-        self.prep_insert = await self.conn.prepare('''
+            "postgresql://%s@%s/%s"
+            % (self.server.lower(), self.db_host, self.server.lower())
+        )
+        self.prep_insert = await self.conn.prepare(
+            """
             UPDATE summoner
             SET account_id = $1, puuid = $2
             WHERE summoner_id = $3;
-            ''')
-        self.prep_drop = await self.conn.prepare('''
+            """
+        )
+        self.prep_drop = await self.conn.prepare(
+            """
                     DELETE FROM summoner
                     WHERE summoner_id = $1;
-                    ''')
+                    """
+        )
 
     async def init(self):
         """Override of the default init function.
 
         Initiate the Rankmanager object.
         """
-        self.redis = await aioredis.create_redis_pool(
-            ('redis', 6379), encoding='utf-8')
+        self.redis = await aioredis.create_redis_pool(("redis", 6379), encoding="utf-8")
         self.conn_lock = asyncio.Lock()
         await self.open_db()
 
     async def run(self):
         """Runner."""
         await self.init()
-        await asyncio.gather(*[asyncio.create_task(self.async_worker(delay=i)) for i in range(5)])
+        await asyncio.gather(
+            *[asyncio.create_task(self.async_worker(delay=i)) for i in range(5)]
+        )
         await self.conn.close()

@@ -21,18 +21,16 @@ class Manager:
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
-        handler.setFormatter(
-            logging.Formatter('%(asctime)s %(message)s'))
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         self.logging.addHandler(handler)
-        self.limit = int(os.environ['LIMIT'])
-        self.server = os.environ['SERVER']
-        self.db_host = os.environ['DB_HOST']
+        self.limit = int(os.environ["LIMIT"])
+        self.server = os.environ["SERVER"]
+        self.db_host = os.environ["DB_HOST"]
 
     async def init(self):
-        self.redis = await aioredis.create_redis(
-            ('redis', 6379))
-        await self.redis.delete('%s_match_details_in_progress' % self.server)
-        await self.redis.delete('%s_match_details_tasks' % self.server)
+        self.redis = await aioredis.create_redis(("redis", 6379))
+        await self.redis.delete("%s_match_details_in_progress" % self.server)
+        await self.redis.delete("%s_match_details_tasks" % self.server)
 
     def shutdown(self):
         self.stopped = True
@@ -43,16 +41,22 @@ class Manager:
         If there are non-initialized user found only those will be selected.
         If none are found a list of the user with the most new games are returned.
         """
-        conn = await asyncpg.connect("postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
+        conn = await asyncpg.connect(
+            "postgresql://%s@%s/%s"
+            % (self.server.lower(), self.db_host, self.server.lower())
+        )
         try:
-            return await conn.fetch('''
+            return await conn.fetch(
+                """
                 SELECT match_id
                 FROM match
                 WHERE details_pulled IS NULL
                 AND DATE(timestamp) >= '2021-01-01' 
                 ORDER BY timestamp DESC
                 LIMIT $1;
-                ''', self.limit * 2)
+                """,
+                self.limit * 2,
+            )
         finally:
             await conn.close()
 
@@ -62,9 +66,15 @@ class Manager:
             while not self.stopped:
                 # Drop timed out tasks
                 limit = int((datetime.utcnow() - timedelta(minutes=2)).timestamp())
-                await self.redis.zremrangebyscore('%s_match_details_in_progress' % self.server, max=limit)
+                await self.redis.zremrangebyscore(
+                    "%s_match_details_in_progress" % self.server, max=limit
+                )
                 # Check remaining buffer size
-                if (size := await self.redis.scard('%s_match_details_tasks' % self.server)) < self.limit:
+                if (
+                        size := await self.redis.scard(
+                            "%s_match_details_tasks" % self.server
+                        )
+                ) < self.limit:
                     self.logging.info("%s tasks remaining.", size)
                     # Pull new tasks
                     result = await self.get_tasks()
@@ -75,13 +85,20 @@ class Manager:
                     # Add new tasks
                     for entry in result:
                         # Each entry will always be refered to by account_id
-                        if await self.redis.zscore('%s_match_details_in_progress' % self.server, entry['match_id']):
+                        if await self.redis.zscore(
+                                "%s_match_details_in_progress" % self.server,
+                                entry["match_id"],
+                        ):
                             continue
                         # Insert task hook
-                        await self.redis.sadd('%s_match_details_tasks' % self.server, entry['match_id'])
+                        await self.redis.sadd(
+                            "%s_match_details_tasks" % self.server, entry["match_id"]
+                        )
 
-                    self.logging.info("Filled tasks to %s.",
-                                      await self.redis.scard('%s_match_details_tasks' % self.server))
+                    self.logging.info(
+                        "Filled tasks to %s.",
+                        await self.redis.scard("%s_match_details_tasks" % self.server),
+                    )
                     await asyncio.sleep(1)
                     continue
                 await asyncio.sleep(5)

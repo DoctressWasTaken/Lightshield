@@ -13,13 +13,10 @@ tiers = [
     "DIAMOND",
     "MASTER",
     "GRANDMASTER",
-    "CHALLENGER"]
+    "CHALLENGER",
+]
 
-divisions = [
-    "IV",
-    "III",
-    "II",
-    "I"]
+divisions = ["IV", "III", "II", "I"]
 
 
 class RankManager:
@@ -31,25 +28,30 @@ class RankManager:
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
-        handler.setFormatter(
-            logging.Formatter('%(asctime)s [RankManager] %(message)s'))
+        handler.setFormatter(logging.Formatter("%(asctime)s [RankManager] %(message)s"))
         self.logging.addHandler(handler)
 
         self.ranks = None
-        self.update_interval = int(os.environ['UPDATE_INTERVAL'])
+        self.update_interval = int(os.environ["UPDATE_INTERVAL"])
 
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
         try:
-            self.ranks = json.loads(open(f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "r+").read())
+            self.ranks = json.loads(
+                open(
+                    f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "r+"
+                ).read()
+            )
             self.logging.info("Loaded data file.")
         except FileNotFoundError:
             self.logging.info("File not found. Recreating.")
-            now = datetime.timestamp(datetime.now() - timedelta(hours=self.update_interval))
+            now = datetime.timestamp(
+                datetime.now() - timedelta(hours=self.update_interval)
+            )
             self.ranks = []
             for tier in tiers:
-                if tier in ['MASTER', 'GRANDMASTER', 'CHALLENGER']:
-                    self.ranks.append([tier, 'I', now])
+                if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
+                    self.ranks.append([tier, "I", now])
                     continue
                 for division in divisions:
                     self.ranks.append([tier, division, now])
@@ -57,7 +59,9 @@ class RankManager:
 
     async def save_to_file(self):
         """Save the current stats to the tracking file."""
-        with open(f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "w+") as datafile:
+        with open(
+                f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "w+"
+        ) as datafile:
             datafile.write(json.dumps(self.ranks))
 
     async def get_next(self):

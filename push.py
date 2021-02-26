@@ -8,13 +8,13 @@ def main():
     try:
         version = sys.argv[1]
     except:
-        version = 'latest'
+        version = "latest"
 
     client = docker.from_env()
 
     for image in client.images.list():
         for tag in image.tags:
-            if tag.startswith('lightshield_'):
+            if tag.startswith("lightshield_"):
                 image.tag(repository + tag, tag=version)
                 client.images.push(repository + tag, tag=version)
                 continue

@@ -42,7 +42,9 @@ class WorkerClass:
         await self.init()
         async with aiohttp.ClientSession() as session:
             while not self.service.stopped:
-                if (delay := (self.service.retry_after - datetime.now()).total_seconds()) > 0:
+                if (
+                        delay := (self.service.retry_after - datetime.now()).total_seconds()
+                ) > 0:
                     if delay > 5:
                         self.logging.info("Sleeping for %s.", delay)
                     await asyncio.sleep(delay)

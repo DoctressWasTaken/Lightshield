@@ -19,20 +19,22 @@ class Publisher(threading.Thread):
     Data is taken from an outgoing buffer and broadcasted.
     """
 
-    def __init__(self, host='0.0.0.0', port=9999):
+    def __init__(self, host="0.0.0.0", port=9999):
         """Initiate logging and global variables."""
         super().__init__()
         self.logging = logging.getLogger("Publisher")
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
-        handler.setFormatter(
-            logging.Formatter('%(asctime)s [Publisher] %(message)s'))
+        handler.setFormatter(logging.Formatter("%(asctime)s [Publisher] %(message)s"))
         self.logging.addHandler(handler)
-        os.environ['OUTGOING'] = "0"
+        os.environ["OUTGOING"] = "0"
         self.logging.info("Initiating publisher service.")
-        if 'REQUIRED_SUBSCRIBER' in os.environ and os.environ['REQUIRED_SUBSCRIBER'] != '':
-            self.required_subs = os.environ['REQUIRED_SUBSCRIBER'].split(',')
+        if (
+                "REQUIRED_SUBSCRIBER" in os.environ
+                and os.environ["REQUIRED_SUBSCRIBER"] != ""
+        ):
+            self.required_subs = os.environ["REQUIRED_SUBSCRIBER"].split(",")
             self.logging.info("Required subs: %s" % self.required_subs)
         else:
             self.required_subs = []
@@ -61,7 +63,8 @@ class Publisher(threading.Thread):
     async def init(self) -> None:
         """Initiate redis connection."""
         self.redisc = await aioredis.create_redis_pool(
-            ('redis', 6379), db=0, encoding='utf-8')
+            ("redis", 6379), db=0, encoding="utf-8"
+        )
 
     async def async_run(self) -> None:
         """Run async initiation and start websocket server."""
@@ -86,8 +89,9 @@ class Publisher(threading.Thread):
             self.logging.info(
                 "Sent: %s | Buffered out: %s/500. Connections: %s",
                 self.sent_packages,
-                await self.redisc.llen('packages'),
-                list(self.client_names.keys()))
+                await self.redisc.llen("packages"),
+                list(self.client_names.keys()),
+            )
             self.sent_packages = 0
 
     async def shutdown_handler(self):
@@ -124,10 +128,13 @@ class Publisher(threading.Thread):
                     await asyncio.sleep(1)
             if missing:
                 continue
-            task = await self.redisc.lpop('packages')
+            task = await self.redisc.lpop("packages")
             if task:
                 if not all(
-                        await asyncio.gather(*[self.send(client, task) for client in self.clients])):
+                        await asyncio.gather(
+                            *[self.send(client, task) for client in self.clients]
+                        )
+                ):
                     await asyncio.sleep(1)
                 self.sent_packages += 1
             else:
@@ -143,7 +150,7 @@ class Publisher(threading.Thread):
                 self.logging.info("Receive timed out.")
                 return
 
-            if not message.startswith('ACK'):
+            if not message.startswith("ACK"):
                 self.logging.info("Received non ACK message: %s", message)
                 return
             client_name = message.split("_")[1]

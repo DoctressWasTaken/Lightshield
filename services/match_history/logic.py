@@ -13,6 +13,7 @@ from exceptions import RatelimitException, NotFoundException, Non200Exception
 
 class Service:
     """Core service worker object."""
+
     queues = None
 
     def __init__(self):
@@ -23,28 +24,32 @@ class Service:
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(
-            logging.Formatter('%(asctime)s [MatchHistory] %(message)s'))
+            logging.Formatter("%(asctime)s [MatchHistory] %(message)s")
+        )
         self.logging.addHandler(handler)
-        self.db_host = os.environ['DB_HOST']
+        self.db_host = os.environ["DB_HOST"]
 
-        self.server = os.environ['SERVER']
+        self.server = os.environ["SERVER"]
         self.stopped = False
         self.retry_after = datetime.now()
-        self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + \
-                   "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s"
+        self.url = (
+                f"http://{self.server.lower()}.api.riotgames.com/lol/"
+                + "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s"
+        )
 
-        if 'QUEUES' in os.environ:
-            self.queues = [int(queue) for queue in os.environ['QUEUES'].split(',')]
-            self.url = self.url + "&queue=" + os.environ['QUEUES']
+        if "QUEUES" in os.environ:
+            self.queues = [int(queue) for queue in os.environ["QUEUES"].split(",")]
+            self.url = self.url + "&queue=" + os.environ["QUEUES"]
 
-        self.buffered_elements = {}  # Short term buffer to keep track of currently ongoing requests
+        self.buffered_elements = (
+            {}
+        )  # Short term buffer to keep track of currently ongoing requests
 
         self.active_tasks = []
 
     async def init(self):
         """Initiate timelimit for pulled matches."""
-        self.redis = await aioredis.create_redis_pool(
-            ('redis', 6379), encoding='utf-8')
+        self.redis = await aioredis.create_redis_pool(("redis", 6379), encoding="utf-8")
 
     def shutdown(self):
         """Called on shutdown init."""
@@ -55,31 +60,41 @@ class Service:
         try:
             sets = []
             for entry in matches:
-                if self.queues and int(entry['queue']) not in self.queues:
+                if self.queues and int(entry["queue"]) not in self.queues:
                     continue
-                sets.append((entry['gameId'],
-                             entry['queue'],
-                             datetime.fromtimestamp(entry['timestamp'] // 1000)
-                             ))
+                sets.append(
+                    (
+                        entry["gameId"],
+                        entry["queue"],
+                        datetime.fromtimestamp(entry["timestamp"] // 1000),
+                    )
+                )
             conn = await asyncpg.connect(
-                "postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
+                "postgresql://%s@%s/%s"
+                % (self.server.lower(), self.db_host, self.server.lower())
+            )
             if sets:
-                query = '''
+                query = """
                     INSERT INTO match (match_id, queue, timestamp)
                     VALUES ($1, $2, $3)
                     ON CONFLICT DO NOTHING;
-                    '''
+                    """
 
                 prepared_query = await conn.prepare(query)
                 await prepared_query.executemany(sets)
                 self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
 
-            await conn.execute('''
+            await conn.execute(
+                """
                 UPDATE summoner
                 SET wins_last_updated = $1,
                     losses_last_updated = $2
                 WHERE account_id = $3
-                ''', int(keys['wins']), int(keys['losses']), account_id)
+                """,
+                int(keys["wins"]),
+                int(keys["losses"]),
+                account_id,
+            )
             await conn.close()
         except Exception as err:
             traceback.print_tb(err.__traceback__)
@@ -87,25 +102,37 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        while not (task := await self.redis.zpopmax('%s_match_history_tasks' % self.server, 1)) and not self.stopped:
+        while (
+                not (
+                        task := await self.redis.zpopmax(
+                            "%s_match_history_tasks" % self.server, 1
+                        )
+                )
+                and not self.stopped
+        ):
             await asyncio.sleep(5)
         if self.stopped:
             return
-        keys = await self.redis.hgetall('%s:%s:%s' % (self.server, task[0], task[1]))
-        await self.redis.delete('%s:%s:%s' % (self.server, task[0], task[1]))
+        keys = await self.redis.hgetall("%s:%s:%s" % (self.server, task[0], task[1]))
+        await self.redis.delete("%s:%s:%s" % (self.server, task[0], task[1]))
         start = int(datetime.utcnow().timestamp())
-        await self.redis.zadd('match_history_in_progress', start, task[0])
+        await self.redis.zadd("match_history_in_progress", start, task[0])
         return [task[0], int(task[1])], keys
 
     async def full_refresh(self, account_id, keys):
         """Pull match-history data until the page is empty."""
         worker = 6
         async with aiohttp.ClientSession() as session:
-            match_data = await asyncio.gather(*[
-                asyncio.create_task(self.worker(
-                    account_id, session=session, offset=i, worker=worker
-                )) for i in range(worker)
-            ])
+            match_data = await asyncio.gather(
+                *[
+                    asyncio.create_task(
+                        self.worker(
+                            account_id, session=session, offset=i, worker=worker
+                        )
+                    )
+                    for i in range(worker)
+                ]
+            )
         if self.stopped:
             return
         matches = []
@@ -118,11 +145,20 @@ class Service:
         worker = 3
         pages = to_call // 100 + 1
         async with aiohttp.ClientSession() as session:
-            match_data = await asyncio.gather(*[
-                asyncio.create_task(self.worker(
-                    account_id, session=session, offset=i, worker=worker, limit=pages
-                )) for i in range(worker)
-            ])
+            match_data = await asyncio.gather(
+                *[
+                    asyncio.create_task(
+                        self.worker(
+                            account_id,
+                            session=session,
+                            offset=i,
+                            worker=worker,
+                            limit=pages,
+                        )
+                    )
+                    for i in range(worker)
+                ]
+            )
         if self.stopped:
             return
         matches = []
@@ -138,21 +174,34 @@ class Service:
         end = offset * 100 + 100
         while not self.stopped:
             if limit and start > limit * 100:
-                return [match for match in matches if match['platformId'] == self.server.upper()]
+                return [
+                    match
+                    for match in matches
+                    if match["platformId"] == self.server.upper()
+                ]
             if datetime.now() < self.retry_after:
                 delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
                 await asyncio.sleep(delay)
             try:
-                result = await self.fetch(session=session,
-                                          url=self.url % (account_id, start, end))
-                if not result['matches']:
-                    return [match for match in matches if match['platformId'] == self.server.upper()]
-                matches += result['matches']
+                result = await self.fetch(
+                    session=session, url=self.url % (account_id, start, end)
+                )
+                if not result["matches"]:
+                    return [
+                        match
+                        for match in matches
+                        if match["platformId"] == self.server.upper()
+                    ]
+                matches += result["matches"]
                 start += 100 * worker
                 end += 100 * worker
                 await asyncio.sleep(0.2)
             except NotFoundException:
-                return [match for match in matches if match['platformId'] == self.server.upper()]
+                return [
+                    match
+                    for match in matches
+                    if match["platformId"] == self.server.upper()
+                ]
             except (Non200Exception, RatelimitException):
                 continue
             except Exception as err:
@@ -187,7 +236,9 @@ class Service:
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()) as response:
+            async with session.get(
+                    url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+            ) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
@@ -195,7 +246,7 @@ class Service:
             if response.status == 429:
                 self.logging.info(response.status)
             if "Retry-After" in response.headers:
-                delay = int(response.headers['Retry-After'])
+                delay = int(response.headers["Retry-After"])
             else:
                 delay = 1
             self.retry_after = datetime.now() + timedelta(seconds=delay)

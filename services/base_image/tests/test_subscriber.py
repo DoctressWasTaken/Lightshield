@@ -10,8 +10,8 @@ class TestSubscriber:
     subscriber = None
 
     def setup_method(self):
-        os.environ['MAX_TASK_BUFFER'] = "10"
-        self.subscriber = Subscriber(service_name='Test')
+        os.environ["MAX_TASK_BUFFER"] = "10"
+        self.subscriber = Subscriber(service_name="Test")
         self.loop = asyncio.get_event_loop()
 
     def test_initialization(self):
@@ -25,8 +25,8 @@ class TestSubscriber:
         websocket = Mock()
         type(websocket).send = AsyncMock()
         self.loop.run_until_complete(self.subscriber.pause_handler(websocket))
-        websocket.send.assert_any_await('PAUSE')
-        websocket.send.assert_any_await('UNPAUSE')
+        websocket.send.assert_any_await("PAUSE")
+        websocket.send.assert_any_await("UNPAUSE")
 
     def test_pause_handler_stopped(self):
         # Setup
@@ -37,7 +37,7 @@ class TestSubscriber:
         websocket = Mock()
         type(websocket).send = AsyncMock()
         self.loop.run_until_complete(self.subscriber.pause_handler(websocket))
-        websocket.send.assert_awaited_once_with('PAUSE')
+        websocket.send.assert_awaited_once_with("PAUSE")
 
     def test_pause_handler_cycle(self):
         # Setup
@@ -47,14 +47,14 @@ class TestSubscriber:
         websocket = Mock()
         type(websocket).send = AsyncMock()
         self.loop.run_until_complete(self.subscriber.pause_handler(websocket))
-        websocket.send.assert_any_await('PAUSE')
-        websocket.send.assert_any_await('UNPAUSE')
+        websocket.send.assert_any_await("PAUSE")
+        websocket.send.assert_any_await("UNPAUSE")
 
     def test_init(self):
-        with patch('aioredis.create_redis_pool', new_callable=AsyncMock) as mock:
-            mock.return_value = 'NotARedisConnection'
+        with patch("aioredis.create_redis_pool", new_callable=AsyncMock) as mock:
+            mock.return_value = "NotARedisConnection"
             self.loop.run_until_complete(self.subscriber.init())
-            assert self.subscriber.redisc == 'NotARedisConnection'
+            assert self.subscriber.redisc == "NotARedisConnection"
 
     def test_async_run_stopped(self):
         self.subscriber.init = AsyncMock()

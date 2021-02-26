@@ -20,17 +20,15 @@ class Manager:
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
-        handler.setFormatter(
-            logging.Formatter('%(asctime)s %(message)s'))
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         self.logging.addHandler(handler)
-        self.server = os.environ['SERVER']
-        self.db_host = os.environ['DB_HOST']
+        self.server = os.environ["SERVER"]
+        self.db_host = os.environ["DB_HOST"]
 
     async def init(self):
-        self.redis = await aioredis.create_redis(
-            ('redis', 6379))
-        await self.redis.delete('%s_summoner_id_in_progress' % self.server)
-        await self.redis.delete('%s_summoner_id_tasks' % self.server)
+        self.redis = await aioredis.create_redis(("redis", 6379))
+        await self.redis.delete("%s_summoner_id_in_progress" % self.server)
+        await self.redis.delete("%s_summoner_id_tasks" % self.server)
 
     def shutdown(self):
         self.stopped = True
@@ -41,19 +39,27 @@ class Manager:
         while not self.stopped:
             # Drop timed out tasks
             limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
-            await self.redis.zremrangebyscore('%s_summoner_id_in_progress' % self.server, max=limit)
+            await self.redis.zremrangebyscore(
+                "%s_summoner_id_in_progress" % self.server, max=limit
+            )
             # Check remaining buffer size
-            if (size := await self.redis.scard('%s_summoner_id_tasks' % self.server)) < 1000:
+            if (
+                    size := await self.redis.scard("%s_summoner_id_tasks" % self.server)
+            ) < 1000:
                 self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
                 conn = await asyncpg.connect(
-                    "postgresql://%s@%s/%s" % (self.server.lower(), self.db_host, self.server.lower()))
-                result = await conn.fetch('''
+                    "postgresql://%s@%s/%s"
+                    % (self.server.lower(), self.db_host, self.server.lower())
+                )
+                result = await conn.fetch(
+                    """
                     SELECT summoner_id
                     FROM summoner
                     WHERE account_id IS NULL
                     LIMIT 2000;
-                    ''')
+                    """
+                )
                 await conn.close()
                 if len(result) < min_threshold:
                     self.logging.info("Not enough tasks found.")
@@ -62,12 +68,22 @@ class Manager:
                     continue
                 # Add new tasks
                 for entry in result:
-                    if await self.redis.sismember('%s_summoner_id_tasks' % self.server, entry['summoner_id']):
+                    if await self.redis.sismember(
+                            "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
+                    ):
                         continue
-                    await self.redis.sadd('%s_summoner_id_tasks' % self.server, entry['summoner_id'])
-                    if await self.redis.scard('%s_summoner_id_tasks' % self.server) >= 2000:
+                    await self.redis.sadd(
+                        "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
+                    )
+                    if (
+                            await self.redis.scard("%s_summoner_id_tasks" % self.server)
+                            >= 2000
+                    ):
                         break
-                self.logging.info("Filled tasks to %s.", await self.redis.scard('%s_summoner_id_tasks' % self.server))
+                self.logging.info(
+                    "Filled tasks to %s.",
+                    await self.redis.scard("%s_summoner_id_tasks" % self.server),
+                )
 
             await asyncio.sleep(5)
         await self.redis.close()

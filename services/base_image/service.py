@@ -25,12 +25,11 @@ class ServiceClass:  # pylint: disable=R0902
         self.logging.setLevel(logging.INFO)
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
-        handler.setFormatter(
-            logging.Formatter('%(asctime)s [Logic] %(message)s'))
+        handler.setFormatter(logging.Formatter("%(asctime)s [Logic] %(message)s"))
         self.logging.addHandler(handler)
-        self.parallel_worker = int(os.environ['WORKER'])
+        self.parallel_worker = int(os.environ["WORKER"])
 
-        self.server = os.environ['SERVER']
+        self.server = os.environ["SERVER"]
         self.marker = marker
         self.url = f"http://{self.server.lower()}.api.riotgames.com/lol/" + url_snippet
 
@@ -81,7 +80,7 @@ class ServiceClass:  # pylint: disable=R0902
             raise Non200Exception()
         if response.status in [429, 430]:
             if "Retry-After" in response.headers:
-                delay = int(response.headers['Retry-After'])
+                delay = int(response.headers["Retry-After"])
                 self.retry_after = datetime.now() + timedelta(seconds=delay)
             raise RatelimitException()
         if response.status == 404:

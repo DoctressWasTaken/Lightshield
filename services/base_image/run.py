@@ -26,7 +26,6 @@ if __name__ == "__main__":
     subscriber = Subscriber(service_name="")
     service = Service(url_snippet="", marker=marker)
 
-
     def shutdown_handler():
         """Shutdown handler called by the termination signal manager.
 
@@ -35,7 +34,6 @@ if __name__ == "__main__":
         publisher.shutdown()
         subscriber.shutdown()
         service.shutdown()
-
 
     signal.signal(signal.SIGTERM, shutdown_handler)
 

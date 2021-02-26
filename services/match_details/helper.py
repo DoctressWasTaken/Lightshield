@@ -6,6 +6,4 @@ async def format_queue(params):
             template_elements.append("'%s'")
         else:
             template_elements.append("%s")
-    return "(" \
-           + ", ".join(template_elements) \
-           + ")"
+    return "(" + ", ".join(template_elements) + ")"
