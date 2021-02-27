@@ -77,10 +77,10 @@ class Service:
             if sets:
                 query = (
                         """
-                            INSERT INTO %s.match (match_id, queue, timestamp)
-                            VALUES ($1, $2, $3)
-                            ON CONFLICT DO NOTHING;
-                            """
+                                INSERT INTO %s.match (match_id, queue, timestamp)
+                                VALUES ($1, $2, $3)
+                                ON CONFLICT DO NOTHING;
+                                """
                         % self.server.lower()
                 )
 

@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import os
 from datetime import datetime
 
@@ -16,6 +15,10 @@ class Server:
         self.last = datetime.now()
         self.cutoff = os.environ["DETAILS_CUTOFF"]
 
+        self.data = None
+        with open("status.json", "r") as data:
+            self.data = json.loads(data.read())
+
     async def make_app(self):
         app = web.Application()
         app.add_routes([web.get("/api/status", self.return_status)])
@@ -30,9 +33,9 @@ class Server:
         data["summoner"]["total"] = (
                 await conn.fetchval(
                     """ 
-                SELECT COUNT(summoner_id)
-                        FROM %s.summoner;
-            """
+                    SELECT COUNT(summoner_id)
+                            FROM %s.summoner;
+                """
                     % server.lower()
                 )
                 or 0
@@ -40,10 +43,10 @@ class Server:
         data["summoner"]["no_id"] = (
                 await conn.fetchval(
                     """ 
-                SELECT COUNT(summoner_id)
-                        FROM %s.summoner
-                        WHERE puuid IS NULL;
-                                """
+                    SELECT COUNT(summoner_id)
+                            FROM %s.summoner
+                            WHERE puuid IS NULL;
+                                    """
                     % server.lower()
                 )
                 or 0
@@ -51,10 +54,10 @@ class Server:
         data["summoner"]["no_history"] = (
                 await conn.fetchval(
                     """ 
-                SELECT COUNT(summoner_id)
-                        FROM %s.summoner
-                        WHERE wins_last_updated IS NULL;
-            """
+                    SELECT COUNT(summoner_id)
+                            FROM %s.summoner
+                            WHERE wins_last_updated IS NULL;
+                """
                     % server.lower()
                 )
                 or 0
@@ -62,10 +65,10 @@ class Server:
         data["summoner"]["average_delay"] = (
                 await conn.fetchval(
                     """ 
-                SELECT AVG((wins::float + losses) - (wins_last_updated + losses_last_updated))
-                        FROM %s.summoner
-                        WHERE wins_last_updated IS NOT NULL;
-            """
+                    SELECT AVG((wins::float + losses) - (wins_last_updated + losses_last_updated))
+                            FROM %s.summoner
+                            WHERE wins_last_updated IS NOT NULL;
+                """
                     % server.lower()
                 )
                 or 0
@@ -73,10 +76,10 @@ class Server:
         data["match"]["total"] = (
                 await conn.fetch(
                     """ 
-                SELECT COUNT(match_id),
-                FROM %s.match 
-                WHERE DATE(timestamp) >= '%s';
-            """
+                    SELECT COUNT(match_id),
+                    FROM %s.match 
+                    WHERE DATE(timestamp) >= '%s';
+                """
                     % (server.lower(), self.cutoff)
                 )
                 or 0
@@ -84,11 +87,11 @@ class Server:
         data["match"]["details_missing"] = (
                 await conn.fetch(
                     """ 
-                SELECT COUNT(match_id),
-                FROM %s.match 
-                WHERE DATE(timestamp) >= '%s'
-                AND details_pulled IS NULL;
-            """
+                    SELECT COUNT(match_id),
+                    FROM %s.match 
+                    WHERE DATE(timestamp) >= '%s'
+                    AND details_pulled IS NULL;
+                """
                     % (server.lower(), self.cutoff)
                 )
                 or 0
@@ -96,11 +99,11 @@ class Server:
         data["match"]["timeline_missing"] = (
                 await conn.fetch(
                     """ 
-                SELECT COUNT(match_id),
-                FROM %s.match 
-                WHERE DATE(timestamp) >= '%s'
-                AND timeline_pulled IS NULL;
-            """
+                    SELECT COUNT(match_id),
+                    FROM %s.match 
+                    WHERE DATE(timestamp) >= '%s'
+                    AND timeline_pulled IS NULL;
+                """
                     % (server.lower(), self.cutoff)
                 )
                 or 0
@@ -108,12 +111,10 @@ class Server:
         await conn.close()
         return data
 
-    async def generate_file(self, repeat=0):
+    async def generate_data(self, repeat=0):
         tasks = await asyncio.gather(*[self.get_data(server) for server in self.server])
 
-        with open("status.json", "w+") as data:
-            logging.info(tasks)
-            data.write(json.dumps(tasks))
+        self.data = tasks
 
         while repeat > 0:
             tasks = await asyncio.gather(
@@ -121,34 +122,20 @@ class Server:
             )
 
             with open("status.json", "w+") as data:
-                logging.info(tasks)
                 data.write(json.dumps(tasks))
             await asyncio.sleep(repeat)
 
     async def return_status(self, request):
-        print("requested")
-        with open("status.json", "r") as data:
-            return web.Response(
-                text=data.read(), headers={"Access-Control-Allow-Origin": "*"}
-            )
-
-
-async def start_gunicorn():
-    """Return webserver element to gunicorn.
-
-    Called by gunicorn directly.
-    """
-    server = Server()
-    await server.generate_file()
-    task = asyncio.create_task(server.generate_file(repeat=60))
-    return await server.make_app()
+        return web.Response(
+            json=self.data, headers={"Access-Control-Allow-Origin": "*"}
+        )
 
 
 async def main():
     server = Server()
-    await server.generate_file()
+    await server.generate_data()
     await asyncio.gather(
-        web._run_app(server.make_app(), port=8000), server.generate_file(repeat=60)
+        web._run_app(server.make_app(), port=8000), server.generate_data(repeat=60)
     )
 
 

@@ -15,6 +15,7 @@ export class DataService {
   update_data(): void {
     this.http.get('https://status.lightshield.dev/api/status')
       .subscribe((data: any) => {
+        console.log(data);
         this.status = data;
       });
   }
