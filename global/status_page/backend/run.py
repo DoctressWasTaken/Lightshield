@@ -15,9 +15,7 @@ class Server:
         self.last = datetime.now()
         self.cutoff = os.environ["DETAILS_CUTOFF"]
 
-        self.data = None
-        with open("status.json", "r") as data:
-            self.data = json.loads(data.read())
+        self.data = {}
 
     async def make_app(self):
         app = web.Application()
@@ -31,82 +29,82 @@ class Server:
         )
         data = {"server": server, "summoner": {}, "match": {}}
         data["summoner"]["total"] = (
-                await conn.fetchval(
-                    """ 
+            await conn.fetchval(
+                """ 
                         SELECT COUNT(summoner_id)
                                 FROM %s.summoner;
                     """
-                    % server.lower()
-                )
-                or 0
+                % server.lower()
+            )
+            or 0
         )
         data["summoner"]["no_id"] = (
-                await conn.fetchval(
-                    """ 
+            await conn.fetchval(
+                """ 
                         SELECT COUNT(summoner_id)
                                 FROM %s.summoner
                                 WHERE puuid IS NULL;
                                         """
-                    % server.lower()
-                )
-                or 0
+                % server.lower()
+            )
+            or 0
         )
         data["summoner"]["no_history"] = (
-                await conn.fetchval(
-                    """ 
+            await conn.fetchval(
+                """ 
                         SELECT COUNT(summoner_id)
                                 FROM %s.summoner
                                 WHERE wins_last_updated IS NULL;
                     """
-                    % server.lower()
-                )
-                or 0
+                % server.lower()
+            )
+            or 0
         )
         data["summoner"]["average_delay"] = (
-                await conn.fetchval(
-                    """ 
+            await conn.fetchval(
+                """ 
                         SELECT AVG((wins::float + losses) - (wins_last_updated + losses_last_updated))
                                 FROM %s.summoner
                                 WHERE wins_last_updated IS NOT NULL;
                     """
-                    % server.lower()
-                )
-                or 0
+                % server.lower()
+            )
+            or 0
         )
         data["match"]["total"] = (
-                await conn.fetch(
-                    """ 
+            await conn.fetch(
+                """ 
                         SELECT COUNT(match_id),
                         FROM %s.match 
                         WHERE DATE(timestamp) >= '%s';
                     """
-                    % (server.lower(), self.cutoff)
-                )
-                or 0
+                % (server.lower(), self.cutoff)
+            )
+            or 0
         )
         data["match"]["details_missing"] = (
-                await conn.fetch(
-                    """ 
+            await conn.fetch(
+                """ 
                         SELECT COUNT(match_id),
                         FROM %s.match 
                         WHERE DATE(timestamp) >= '%s'
                         AND details_pulled IS NULL;
                     """
-                    % (server.lower(), self.cutoff)
-                )
-                or 0
+                % (server.lower(), self.cutoff)
+            )
+            or 0
         )
         data["match"]["timeline_missing"] = (
-                await conn.fetch(
-                    """ 
+            await conn.fetch(
+                """ 
                         SELECT COUNT(match_id),
                         FROM %s.match 
                         WHERE DATE(timestamp) >= '%s'
                         AND timeline_pulled IS NULL;
                     """
-                    % (server.lower(), self.cutoff)
-                )
-                or 0
+                % (server.lower(), self.cutoff)
+            )
+            or 0
         )
         await conn.close()
         return data
@@ -120,10 +118,6 @@ class Server:
             tasks = await asyncio.gather(
                 *[self.get_data(server) for server in self.server]
             )
-
-            with open("status.json", "w+") as data:
-                data.write(json.dumps(tasks))
-            await asyncio.sleep(repeat)
 
     async def return_status(self, request):
         return web.Response(

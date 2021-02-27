@@ -71,15 +71,15 @@ class Manager:
                 # Add new tasks
                 for entry in result:
                     if await self.redis.sismember(
-                            "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
+                        "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
                     ):
                         continue
                     await self.redis.sadd(
                         "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
                     )
                     if (
-                            await self.redis.scard("%s_summoner_id_tasks" % self.server)
-                            >= 2000
+                        await self.redis.scard("%s_summoner_id_tasks" % self.server)
+                        >= 2000
                     ):
                         break
                 self.logging.info(

@@ -34,8 +34,8 @@ class Service:
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-                f"http://{self.server.lower()}.api.riotgames.com/lol/"
-                + "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s"
+            f"http://{self.server.lower()}.api.riotgames.com/lol/"
+            + "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s"
         )
 
         if "QUEUES" in os.environ:
@@ -76,12 +76,12 @@ class Service:
             )
             if sets:
                 query = (
-                        """
+                    """
                                     INSERT INTO %s.match (match_id, queue, timestamp)
                                     VALUES ($1, $2, $3)
                                     ON CONFLICT DO NOTHING;
                                     """
-                        % self.server.lower()
+                    % self.server.lower()
                 )
 
                 prepared_query = await conn.prepare(query)
@@ -108,12 +108,12 @@ class Service:
     async def get_task(self):
         """Return tasks to the async worker."""
         while (
-                not (
-                        task := await self.redis.zpopmax(
-                            "%s_match_history_tasks" % self.server, 1
-                        )
+            not (
+                task := await self.redis.zpopmax(
+                    "%s_match_history_tasks" % self.server, 1
                 )
-                and not self.stopped
+            )
+            and not self.stopped
         ):
             await asyncio.sleep(5)
         if self.stopped:
@@ -242,7 +242,7 @@ class Service:
         """
         try:
             async with session.get(
-                    url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+                url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
             ) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:

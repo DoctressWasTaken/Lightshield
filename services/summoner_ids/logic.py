@@ -33,8 +33,8 @@ class Service:
         self.server = os.environ["SERVER"]
         self.db_database = os.environ["DB_DATABASE"]
         self.url = (
-                f"http://{self.server.lower()}.api.riotgames.com/lol/"
-                + "summoner/v4/summoners/%s"
+            f"http://{self.server.lower()}.api.riotgames.com/lol/"
+            + "summoner/v4/summoners/%s"
         )
         self.stopped = False
         self.retry_after = datetime.now()
@@ -118,7 +118,7 @@ class Service:
         """
         try:
             async with session.get(
-                    url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+                url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
             ) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:

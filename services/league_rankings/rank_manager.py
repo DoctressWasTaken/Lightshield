@@ -60,7 +60,7 @@ class RankManager:
     async def save_to_file(self):
         """Save the current stats to the tracking file."""
         with open(
-                f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "w+"
+            f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "w+"
         ) as datafile:
             datafile.write(json.dumps(self.ranks))
 

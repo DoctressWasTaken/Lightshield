@@ -47,7 +47,7 @@ class Manager:
         )
         try:
             if result := await conn.fetch(
-                    """
+                """
                                     SELECT account_id, 
                                            wins, 
                                            losses
@@ -56,7 +56,7 @@ class Manager:
                                     AND account_id IS NOT NULL
                                     LIMIT 2000;
                                     """
-                    % self.server.lower()
+                % self.server.lower()
             ):
                 return result, True
             return (
@@ -93,7 +93,7 @@ class Manager:
             )
             # Check remaining buffer size
             if (
-                    size := await self.redis.zcard("%s_match_history_tasks" % self.server)
+                size := await self.redis.zcard("%s_match_history_tasks" % self.server)
             ) < 1000:
                 self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
@@ -106,8 +106,8 @@ class Manager:
                 for entry in result:
                     # Each entry will always be refered to by account_id
                     if await self.redis.zscore(
-                            "%s_match_history_in_progress" % self.server,
-                            entry["account_id"],
+                        "%s_match_history_in_progress" % self.server,
+                        entry["account_id"],
                     ):
                         continue
                     if full_refreshes:
@@ -115,10 +115,10 @@ class Manager:
                         package = {key: entry[key] for key in ["wins", "losses"]}
                     else:
                         z_index = (
-                                entry["wins"]
-                                + entry["losses"]
-                                - entry["wins_last_updated"]
-                                - entry["losses_last_updated"]
+                            entry["wins"]
+                            + entry["losses"]
+                            - entry["wins_last_updated"]
+                            - entry["losses_last_updated"]
                         )
                         package = {
                             key: entry[key]

@@ -42,8 +42,8 @@ class Service:
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-                f"http://{self.server.lower()}.api.riotgames.com/lol/"
-                + "match/v4/matches/%s"
+            f"http://{self.server.lower()}.api.riotgames.com/lol/"
+            + "match/v4/matches/%s"
         )
 
         self.buffered_elements = (
@@ -63,7 +63,7 @@ class Service:
 
     async def prepare_calls(self, conn):
         template = (
-                """
+            """
                         INSERT INTO %s.team
                             (match_id, side, bans, tower_kills, inhibitor_kills,
                              first_tower, first_rift_herald, first_dragon, first_baron, 
@@ -71,12 +71,12 @@ class Service:
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                         ON CONFLICT DO NOTHING;
                         """
-                % self.server.lower()
+            % self.server.lower()
         )
         self.team_insert = await conn.prepare(template)
 
         template = (
-                """
+            """
                                         INSERT INTO %s.participant
                         (match_id, participant_id, summoner_id, summoner_spell,
                          rune_main_tree, rune_sec_tree, rune_main_select,
@@ -95,7 +95,7 @@ class Service:
                                 $31,$32,$33,$34,$35,$36,$37,$38)
                         ON CONFLICT DO NOTHING
                         """
-                % self.server.lower()
+            % self.server.lower()
         )
         self.participant_insert = await conn.prepare(template)
 
@@ -261,9 +261,9 @@ class Service:
     async def get_task(self):
         """Return tasks to the async worker."""
         if not (
-                tasks := await self.redis.spop(
-                    "%s_match_details_tasks" % self.server, self.batch_size
-                )
+            tasks := await self.redis.spop(
+                "%s_match_details_tasks" % self.server, self.batch_size
+            )
         ):
             return tasks
         if self.stopped:
@@ -348,7 +348,7 @@ class Service:
         """
         try:
             async with session.get(
-                    url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+                url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
             ) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:

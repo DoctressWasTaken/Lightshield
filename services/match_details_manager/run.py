@@ -73,9 +73,9 @@ class Manager:
                 )
                 # Check remaining buffer size
                 if (
-                        size := await self.redis.scard(
-                            "%s_match_details_tasks" % self.server
-                        )
+                    size := await self.redis.scard(
+                        "%s_match_details_tasks" % self.server
+                    )
                 ) < self.limit:
                     self.logging.info("%s tasks remaining.", size)
                     # Pull new tasks
@@ -88,8 +88,8 @@ class Manager:
                     for entry in result:
                         # Each entry will always be refered to by account_id
                         if await self.redis.zscore(
-                                "%s_match_details_in_progress" % self.server,
-                                entry["match_id"],
+                            "%s_match_details_in_progress" % self.server,
+                            entry["match_id"],
                         ):
                             continue
                         # Insert task hook
