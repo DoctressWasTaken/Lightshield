@@ -48,14 +48,14 @@ class Manager:
         try:
             if result := await conn.fetch(
                     """
-                                SELECT account_id, 
-                                       wins, 
-                                       losses
-                                FROM %s.summoner
-                                WHERE wins_last_updated IS NULL 
-                                AND account_id IS NOT NULL
-                                LIMIT 2000;
-                                """
+                                    SELECT account_id, 
+                                           wins, 
+                                           losses
+                                    FROM %s.summoner
+                                    WHERE wins_last_updated IS NULL 
+                                    AND account_id IS NOT NULL
+                                    LIMIT 2000;
+                                    """
                     % self.server.lower()
             ):
                 return result, True

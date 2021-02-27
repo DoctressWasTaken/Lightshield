@@ -33,9 +33,9 @@ class Server:
         data["summoner"]["total"] = (
                 await conn.fetchval(
                     """ 
-                    SELECT COUNT(summoner_id)
-                            FROM %s.summoner;
-                """
+                        SELECT COUNT(summoner_id)
+                                FROM %s.summoner;
+                    """
                     % server.lower()
                 )
                 or 0
@@ -43,10 +43,10 @@ class Server:
         data["summoner"]["no_id"] = (
                 await conn.fetchval(
                     """ 
-                    SELECT COUNT(summoner_id)
-                            FROM %s.summoner
-                            WHERE puuid IS NULL;
-                                    """
+                        SELECT COUNT(summoner_id)
+                                FROM %s.summoner
+                                WHERE puuid IS NULL;
+                                        """
                     % server.lower()
                 )
                 or 0
@@ -54,10 +54,10 @@ class Server:
         data["summoner"]["no_history"] = (
                 await conn.fetchval(
                     """ 
-                    SELECT COUNT(summoner_id)
-                            FROM %s.summoner
-                            WHERE wins_last_updated IS NULL;
-                """
+                        SELECT COUNT(summoner_id)
+                                FROM %s.summoner
+                                WHERE wins_last_updated IS NULL;
+                    """
                     % server.lower()
                 )
                 or 0
@@ -65,10 +65,10 @@ class Server:
         data["summoner"]["average_delay"] = (
                 await conn.fetchval(
                     """ 
-                    SELECT AVG((wins::float + losses) - (wins_last_updated + losses_last_updated))
-                            FROM %s.summoner
-                            WHERE wins_last_updated IS NOT NULL;
-                """
+                        SELECT AVG((wins::float + losses) - (wins_last_updated + losses_last_updated))
+                                FROM %s.summoner
+                                WHERE wins_last_updated IS NOT NULL;
+                    """
                     % server.lower()
                 )
                 or 0
@@ -76,10 +76,10 @@ class Server:
         data["match"]["total"] = (
                 await conn.fetch(
                     """ 
-                    SELECT COUNT(match_id),
-                    FROM %s.match 
-                    WHERE DATE(timestamp) >= '%s';
-                """
+                        SELECT COUNT(match_id),
+                        FROM %s.match 
+                        WHERE DATE(timestamp) >= '%s';
+                    """
                     % (server.lower(), self.cutoff)
                 )
                 or 0
@@ -87,11 +87,11 @@ class Server:
         data["match"]["details_missing"] = (
                 await conn.fetch(
                     """ 
-                    SELECT COUNT(match_id),
-                    FROM %s.match 
-                    WHERE DATE(timestamp) >= '%s'
-                    AND details_pulled IS NULL;
-                """
+                        SELECT COUNT(match_id),
+                        FROM %s.match 
+                        WHERE DATE(timestamp) >= '%s'
+                        AND details_pulled IS NULL;
+                    """
                     % (server.lower(), self.cutoff)
                 )
                 or 0
@@ -99,11 +99,11 @@ class Server:
         data["match"]["timeline_missing"] = (
                 await conn.fetch(
                     """ 
-                    SELECT COUNT(match_id),
-                    FROM %s.match 
-                    WHERE DATE(timestamp) >= '%s'
-                    AND timeline_pulled IS NULL;
-                """
+                        SELECT COUNT(match_id),
+                        FROM %s.match 
+                        WHERE DATE(timestamp) >= '%s'
+                        AND timeline_pulled IS NULL;
+                    """
                     % (server.lower(), self.cutoff)
                 )
                 or 0
