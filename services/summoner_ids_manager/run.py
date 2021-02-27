@@ -45,7 +45,7 @@ class Manager:
             )
             # Check remaining buffer size
             if (
-                    size := await self.redis.scard("%s_summoner_id_tasks" % self.server)
+                size := await self.redis.scard("%s_summoner_id_tasks" % self.server)
             ) < 1000:
                 self.logging.info("%s tasks remaining.", size)
                 # Pull new tasks
@@ -55,8 +55,8 @@ class Manager:
                 )
                 result = await conn.fetch(
                     """
-                    SELECT %s.summoner_id
-                    FROM summoner
+                    SELECT summoner_id
+                    FROM %s.summoner
                     WHERE account_id IS NULL
                     LIMIT 2000;
                     """

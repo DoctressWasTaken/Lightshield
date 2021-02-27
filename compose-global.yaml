@@ -16,7 +16,7 @@ services:
     restart: always
 
   status_page:
-    image: lightshield_status_page
+    image: lightshield.dev:5000/lightshield_status_page:latest
     build:
       dockerfile: Dockerfile
       context: global/status_page/backend

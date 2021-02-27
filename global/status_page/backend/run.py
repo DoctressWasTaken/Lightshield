@@ -11,6 +11,7 @@ from aiohttp import web
 class Server:
     def __init__(self):
         self.db_host = os.environ["DB_HOST"]
+        self.db_database = os.environ["DB_DATABASE"]
         self.server = os.environ["SERVER"].split(",")
         self.last = datetime.now()
         self.cutoff = os.environ["DETAILS_CUTOFF"]
@@ -22,40 +23,88 @@ class Server:
 
     async def get_data(self, server):
         conn = await asyncpg.connect(
-            "postgresql://%s@%s/%s" % (server.lower(), self.db_host, server.lower())
+            "postgresql://%s@%s/%s"
+            % (server.lower(), self.db_host, self.db_database.lower())
         )
-        data = {"server": server}
-        res = await conn.fetch(
-            """ 
-            SELECT COUNT(summoner_id),
-                    CASE WHEN puuid IS NULL THEN 'outstanding'
-                    ELSE 'pulled' END AS status
-                    FROM summoner
-                    GROUP BY status;
-        """
+        data = {"server": server, "summoner": {}, "match": {}}
+        data["summoner"]["total"] = (
+                await conn.fetchval(
+                    """ 
+                SELECT COUNT(summoner_id)
+                        FROM %s.summoner;
+            """
+                    % server.lower()
+                )
+                or 0
         )
-        data["summoner"] = {}
-        for line in res:
-            data["summoner"][line["status"]] = line["count"]
-        if not "outstanding" in data["summoner"]:
-            data["summoner"]["outstanding"] = 0
-
-        res = await conn.fetch(
-            """ 
-            SELECT COUNT(match_id),
-            CASE WHEN details_pulled IS NULL THEN 'outstanding'
-            ELSE 'pulled' END AS status
-            FROM match WHERE DATE(timestamp) >= '%s'
-            GROUP BY status;
-        """
-            % self.cutoff
+        data["summoner"]["no_id"] = (
+                await conn.fetchval(
+                    """ 
+                SELECT COUNT(summoner_id)
+                        FROM %s.summoner
+                        WHERE puuid IS NULL;
+                                """
+                    % server.lower()
+                )
+                or 0
         )
-        data["match"] = {}
-        for line in res:
-            data["match"][line["status"]] = line["count"]
-        if not "outstanding" in data["match"]:
-            data["match"]["outstanding"] = 0
-
+        data["summoner"]["no_history"] = (
+                await conn.fetchval(
+                    """ 
+                SELECT COUNT(summoner_id)
+                        FROM %s.summoner
+                        WHERE wins_last_updated IS NULL;
+            """
+                    % server.lower()
+                )
+                or 0
+        )
+        data["summoner"]["average_delay"] = (
+                await conn.fetchval(
+                    """ 
+                SELECT AVG((wins::float + losses) - (wins_last_updated + losses_last_updated))
+                        FROM %s.summoner
+                        WHERE wins_last_updated IS NOT NULL;
+            """
+                    % server.lower()
+                )
+                or 0
+        )
+        data["match"]["total"] = (
+                await conn.fetch(
+                    """ 
+                SELECT COUNT(match_id),
+                FROM %s.match 
+                WHERE DATE(timestamp) >= '%s';
+            """
+                    % (server.lower(), self.cutoff)
+                )
+                or 0
+        )
+        data["match"]["details_missing"] = (
+                await conn.fetch(
+                    """ 
+                SELECT COUNT(match_id),
+                FROM %s.match 
+                WHERE DATE(timestamp) >= '%s'
+                AND details_pulled IS NULL;
+            """
+                    % (server.lower(), self.cutoff)
+                )
+                or 0
+        )
+        data["match"]["timeline_missing"] = (
+                await conn.fetch(
+                    """ 
+                SELECT COUNT(match_id),
+                FROM %s.match 
+                WHERE DATE(timestamp) >= '%s'
+                AND timeline_pulled IS NULL;
+            """
+                    % (server.lower(), self.cutoff)
+                )
+                or 0
+        )
         await conn.close()
         return data
 
