@@ -1,5 +1,4 @@
-FROM lightshield_base_image
-
+FROM lightshield/base_image:${TAG}
 # Main Application
 COPY runesReforged.json .
 
