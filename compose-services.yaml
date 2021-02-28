@@ -7,13 +7,15 @@ services:
       dockerfile: Dockerfile
       context: services/base
     image: lightshield/base_image:${TAG}
-    entrypoint: ['ls']
+    entrypoint: [ 'ls' ]
 
   league_ranking:
     hostname: league_rankings
     build:
       dockerfile: Dockerfile
       context: services/league_rankings
+      args:
+        TAG: ${TAG}
     image: lightshield/league_ranking:${TAG}
     environment:
       - SERVER=${SERVER}
@@ -30,6 +32,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids_manager
+      args:
+        TAG: ${TAG}
     image: lightshield/summoner_id_manager:${TAG}
     environment:
       - SERVER=${SERVER}
@@ -41,6 +45,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids
+      args:
+        TAG: ${TAG}
     image: lightshield/summoner_id:${TAG}
     environment:
       - SERVER=${SERVER}
@@ -56,6 +62,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_history_manager
+      args:
+        TAG: ${TAG}
     image: lightshield/match_history_manager:${TAG}
     env_file:
       - secrets.env
@@ -65,6 +73,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_history
+      args:
+        TAG: ${TAG}
     image: lightshield/match_history:${TAG}
     environment:
       - SERVER=${SERVER}
@@ -78,6 +88,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_details_manager
+      args:
+        TAG: ${TAG}
     image: lightshield/match_details_manager:${TAG}
     environment:
       - LIMIT=5000
@@ -90,6 +102,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_details
+      args:
+        TAG: ${TAG}
     image: lightshield/match_details:${TAG}
     environment:
       - SERVER=${SERVER}
