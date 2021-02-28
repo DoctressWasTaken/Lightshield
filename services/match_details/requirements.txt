@@ -1,4 +1,0 @@
-aioredis
-asyncpg==0.22.0
-aiohttp
-uvloop==0.14.0

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS summoner
     losses              SMALLINT DEFAULT NULL,
     losses_last_updated SMALLINT DEFAULT NULL,
 
-    priority            VARCHAR(1)
+    priority            VARCHAR(1),
+
+    last_updated        DATE DEFAULT CURRENT_DATE
 );
-
-

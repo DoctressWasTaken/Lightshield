@@ -2,10 +2,10 @@ import asyncio
 import json
 import os
 from datetime import datetime
-
+import logging
 import asyncpg
 from aiohttp import web
-
+import traceback
 
 class Server:
     def __init__(self):
@@ -15,6 +15,15 @@ class Server:
         self.last = datetime.now()
         self.cutoff = os.environ["DETAILS_CUTOFF"]
 
+
+        self.logging = logging.getLogger("Main")
+        level = logging.INFO
+        self.logging.setLevel(level)
+        handler = logging.StreamHandler()
+        handler.setLevel(level)
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+
+
         self.data = {}
 
     async def make_app(self):
@@ -22,11 +31,7 @@ class Server:
         app.add_routes([web.get("/api/status", self.return_status)])
         return app
 
-    async def get_data(self, server):
-        conn = await asyncpg.connect(
-            "postgresql://%s@%s/%s"
-            % (server.lower(), self.db_host, self.db_database.lower())
-        )
+    async def get_data(self, server, conn):
         data = {"server": server, "summoner": {}, "match": {}}
         data["summoner"]["total"] = (
             await conn.fetchval(
@@ -72,9 +77,9 @@ class Server:
             or 0
         )
         data["match"]["total"] = (
-            await conn.fetch(
+            await conn.fetchval(
                 """ 
-                        SELECT COUNT(match_id),
+                        SELECT COUNT(match_id)
                         FROM %s.match 
                         WHERE DATE(timestamp) >= '%s';
                     """
@@ -83,9 +88,9 @@ class Server:
             or 0
         )
         data["match"]["details_missing"] = (
-            await conn.fetch(
+            await conn.fetchval(
                 """ 
-                        SELECT COUNT(match_id),
+                        SELECT COUNT(match_id)
                         FROM %s.match 
                         WHERE DATE(timestamp) >= '%s'
                         AND details_pulled IS NULL;
@@ -95,9 +100,9 @@ class Server:
             or 0
         )
         data["match"]["timeline_missing"] = (
-            await conn.fetch(
+            await conn.fetchval(
                 """ 
-                        SELECT COUNT(match_id),
+                        SELECT COUNT(match_id)
                         FROM %s.match 
                         WHERE DATE(timestamp) >= '%s'
                         AND timeline_pulled IS NULL;
@@ -106,30 +111,37 @@ class Server:
             )
             or 0
         )
-        await conn.close()
         return data
 
-    async def generate_data(self, repeat=0):
-        tasks = await asyncio.gather(*[self.get_data(server) for server in self.server])
-
-        self.data = tasks
-
-        while repeat > 0:
-            tasks = await asyncio.gather(
-                *[self.get_data(server) for server in self.server]
-            )
+    async def generate_data(self):
+        try:
+            while True:
+                tasks = []
+                for server in self.server:
+                    conn = await asyncpg.connect(
+                        "postgresql://%s@%s/%s"
+                        % (server.lower(), self.db_host, self.db_database.lower())
+                    )
+                    tasks.append(await self.get_data(server, conn))
+                    await conn.close()
+                self.data = tasks
+                self.logging.info(self.data)
+                await asyncio.sleep(60)
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            self.logging.info(err)
+            exit()
 
     async def return_status(self, request):
         return web.Response(
-            json=self.data, headers={"Access-Control-Allow-Origin": "*"}
+            text=json.dumps(self.data), headers={"Access-Control-Allow-Origin": "*"}
         )
 
 
 async def main():
     server = Server()
-    await server.generate_data()
     await asyncio.gather(
-        web._run_app(server.make_app(), port=8000), server.generate_data(repeat=60)
+        server.generate_data()
     )
 
 

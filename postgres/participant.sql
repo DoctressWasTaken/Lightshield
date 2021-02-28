@@ -1,6 +1,9 @@
 CREATE TABLE IF NOT EXISTS participant
 (
     match_id                     BIGINT,
+    timestamp                    TIMESTAMP,
+    win                          BOOLEAN,
+
     participant_id               SMALLINT,
     summoner_id                  VARCHAR(63), -- current summoner id
 
@@ -63,6 +66,7 @@ CREATE TABLE IF NOT EXISTS participant
     PRIMARY KEY (match_id, participant_id)
 );
 
-CREATE INDEX ON na1.participant (summoner_id);
-CREATE INDEX ON na1.participant (rune_main_tree, rune_sec_tree);
-CREATE INDEX ON na1.participant (champ_id);
+CREATE INDEX ON participant (summoner_id);
+CREATE INDEX ON participant (rune_main_tree, rune_sec_tree);
+CREATE INDEX ON participant (champ_id);
+CREATE INDEX ON participant (timestamp);

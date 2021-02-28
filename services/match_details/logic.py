@@ -11,6 +11,8 @@ import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from helper import format_queue
 from runes import get_ids, get_trees
+from connection_manager.buffer import RedisConnector
+from connection_manager.persistent import PostgresConnector
 
 shard_id = {5001: 1, 5002: 2, 5003: 3, 5005: 2, 5007: 3, 5008: 1}
 
@@ -34,11 +36,14 @@ class Service:
 
         self.rune_ids = get_ids()
         self.rune_tree = get_trees()
-        self.db_host = os.environ["DB_HOST"]
-        self.db_database = os.environ["DB_DATABASE"]
 
         self.server = os.environ["SERVER"]
         self.batch_size = int(os.environ["BATCH_SIZE"])
+
+        self.redis = RedisConnector()
+        self.db = PostgresConnector(user=self.server.lower())
+        self.db.set_prepare(self.prepare)
+
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
@@ -52,23 +57,18 @@ class Service:
 
         self.active_tasks = []
 
-    async def init(self):
-        """Initiate timelimit for pulled matches."""
-        self.redis = await aioredis.create_redis_pool(("redis", 6379), encoding="utf-8")
-        self.logging.info("Initialized.")
-
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
 
-    async def prepare_calls(self, conn):
+    async def prepare(self, conn):
         template = (
             """
                         INSERT INTO %s.team
-                            (match_id, side, bans, tower_kills, inhibitor_kills,
+                            (match_id, timestamp, win, side, bans, tower_kills, inhibitor_kills,
                              first_tower, first_rift_herald, first_dragon, first_baron, 
                              rift_herald_kills, dragon_kills, baron_kills)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                         ON CONFLICT DO NOTHING;
                         """
             % self.server.lower()
@@ -78,10 +78,10 @@ class Service:
         template = (
             """
                                         INSERT INTO %s.participant
-                        (match_id, participant_id, summoner_id, summoner_spell,
+                        (match_id, timestamp, win, participant_id, summoner_id, summoner_spell,
                          rune_main_tree, rune_sec_tree, rune_main_select,
-                         rune_sec_select, rune_shards, item, -- 10 
-                         trinket, champ_level, champ_id, kills, deaths, assists, gold_earned,
+                         rune_sec_select,  -- 10
+                         rune_shards, item, trinket, champ_level, champ_id, kills, deaths, assists, gold_earned,
                          neutral_minions_killed, neutral_minions_killed_enemy, 
                          neutral_minions_killed_team, total_minions_killed, 
                          vision_score, vision_wards_bought, wards_placed,
@@ -92,7 +92,7 @@ class Service:
                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                                 $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
                                 $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-                                $31,$32,$33,$34,$35,$36,$37,$38)
+                                $31,$32,$33,$34,$35,$36,$37,$38, $39, $40)
                         ON CONFLICT DO NOTHING
                         """
             % self.server.lower()
@@ -110,24 +110,25 @@ class Service:
             % self.server.lower()
         )
 
-    async def flush_manager(self, match_details, conn):
+    async def flush_manager(self, match_details):
         """Update entries in postgres once enough tasks are done."""
         try:
             match_ids = []
             for match in match_details:
                 match_ids.append(match[0])
 
-            existing_ids = [
-                match["match_id"]
-                for match in await conn.fetch(
+            async with self.db.get_connection() as db:
+                existing_ids = [
+                    match["match_id"]
+                    for match in await db.fetch(
+                        """
+                    SELECT DISTINCT match_id
+                    FROM %s.team
+                    WHERE match_id IN (%s);
                     """
-                SELECT DISTINCT match_id
-                FROM %s.team
-                WHERE match_id IN (%s);
-                """
-                    % (self.server.lower(), ",".join(match_ids))
-                )
-            ]
+                        % (self.server.lower(), ",".join(match_ids))
+                    )
+                ]
             team_sets = []
             participant_sets = []
             update_sets = []
@@ -150,6 +151,8 @@ class Service:
                     team_sets.append(
                         (
                             int(match[0]),
+                            datetime.fromtimestamp(details["gameCreation"] // 1000),
+                            team['win'] == 'Win',
                             team["teamId"] == 200,
                             bans,
                             team["towerKills"],
@@ -174,6 +177,8 @@ class Service:
                         participant_sets.append(
                             (
                                 int(match[0]),
+                                datetime.fromtimestamp(details["gameCreation"] // 1000),
+                                details["teams"][participant['participantId']//6]['win'] == 'Win',
                                 participant["participantId"],
                                 participant["player"]["summonerId"],
                                 [participant["spell1Id"], participant["spell2Id"]],
@@ -231,7 +236,8 @@ class Service:
                         raise err
             if team_sets:
                 lines = []
-                await self.team_insert.executemany(team_sets)
+                async with self.db.get_connection() as db:
+                    await self.team_insert.executemany(team_sets)
 
             if participant_sets:
                 template = await format_queue(participant_sets[0])
@@ -247,11 +253,12 @@ class Service:
                         )
                     )
                 values = ",".join(lines)
-
-                await self.participant_insert.executemany(participant_sets)
+                async with self.db.get_connection() as db:
+                    await self.participant_insert.executemany(participant_sets)
 
             if update_sets:
-                await self.match_update.executemany(update_sets)
+                async with self.db.get_connection() as db:
+                    await self.match_update.executemany(update_sets)
             self.logging.info("Inserted %s match_details.", len(update_sets))
 
         except Exception as err:
@@ -260,20 +267,21 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        if not (
-            tasks := await self.redis.spop(
-                "%s_match_details_tasks" % self.server, self.batch_size
-            )
-        ):
+        async with self.redis.get_connection() as buffer:
+            if not (
+                tasks := await buffer.spop(
+                    "%s_match_details_tasks" % self.server, self.batch_size
+                )
+            ):
+                return tasks
+            if self.stopped:
+                return
+            start = int(datetime.utcnow().timestamp())
+            for entry in tasks:
+                await buffer.zadd(
+                    "%s_match_details_in_progress" % self.server, start, entry
+                )
             return tasks
-        if self.stopped:
-            return
-        start = int(datetime.utcnow().timestamp())
-        for entry in tasks:
-            await self.redis.zadd(
-                "%s_match_details_in_progress" % self.server, start, entry
-            )
-        return tasks
 
     async def worker(self, matchId, session, delay) -> list:
         """Multiple started per separate processor.
@@ -299,11 +307,6 @@ class Service:
 
     async def async_worker(self):
         afk_alert = False
-        conn = await asyncpg.connect(
-            "postgresql://%s@%s/%s"
-            % (self.server.lower(), self.db_host, self.db_database.lower())
-        )
-        await self.prepare_calls(conn)
         while not self.stopped:
             if not (tasks := await self.get_task()):
                 if not afk_alert:
@@ -321,15 +324,8 @@ class Service:
                         for index, matchId in enumerate(tasks)
                     ]
                 )
-            if conn.is_closed():
-                conn = await asyncpg.connect(
-                    "postgresql://%s@%s/%s"
-                    % (self.server.lower(), self.db_host, self.db_database.lower())
-                )
-                await self.prepare_calls(conn)
-            await self.flush_manager(results, conn)
+            await self.flush_manager(results)
             await asyncio.sleep(0.01)
-        await conn.close()
 
     async def fetch(self, session, url) -> dict:
         """
@@ -373,5 +369,4 @@ class Service:
         """
         Runner.
         """
-        await self.init()
         await self.async_worker()

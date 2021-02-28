@@ -2,6 +2,13 @@ version: '3.7'
 services:
   ### Services
 
+  base_image:
+    build:
+      dockerfile: Dockerfile
+      context: services/base
+    image: lightshield_base_image:latest
+    entrypoint: ['ls']
+
   league_rankings:
     hostname: league_rankings
     build:

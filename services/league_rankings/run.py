@@ -9,6 +9,7 @@ import aiohttp
 import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 from rank_manager import RankManager
+from connection_manager.persistent import PostgresConnector
 
 # uvloop.install()
 
@@ -44,8 +45,8 @@ class Service:  # pylint: disable=R0902
         self.logging.addHandler(handler)
 
         self.server = os.environ["SERVER"]
-        self.db_host = os.environ["DB_HOST"]
-        self.db_database = os.environ["DB_DATABASE"]
+        self.db = PostgresConnector(user=self.server.lower())
+
         self.url = (
             f"http://{self.server.lower()}.api.riotgames.com/lol/"
             + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
@@ -81,45 +82,41 @@ class Service:  # pylint: disable=R0902
         min_rank = tiers[tier] * 400 + rank[division] * 100
         self.logging.info("Found %s unique user.", len(tasks))
 
-        conn = await asyncpg.connect(
-            "postgresql://%s@%s/%s"
-            % (self.server.lower(), self.db_host, self.db_database.lower())
-        )
-        latest = await conn.fetch(
-            """
-            SELECT summoner_id, rank, wins, losses
-            FROM %s.summoner
-            WHERE rank >= $1 
-            AND rank <= $2
-        """
-            % self.server.lower(),
-            min_rank,
-            min_rank + 100,
-        )
-        for line in latest:
-            if line["summoner_id"] in tasks:
-                task = tasks[line["summoner_id"]]
-                if task == (
-                    line["summoner_id"],
-                    int(line["rank"]),
-                    int(line["wins"]),
-                    int(line["losses"]),
-                ):
-                    del tasks[line["summoner_id"]]
-        self.logging.info("Upserting %s changed user.", len(tasks))
-        if tasks:
-            prepared = await conn.prepare(
-                """                INSERT INTO %s.summoner (summoner_id, rank, wins, losses)
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (summoner_id) DO 
-                    UPDATE SET rank = EXCLUDED.rank,
-                               wins = EXCLUDED.wins,
-                               losses = EXCLUDED.losses  
+        async with self.db.get_connection() as db:
+            latest = await db.fetch(
                 """
-                % self.server.lower()
+                SELECT summoner_id, rank, wins, losses
+                FROM %s.summoner
+                WHERE rank >= $1 
+                AND rank <= $2
+            """
+                % self.server.lower(),
+                min_rank,
+                min_rank + 100,
             )
-            await prepared.executemany(tasks.values())
-        await conn.close()
+            for line in latest:
+                if line["summoner_id"] in tasks:
+                    task = tasks[line["summoner_id"]]
+                    if task == (
+                        line["summoner_id"],
+                        int(line["rank"]),
+                        int(line["wins"]),
+                        int(line["losses"]),
+                    ):
+                        del tasks[line["summoner_id"]]
+            self.logging.info("Upserting %s changed user.", len(tasks))
+            if tasks:
+                prepared = await db.prepare(
+                    """                INSERT INTO %s.summoner (summoner_id, rank, wins, losses)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT (summoner_id) DO 
+                        UPDATE SET rank = EXCLUDED.rank,
+                                   wins = EXCLUDED.wins,
+                                   losses = EXCLUDED.losses  
+                    """
+                    % self.server.lower()
+                )
+                await prepared.executemany(tasks.values())
 
     async def async_worker(self, tier, division, offset, worker):
         failed = False
@@ -208,7 +205,7 @@ class Service:  # pylint: disable=R0902
             self.next_page = 1
             await self.process_rank(tier, division, worker=5)
             await self.rankmanager.update(key=(tier, division))
-
+        await self.db.close()
 
 if __name__ == "__main__":
     service = Service()

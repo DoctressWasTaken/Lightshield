@@ -1,6 +1,8 @@
 CREATE TABLE IF NOT EXISTS team
 (
     match_id          BIGINT,
+    timestamp         TIMESTAMP,
+    win               BOOLEAN,
     side              BOOLEAN, -- False: Blue | True: Red
 
     bans              SMALLINT[5],
@@ -18,4 +20,6 @@ CREATE TABLE IF NOT EXISTS team
     baron_kills       SMALLINT,
 
     PRIMARY KEY (match_id, side)
-)
+);
+
+CREATE INDEX ON team (timestamp);

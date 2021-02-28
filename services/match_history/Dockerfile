@@ -1,11 +1,4 @@
-FROM python:3.8-slim
+FROM lightshield_base_image
 
-WORKDIR /project
-COPY *.sh ./
-RUN chmod 500 *.sh
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
+# Main Application
 COPY *.py ./
-
-ENTRYPOINT ["/project/startup.sh"]

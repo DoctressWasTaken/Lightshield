@@ -10,8 +10,8 @@ import traceback
 from datetime import datetime, timedelta
 
 import aiohttp
-import aioredis
-import asyncpg
+from connection_manager.buffer import RedisConnector
+from connection_manager.persistent import PostgresConnector
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 
 
@@ -29,16 +29,16 @@ class Service:
         handler.setLevel(level)
         handler.setFormatter(logging.Formatter("%(asctime)s [SummonerIDs] %(message)s"))
         self.logging.addHandler(handler)
-        self.db_host = os.environ["DB_HOST"]
-        self.server = os.environ["SERVER"]
-        self.db_database = os.environ["DB_DATABASE"]
+        self.server = os.environ["SERVER"].lower()
         self.url = (
-            f"http://{self.server.lower()}.api.riotgames.com/lol/"
-            + "summoner/v4/summoners/%s"
+                f"http://{self.server}.api.riotgames.com/lol/"
+                + "summoner/v4/summoners/%s"
         )
         self.stopped = False
         self.retry_after = datetime.now()
-
+        self.redis = RedisConnector()
+        self.db = PostgresConnector(user=self.server)
+        self.db.set_prepare(self.prepare)
         self.completed_tasks = []
         self.to_delete = []
 
@@ -46,53 +46,41 @@ class Service:
         """Called on shutdown init."""
         self.stopped = True
 
-    async def insert(self, task):
+    async def insert(self, batch):
         """Update entry in postgres."""
-        if self.conn.is_closed():
-            await self.open_db()
-        await self.prep_insert.executemany([task])
+        async with self.db.get_connection(exclusive=True):
+            await self.prep_insert.executemany(batch)
 
-    async def drop(self, task):
-        if self.conn.is_closed():
-            await self.open_db()
-        await self.prep_drop.executemany([task])
+    async def drop(self, summoner_id):
+        async with self.db.get_connection(exclusive=True) as db:
+            await db.execute("""
+                    DELETE FROM %s.summoner
+                    WHERE summoner_id = $1;
+                    """, summoner_id)
 
     async def get_task(self):
         """Return tasks to the async worker."""
+        async with self.redis.get_connection() as buffer:
+            task = await buffer.spop("%s_summoner_id_tasks" % self.server)
+            if not task or self.stopped:
+                return
+            start = int(datetime.utcnow().timestamp())
+            await buffer.zadd("%s_summoner_id_in_progress" % self.server, start, task)
+            return task
 
-        task = await self.redis.spop("%s_summoner_id_tasks" % self.server)
-        if not task or self.stopped:
-            return
-        start = int(datetime.utcnow().timestamp())
-        await self.redis.zadd("%s_summoner_id_in_progress" % self.server, start, task)
-        return task
-
-    async def async_worker(self, delay):
-        """Create only a new call if the summoner is not yet in the db."""
-        await asyncio.sleep(delay)
-        self.logging.info("Started worker.")
-        failed = None
-        while not self.stopped:
+    async def logic(self, session, summoner_id):
+        failed = summoner_id
+        while failed:
             if datetime.now() < self.retry_after:
                 delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
                 await asyncio.sleep(delay)
             try:
-                async with aiohttp.ClientSession() as session:
-                    if failed:
-                        summoner_id = failed
-                        failed = None
-                    else:
-                        summoner_id = await self.get_task()
-                    if not summoner_id:
-                        continue
-                    response = await self.fetch(session, self.url % summoner_id)
-                    async with self.conn_lock:
-                        await self.insert(
-                            [response["accountId"], response["puuid"], summoner_id]
-                        )
+                summoner_id = failed
+                failed = None
+                response = await self.fetch(session, self.url % summoner_id)
+                return [response["accountId"], response["puuid"], summoner_id]
             except NotFoundException:
-                async with self.conn_lock:
-                    await self.drop(summoner_id)
+                await self.drop(summoner_id)
             except (RatelimitException, Non200Exception):
                 failed = summoner_id
                 continue
@@ -100,6 +88,27 @@ class Service:
                 traceback.print_tb(err.__traceback__)
                 self.logging.info(err)
             await asyncio.sleep(0.01)
+
+    async def async_worker(self):
+        """Create only a new call if the summoner is not yet in the db."""
+        self.logging.info("Initiated.")
+        failed = None
+        while not self.stopped:
+            batch = []
+            async with aiohttp.ClientSession() as session:
+                for _ in range(50):
+                    summoner_id = await self.get_task()
+                    if not summoner_id:
+                        break
+                    else:
+                        batch.append(asyncio.create_task(self.logic(session, summoner_id)))
+                if not batch:
+                    await asyncio.sleep(60)
+                    continue
+                batch_results = await asyncio.gather(*batch)
+            self.logging.info("Inserted %s summoner_ids.", len(batch))
+            await self.insert(batch_results)
+
         self.logging.info("Stopped worker.")
 
     async def fetch(self, session, url):
@@ -118,7 +127,7 @@ class Service:
         """
         try:
             async with session.get(
-                url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+                    url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
             ) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:
@@ -135,12 +144,8 @@ class Service:
             raise Non200Exception()
         return await response.json(content_type=None)
 
-    async def open_db(self):
-        self.conn = await asyncpg.connect(
-            "postgresql://%s@%s/%s"
-            % (self.server.lower(), self.db_host, self.db_database.lower())
-        )
-        self.prep_insert = await self.conn.prepare(
+    async def prepare(self, connection):
+        self.prep_insert = await connection.prepare(
             """
             UPDATE %s.summoner
             SET account_id = $1, puuid = $2
@@ -148,7 +153,7 @@ class Service:
             """
             % self.server.lower()
         )
-        self.prep_drop = await self.conn.prepare(
+        self.prep_drop = await connection.prepare(
             """
                     DELETE FROM %s.summoner
                     WHERE summoner_id = $1;
@@ -156,19 +161,6 @@ class Service:
             % self.server.lower()
         )
 
-    async def init(self):
-        """Override of the default init function.
-
-        Initiate the Rankmanager object.
-        """
-        self.redis = await aioredis.create_redis_pool(("redis", 6379), encoding="utf-8")
-        self.conn_lock = asyncio.Lock()
-        await self.open_db()
-
     async def run(self):
         """Runner."""
-        await self.init()
-        await asyncio.gather(
-            *[asyncio.create_task(self.async_worker(delay=i)) for i in range(5)]
-        )
-        await self.conn.close()
+        await self.async_worker()

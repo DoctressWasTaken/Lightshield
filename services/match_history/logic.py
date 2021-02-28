@@ -10,6 +10,8 @@ import aioredis
 import asyncpg
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 
+from connection_manager.buffer import RedisConnector
+from connection_manager.persistent import PostgresConnector
 
 class Service:
     """Core service worker object."""
@@ -27,10 +29,12 @@ class Service:
             logging.Formatter("%(asctime)s [MatchHistory] %(message)s")
         )
         self.logging.addHandler(handler)
-        self.db_host = os.environ["DB_HOST"]
-        self.db_database = os.environ["DB_DATABASE"]
-
         self.server = os.environ["SERVER"]
+
+        self.redis = RedisConnector()
+        self.db = PostgresConnector(user=self.server.lower())
+        self.db.set_prepare(self.prepare)
+
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
@@ -47,10 +51,7 @@ class Service:
         )  # Short term buffer to keep track of currently ongoing requests
 
         self.active_tasks = []
-
-    async def init(self):
-        """Initiate timelimit for pulled matches."""
-        self.redis = await aioredis.create_redis_pool(("redis", 6379), encoding="utf-8")
+        self.insert_query = None
 
     def shutdown(self):
         """Called on shutdown init."""
@@ -70,59 +71,56 @@ class Service:
                         datetime.fromtimestamp(entry["timestamp"] // 1000),
                     )
                 )
-            conn = await asyncpg.connect(
-                "postgresql://%s@%s/%s"
-                % (self.server.lower(), self.db_host, self.db_database.lower())
-            )
-            if sets:
-                query = (
+            async with self.db.get_connection() as db:
+                if sets:
+                    await self.insert_query.executemany(sets)
+                    self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
+
+                await db.execute(
                     """
-                                    INSERT INTO %s.match (match_id, queue, timestamp)
-                                    VALUES ($1, $2, $3)
-                                    ON CONFLICT DO NOTHING;
-                                    """
-                    % self.server.lower()
+                    UPDATE %s.summoner
+                    SET wins_last_updated = $1,
+                        losses_last_updated = $2
+                    WHERE account_id = $3
+                    """
+                    % self.server.lower(),
+                    int(keys["wins"]),
+                    int(keys["losses"]),
+                    account_id,
                 )
-
-                prepared_query = await conn.prepare(query)
-                await prepared_query.executemany(sets)
-                self.logging.info("Inserted %s sets for %s.", len(sets), account_id)
-
-            await conn.execute(
-                """
-                UPDATE %s.summoner
-                SET wins_last_updated = $1,
-                    losses_last_updated = $2
-                WHERE account_id = $3
-                """
-                % self.server.lower(),
-                int(keys["wins"]),
-                int(keys["losses"]),
-                account_id,
-            )
-            await conn.close()
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
 
+    async def prepare(self, connection):
+        self.insert_query = await connection.prepare(
+                """
+                                INSERT INTO %s.match (match_id, queue, timestamp)
+                                VALUES ($1, $2, $3)
+                                ON CONFLICT DO NOTHING;
+                                """
+                % self.server.lower()
+        )
+
     async def get_task(self):
         """Return tasks to the async worker."""
-        while (
-            not (
-                task := await self.redis.zpopmax(
-                    "%s_match_history_tasks" % self.server, 1
+        async with self.redis.get_connection() as buffer:
+            while (
+                not (
+                    task := await buffer.zpopmax(
+                        "%s_match_history_tasks" % self.server, 1
+                    )
                 )
-            )
-            and not self.stopped
-        ):
-            await asyncio.sleep(5)
-        if self.stopped:
-            return
-        keys = await self.redis.hgetall("%s:%s:%s" % (self.server, task[0], task[1]))
-        await self.redis.delete("%s:%s:%s" % (self.server, task[0], task[1]))
-        start = int(datetime.utcnow().timestamp())
-        await self.redis.zadd("match_history_in_progress", start, task[0])
-        return [task[0], int(task[1])], keys
+                and not self.stopped
+            ):
+                await asyncio.sleep(5)
+            if self.stopped:
+                return
+            keys = await buffer.hgetall("%s:%s:%s" % (self.server, task[0], task[1]))
+            await buffer.delete("%s:%s:%s" % (self.server, task[0], task[1]))
+            start = int(datetime.utcnow().timestamp())
+            await buffer.zadd("match_history_in_progress", start, task[0])
+            return [task[0], int(task[1])], keys
 
     async def full_refresh(self, account_id, keys):
         """Pull match-history data until the page is empty."""
@@ -266,5 +264,4 @@ class Service:
         """
         Runner.
         """
-        await self.init()
         await self.async_worker()
