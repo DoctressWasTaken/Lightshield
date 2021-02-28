@@ -177,7 +177,7 @@ class Service:
         start = offset * 100
         end = offset * 100 + 100
         while not self.stopped:
-            if limit and start > limit * 100:
+            if limit and start >= limit * 100:
                 return [
                     match
                     for match in matches
