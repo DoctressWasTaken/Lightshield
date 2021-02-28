@@ -26,8 +26,8 @@ class Manager:
         self.logging.addHandler(handler)
         self.limit = int(os.environ["LIMIT"])
         self.server = os.environ["SERVER"]
-        self.block_limit = int(os.environ['TASK_BLOCKING'])
-        self.details_cutoff = os.environ['DETAILS_CUTOFF']
+        self.block_limit = int(os.environ["TASK_BLOCKING"])
+        self.details_cutoff = os.environ["DETAILS_CUTOFF"]
         self.redis = RedisConnector()
         self.db = PostgresConnector(user=self.server.lower())
 
@@ -68,16 +68,20 @@ class Manager:
         try:
             while not self.stopped:
                 # Drop timed out tasks
-                limit = int((datetime.utcnow() - timedelta(minutes=self.block_limit)).timestamp())
+                limit = int(
+                    (
+                        datetime.utcnow() - timedelta(minutes=self.block_limit)
+                    ).timestamp()
+                )
                 async with self.redis.get_connection() as buffer:
                     await buffer.zremrangebyscore(
                         "%s_match_details_in_progress" % self.server, max=limit
                     )
                     # Check remaining buffer size
                     if (
-                            size := await buffer.scard(
-                                "%s_match_details_tasks" % self.server
-                            )
+                        size := await buffer.scard(
+                            "%s_match_details_tasks" % self.server
+                        )
                     ) >= self.limit:
                         await asyncio.sleep(10)
                         continue
@@ -98,8 +102,8 @@ class Manager:
                     for entry in result:
                         # Each entry will always be refered to by account_id
                         if await buffer.zscore(
-                                "%s_match_details_in_progress" % self.server,
-                                entry["match_id"],
+                            "%s_match_details_in_progress" % self.server,
+                            entry["match_id"],
                         ):
                             continue
                         # Insert task hook

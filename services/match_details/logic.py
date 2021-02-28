@@ -152,7 +152,7 @@ class Service:
                         (
                             int(match[0]),
                             datetime.fromtimestamp(details["gameCreation"] // 1000),
-                            team['win'] == 'Win',
+                            team["win"] == "Win",
                             team["teamId"] == 200,
                             bans,
                             team["towerKills"],
@@ -178,7 +178,10 @@ class Service:
                             (
                                 int(match[0]),
                                 datetime.fromtimestamp(details["gameCreation"] // 1000),
-                                details["teams"][participant['participantId']//6]['win'] == 'Win',
+                                details["teams"][participant["participantId"] // 6][
+                                    "win"
+                                ]
+                                == "Win",
                                 participant["participantId"],
                                 participant["player"]["summonerId"],
                                 [participant["spell1Id"], participant["spell2Id"]],

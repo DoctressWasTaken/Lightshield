@@ -31,8 +31,7 @@ class Service:
         self.logging.addHandler(handler)
         self.server = os.environ["SERVER"].lower()
         self.url = (
-                f"http://{self.server}.api.riotgames.com/lol/"
-                + "summoner/v4/summoners/%s"
+            f"http://{self.server}.api.riotgames.com/lol/" + "summoner/v4/summoners/%s"
         )
         self.stopped = False
         self.retry_after = datetime.now()
@@ -53,10 +52,13 @@ class Service:
 
     async def drop(self, summoner_id):
         async with self.db.get_connection(exclusive=True) as db:
-            await db.execute("""
+            await db.execute(
+                """
                     DELETE FROM %s.summoner
                     WHERE summoner_id = $1;
-                    """, summoner_id)
+                    """,
+                summoner_id,
+            )
 
     async def get_task(self):
         """Return tasks to the async worker."""
@@ -101,7 +103,9 @@ class Service:
                     if not summoner_id:
                         break
                     else:
-                        batch.append(asyncio.create_task(self.logic(session, summoner_id)))
+                        batch.append(
+                            asyncio.create_task(self.logic(session, summoner_id))
+                        )
                 if not batch:
                     await asyncio.sleep(60)
                     continue
@@ -127,7 +131,7 @@ class Service:
         """
         try:
             async with session.get(
-                    url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+                url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
             ) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:

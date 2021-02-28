@@ -7,6 +7,7 @@ import asyncpg
 from aiohttp import web
 import traceback
 
+
 class Server:
     def __init__(self):
         self.db_host = os.environ["DB_HOST"]
@@ -15,14 +16,12 @@ class Server:
         self.last = datetime.now()
         self.cutoff = os.environ["DETAILS_CUTOFF"]
 
-
         self.logging = logging.getLogger("Main")
         level = logging.INFO
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
-
 
         self.data = {}
 
@@ -140,9 +139,7 @@ class Server:
 
 async def main():
     server = Server()
-    await asyncio.gather(
-        server.generate_data()
-    )
+    await asyncio.gather(server.generate_data())
 
 
 if __name__ == "__main__":

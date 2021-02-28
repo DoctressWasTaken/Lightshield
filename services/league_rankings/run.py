@@ -207,6 +207,7 @@ class Service:  # pylint: disable=R0902
             await self.rankmanager.update(key=(tier, division))
         await self.db.close()
 
+
 if __name__ == "__main__":
     service = Service()
     signal.signal(signal.SIGTERM, service.shutdown)

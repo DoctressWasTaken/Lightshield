@@ -3,91 +3,88 @@
 
 This tool provides a fully automated system to permanently mirror the official Riot APIs content
  with your local system. It uses a number of microservices to split requests done to different endpoints
- across separated processes.
+ across separated processes and allows scaling each service according to your current data needs. 
+ This is especially usefull in the early stages of setting up a data repository.
 
-The setup is meant for tasks using alot of match data while not wanting to set up their own data polling.
+The setup is meant for tasks using alot of match data while not wanting to set up their own data pipeline structure.
+Lightshield does currently not pull **all** match details data but only a select subset (for details
+check the SQL schemas in the postgres folder). Changes can be made easily by simply expanding/replacing the service.
 
-Lightshield is optimized to not repeat calls unecessarily. This comes at cost of having data added in a real time fashion.
-*While unlikely services can drop singular datasets on restarts/shutdowns that will not be repeated unless manually forced.*
+Lightshield is optimized to not repeat calls unecessarily. This comes at cost of having data added in a less than
+real time fashion.
  
 ## Structure in Short
 
-![Service](https://raw.githubusercontent.com/LightshieldDotDev/Lightshield/master/Service.png)
+Lightshield handles data through a distributable scalable network of triangular microservice structures.
+All data collected is stored in a dedicated postgres database. Task handling and scalability is provided through a 
+buffering redis database.
 
-Services rely on a standardized structure:
-- Services take input from other services using a Websocket Client that connects to the publishing service.
-- Services each rely on their own redis database for buffering of incoming as well as outgoing tasks. Buffer are limited
-as not to build a major overhead at any point of the service chain.
-- Services use a local SQLite database to hold details on already performed calls/ latest stats. This data is not 
-kept in the Redis database as the in-memory cost would be too high.
-- Services use a centralized Service Class/Worker Class System to perform calls to the API in an asynchronous manner.
-The Service Class handles pulls and pushes to either buffer.
-- All calls are issued through a centralized proxy service, tasked with ratelimiting the requests on client side. 
-- Tasks are published to subscribed services using a websocket server. 
+- Each cluster of services is responsible for a single server and requires an additional proxy for rate limiting and 
+handling of the API key.
+
+Each step of data processing is stored inside the Postgres database from which a single manager service creates tasks.
+Worker services then process the tasks, add data to the db and close the task.
+
 
 ## Requirements
-Lightshield runs on docker-compose meaning that outside of the container system no data is needed.
+Lightshield runs on docker and can either be built through this repository or by pulling the images 
+[directly from DockerHub](https://hub.docker.com/u/lightshield).
+
 
 ## Setup
 
-### I. API Key
-Create a `secrets.env` file in the project folder and add your API key. 
-```.env
-API_KEY=RGAPI-xxx
-```
+### I. Network
 
-### II. Base image & Network
-Build the basic image used by all services:
-```shell script
-docker build -t lightshield_service ./services/base_image/
-```
-Initialize the network used: 
+Initialize the network used to bundle all services together and allow communication: 
 ```shell script
 docker network create lightshield
 ```
+The name can be changed but has to be updated in the compose files as well.
 
-### III. Centralized Postgres
-Calls and services are initiated on a **per server** basis, meaning that server can be added and removed
-as interest in the data exists.
+### II. Database
+Set up a postgres database either locally, in docker (attached to the network) or remotely. The services currently expect
+no password verification as such using a remote postgres library should only be done if you can limit access through other means.
 
-Data collected across **all** services is centralized in a final postgres database.
-Settings for the postgres can be found in the `compose-persistent.yaml`.
-Data is saved in the `data` database.\
-Build and start the postgres db via:
-```shell script
-docker-compose -f compose-persistent.yaml build
-docker-compose -f compose-persistent.yaml up -d
-```
+DB Connection details can be configured through a secrets.env file (template file included).
+
+Lightshield requires the in the postgres folder listed tables to be set up in the specified database under schemas
+corresponding to the server they will contain data for. E.g. pulling data for NA1 means setting up a schema `na1` (lower case)
+with all tables inside said schema.
+
+### III. Centralized Services
+Services included in the `compose-global.yaml` file are centralized and as such do not run per-server.
+This currently mainly includes the redis buffer database which should be started ahead of the other services.
 
 ### IV. Server Specific Structure
-The project uses every container multiple times. For this to work a different `COMPOSE_PROJECT_NAME` has 
-to be set for each server. \
-In adition the currently selected `SERVER` code has to be passed into the command to be passed on into
-the services.\
-**While the `COMPOSE_PROJECT_NAME` can be chosen and changed at will while running the project, the 
-`SERVER` variable has to be kept consistent in spelling (always capital letters) as volumes used by 
-the Redis databases, naming for the SQLite databases and server names in the postgres db all rely on this variable.** \
-Initiate each server chain as follows:
+
+#### IV.0 Proxy
+See the [Proxy Repository](https://github.com/LightshieldDotDev/Lightshield_proxy) for setup description.
+
+#### For docker-compose
+Run docker compose with default parameters. The services require the selected server to be passed into the container via
+the environment variable `SERVER`. In addition make sure to use different project names either through `-p [project name]`
+or through the env variable `COMPOSE_PROJECT_NAME`. This will stop multiple server setups from overwriting one another.
+
 ```shell script
-SERVER=EUW1 COMPOSE_PROJECT_NAME=lightshield_euw1 docker-compose build
+# Build from source
+docker-compose build
+# Or pull from docker hub using TAG to specify the version you want
+TAG=latest docker-compose pull
+# Run either with the -p tag
+SERVER=EUW1 docker-compose -p lightshield_euw1 up -d
+# Or env variable
 SERVER=EUW1 COMPOSE_PROJECT_NAME=lightshield_euw1 docker-compose up -d
 ```
+#### For docker-swarm
+Follow the same guidelines explained for docker-compose. The images can either be built or pulled from DockerHub.
+`SERVER` still needs to be passed into the service.
+The individual project name is passed through the stack name.
+```shell script
+SERVER=EUW1 docker stack deploy -c compose-services.yaml lightshield_euw1
+```
+
 <hr>
 
 ## Config
-Each service takes a number of required arguments:
-#### Default
-`SERVER` contains the selected api server. For the proper codes please refer to the riot api dev website.\
-`WORKER` sets the number of parallel async worker started in the service.\
-`MAX_TASK_BUFFER` sets the maximum number of incoming tasks buffered. *Outgoing tasks are currently not set via env variables.*\
-`REQUIRED_SUBSCRIBER` [Optional] allows to set a number of services needed for the publisher to allow output. 
-Only once all services mentioned are connected the publisher is allowed to broadcast tasks to all connected services.
-*Service names are currently not set via environment variables.*
-
-Services connecting to the postgres database can process host, port and user variables provided for the postgres db.
-The parameters shown below are default parameters used in the services.
-```
-POSTGRES_HOST=postgres
-POSTGRES_PORT=5432
-POSTGRES_USER=db_worker
-```
+In addition to the configs listed in the secrets.env file there are default values used by docker in the .env file
+as well as in the individual compose files (on the services) themselves.

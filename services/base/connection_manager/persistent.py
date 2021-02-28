@@ -5,12 +5,12 @@ import asyncpg
 import traceback
 import logging
 
-class PostgresConnector:
 
-    def __init__(self, user='postgres'):
-        self.host = os.environ['PERSISTENT_HOST']
-        self.port = int(os.environ['PERSISTENT_PORT'])
-        self.db = os.environ['PERSISTENT_DATABASE']
+class PostgresConnector:
+    def __init__(self, user="postgres"):
+        self.host = os.environ["PERSISTENT_HOST"]
+        self.port = int(os.environ["PERSISTENT_PORT"])
+        self.db = os.environ["PERSISTENT_DATABASE"]
         self.user = user
         self.connection = None
         self.prepare = None
@@ -20,9 +20,10 @@ class PostgresConnector:
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
-        handler.setFormatter(logging.Formatter("%(asctime)s [DB Connector] %(message)s"))
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s [DB Connector] %(message)s")
+        )
         self.logging.addHandler(handler)
-
 
     @asynccontextmanager
     async def get_connection(self, exclusive=False):
@@ -31,8 +32,9 @@ class PostgresConnector:
         try:
             if not self.connection or self.connection.is_closed():
                 self.connection = await asyncpg.connect(
-                    "postgresql://%s@%s:%s/%s" % (
-                        self.user, self.host, self.port, self.db))
+                    "postgresql://%s@%s:%s/%s"
+                    % (self.user, self.host, self.port, self.db)
+                )
                 if self.prepare:
                     await self.prepare(self.connection)
             yield self.connection

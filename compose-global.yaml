@@ -24,7 +24,7 @@ services:
     environment:
       - SERVER=NA1,EUW1,KR
     env_file:
-      - secrets.env
+      - secrets_template.env
     ports:
       - 8003:8000
 

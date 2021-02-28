@@ -23,7 +23,7 @@ class Manager:
         handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         self.logging.addHandler(handler)
         self.server = os.environ["SERVER"].lower()
-        self.block_limit = int(os.environ['TASK_BLOCKING'])
+        self.block_limit = int(os.environ["TASK_BLOCKING"])
         self.redis = RedisConnector()
         self.db = PostgresConnector(user=self.server.lower())
 
@@ -41,14 +41,16 @@ class Manager:
         blocked = False
         while not self.stopped:
             # Drop timed out tasks
-            limit = int((datetime.utcnow() - timedelta(minutes=self.block_limit)).timestamp())
+            limit = int(
+                (datetime.utcnow() - timedelta(minutes=self.block_limit)).timestamp()
+            )
             async with self.redis.get_connection() as buffer:
                 await buffer.zremrangebyscore(
                     "%s_summoner_id_in_progress" % self.server, max=limit
                 )
                 # Check remaining buffer size
                 if (
-                        size := await buffer.scard("%s_summoner_id_tasks" % self.server)
+                    size := await buffer.scard("%s_summoner_id_tasks" % self.server)
                 ) >= 1000:
                     await asyncio.sleep(10)
                     continue
@@ -74,16 +76,13 @@ class Manager:
             async with self.redis.get_connection() as buffer:
                 for entry in result:
                     if await buffer.sismember(
-                            "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
+                        "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
                     ):
                         continue
                     await buffer.sadd(
                         "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
                     )
-                    if (
-                            await buffer.scard("%s_summoner_id_tasks" % self.server)
-                            >= 2000
-                    ):
+                    if await buffer.scard("%s_summoner_id_tasks" % self.server) >= 2000:
                         break
                 self.logging.info(
                     "Filled tasks to %s.",
@@ -92,6 +91,7 @@ class Manager:
             await asyncio.sleep(5)
         await self.redis.close()
         await self.db.close()
+
 
 async def main():
     manager = Manager()

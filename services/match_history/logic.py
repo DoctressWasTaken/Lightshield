@@ -13,6 +13,7 @@ from exceptions import RatelimitException, NotFoundException, Non200Exception
 from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
 
+
 class Service:
     """Core service worker object."""
 
@@ -94,12 +95,12 @@ class Service:
 
     async def prepare(self, connection):
         self.insert_query = await connection.prepare(
-                """
+            """
                                 INSERT INTO %s.match (match_id, queue, timestamp)
                                 VALUES ($1, $2, $3)
                                 ON CONFLICT DO NOTHING;
                                 """
-                % self.server.lower()
+            % self.server.lower()
         )
 
     async def get_task(self):

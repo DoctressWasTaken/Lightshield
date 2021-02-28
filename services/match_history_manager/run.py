@@ -90,7 +90,7 @@ class Manager:
                 )
                 # Check remaining buffer size
                 if (
-                        size := await buffer.zcard("%s_match_history_tasks" % self.server)
+                    size := await buffer.zcard("%s_match_history_tasks" % self.server)
                 ) >= 1000:
                     await asyncio.sleep(10)
                     continue
@@ -105,8 +105,8 @@ class Manager:
                 for entry in result:
                     # Each entry will always be refered to by account_id
                     if await buffer.zscore(
-                            "%s_match_history_in_progress" % self.server,
-                            entry["account_id"],
+                        "%s_match_history_in_progress" % self.server,
+                        entry["account_id"],
                     ):
                         continue
                     if full_refreshes:
@@ -114,10 +114,10 @@ class Manager:
                         package = {key: entry[key] for key in ["wins", "losses"]}
                     else:
                         z_index = (
-                                entry["wins"]
-                                + entry["losses"]
-                                - entry["wins_last_updated"]
-                                - entry["losses_last_updated"]
+                            entry["wins"]
+                            + entry["losses"]
+                            - entry["wins_last_updated"]
+                            - entry["losses_last_updated"]
                         )
                         package = {
                             key: entry[key]

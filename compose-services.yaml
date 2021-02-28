@@ -6,46 +6,46 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/base
-    image: lightshield_base_image:latest
+    image: lightshield/base_image:${TAG}
     entrypoint: ['ls']
 
-  league_rankings:
+  league_ranking:
     hostname: league_rankings
     build:
       dockerfile: Dockerfile
       context: services/league_rankings
-    image: lightshield.dev:5000/lightshield_league_rankings:latest
+    image: lightshield/lightshield_league_ranking:${TAG}
     environment:
       - SERVER=${SERVER}
       - UPDATE_INTERVAL=1
       - WORKER=5
     env_file:
-      - secrets.env
+      - secrets_template.env
     restart: always
     volumes:
       - ranking_progress:/project/configs/
 
-  summoner_ids_manager:
+  summoner_id_manager:
     hostname: summoner_ids
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids_manager
-    image: lightshield.dev:5000/lightshield_summoner_ids_manager:latest
+    image: lightshield/lightshield_summoner_id_manager:${TAG}
     environment:
       - SERVER=${SERVER}
     env_file:
-      - secrets.env
+      - secrets_template.env
 
-  summoner_ids: # SI
+  summoner_id: # SI
     hostname: summoner_ids
     build:
       dockerfile: Dockerfile
       context: services/summoner_ids
-    image: lightshield.dev:5000/lightshield_summoner_ids:latest
+    image: lightshield/lightshield_summoner_id:${TAG}
     environment:
       - SERVER=${SERVER}
     env_file:
-      - secrets.env
+      - secrets_template.env
     restart: always
 
   match_history_manager:
@@ -56,48 +56,48 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_history_manager
-    image: lightshield.dev:5000/lightshield_match_history_manager:latest
+    image: lightshield/lightshield_match_history_manager:${TAG}
     env_file:
-      - secrets.env
+      - secrets_template.env
 
   match_history: # MH
     hostname: match_history
     build:
       dockerfile: Dockerfile
       context: services/match_history
-    image: lightshield.dev:5000/lightshield_match_history:latest
+    image: lightshield/lightshield_match_history:${TAG}
     environment:
       - SERVER=${SERVER}
       - QUEUES=420
     restart: always
     env_file:
-      - secrets.env
+      - secrets_template.env
 
   match_details_manager:
     hostname: match_details
     build:
       dockerfile: Dockerfile
       context: services/match_details_manager
-    image: lightshield.dev:5000/lightshield_match_details_manager:latest
+    image: lightshield/lightshield_match_details_manager:${TAG}
     environment:
       - LIMIT=5000
       - SERVER=${SERVER}
     env_file:
-      - secrets.env
+      - secrets_template.env
 
   match_details: # MH
     hostname: match_details
     build:
       dockerfile: Dockerfile
       context: services/match_details
-    image: lightshield.dev:5000/lightshield_match_details:latest
+    image: lightshield/lightshield_match_details:${TAG}
     environment:
       - SERVER=${SERVER}
       - QUEUES=420
       - BATCH_SIZE=30
     restart: always
     env_file:
-      - secrets.env
+      - secrets_template.env
 
 volumes:
   ranking_progress:
