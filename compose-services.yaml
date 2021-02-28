@@ -20,7 +20,7 @@ services:
       - UPDATE_INTERVAL=1
       - WORKER=5
     env_file:
-      - secrets_template.env
+      - secrets.env
     restart: always
     volumes:
       - ranking_progress:/project/configs/
@@ -34,7 +34,7 @@ services:
     environment:
       - SERVER=${SERVER}
     env_file:
-      - secrets_template.env
+      - secrets.env
 
   summoner_id: # SI
     hostname: summoner_ids
@@ -45,7 +45,7 @@ services:
     environment:
       - SERVER=${SERVER}
     env_file:
-      - secrets_template.env
+      - secrets.env
     restart: always
 
   match_history_manager:
@@ -58,7 +58,7 @@ services:
       context: services/match_history_manager
     image: lightshield/lightshield_match_history_manager:${TAG}
     env_file:
-      - secrets_template.env
+      - secrets.env
 
   match_history: # MH
     hostname: match_history
@@ -71,7 +71,7 @@ services:
       - QUEUES=420
     restart: always
     env_file:
-      - secrets_template.env
+      - secrets.env
 
   match_details_manager:
     hostname: match_details
@@ -83,7 +83,7 @@ services:
       - LIMIT=5000
       - SERVER=${SERVER}
     env_file:
-      - secrets_template.env
+      - secrets.env
 
   match_details: # MH
     hostname: match_details
@@ -97,7 +97,7 @@ services:
       - BATCH_SIZE=30
     restart: always
     env_file:
-      - secrets_template.env
+      - secrets.env
 
 volumes:
   ranking_progress:
