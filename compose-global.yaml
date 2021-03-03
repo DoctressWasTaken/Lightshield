@@ -18,8 +18,9 @@ services:
   proxy:
     image: lightshield/proxy:latest
     networks:
-      aliases:
-        - proxy
+      default:
+        aliases:
+          - proxy
     restart: always
     env_file:
       - secrets.env
