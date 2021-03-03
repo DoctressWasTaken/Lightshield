@@ -131,7 +131,7 @@ class Service:
         """
         try:
             async with session.get(
-                url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+                url, proxy="http://proxy:8000"
             ) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:

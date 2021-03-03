@@ -174,7 +174,7 @@ class Service:  # pylint: disable=R0902
         """
         try:
             async with session.get(
-                url, proxy="http://lightshield_proxy_%s:8000" % self.server.lower()
+                url, proxy="http://proxy:8000"
             ) as response:
                 await response.text()
                 if response.status == 429:
