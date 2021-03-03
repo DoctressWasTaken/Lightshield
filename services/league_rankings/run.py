@@ -173,9 +173,7 @@ class Service:  # pylint: disable=R0902
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(
-                url, proxy="http://proxy:8000"
-            ) as response:
+            async with session.get(url, proxy="http://proxy:8000") as response:
                 await response.text()
                 if response.status == 429:
                     self.logging.info(429)
