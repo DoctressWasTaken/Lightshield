@@ -30,6 +30,7 @@ class Service:
             logging.Formatter("%(asctime)s [MatchHistory] %(message)s")
         )
         self.logging.addHandler(handler)
+        self.proxy = os.environ["PROXY_URL"]
         self.server = os.environ["SERVER"]
 
         self.redis = RedisConnector()
@@ -240,7 +241,7 @@ class Service:
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy="http://proxy:8000") as response:
+            async with session.get(url, proxy=self.proxy) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
