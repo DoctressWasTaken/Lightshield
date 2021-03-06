@@ -44,6 +44,7 @@ class Service:  # pylint: disable=R0902
         handler.setFormatter(logging.Formatter("%(asctime)s [Subscriber] %(message)s"))
         self.logging.addHandler(handler)
 
+        self.proxy = os.environ["PROXY_URL"]
         self.server = os.environ["SERVER"]
         self.db = PostgresConnector(user=self.server.lower())
 
@@ -173,7 +174,7 @@ class Service:  # pylint: disable=R0902
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy="http://proxy:8000") as response:
+            async with session.get(url, proxy=self.proxy) as response:
                 await response.text()
                 if response.status == 429:
                     self.logging.info(429)

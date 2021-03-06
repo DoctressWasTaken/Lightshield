@@ -37,6 +37,7 @@ class Service:
         self.rune_ids = get_ids()
         self.rune_tree = get_trees()
 
+        self.proxy = os.environ["PROXY_URL"]
         self.server = os.environ["SERVER"]
         self.batch_size = int(os.environ["BATCH_SIZE"])
 
@@ -346,7 +347,7 @@ class Service:
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy="http://proxy:8000") as response:
+            async with session.get(url, proxy=self.proxy) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
