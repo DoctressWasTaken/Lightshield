@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS participant
+CREATE TABLE IF NOT EXISTS kr.participant
 (
     match_id                     BIGINT,
     timestamp                    TIMESTAMP,
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS participant
     PRIMARY KEY (match_id, participant_id)
 );
 
-CREATE INDEX ON participant (summoner_id);
-CREATE INDEX ON participant (rune_main_tree, rune_sec_tree);
-CREATE INDEX ON participant (champ_id);
-CREATE INDEX ON participant (timestamp);
+CREATE INDEX ON kr.participant (summoner_id);
+CREATE INDEX ON kr.participant (rune_main_tree, rune_sec_tree);
+CREATE INDEX ON kr.participant (champ_id);
+CREATE INDEX ON kr.participant (timestamp);

@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS match
+CREATE TABLE IF NOT EXISTS kr.match
 (
     match_id        BIGINT PRIMARY KEY,
     queue           SMALLINT,
@@ -7,4 +7,4 @@ CREATE TABLE IF NOT EXISTS match
     win             BOOLEAN  DEFAULT NULL, -- False: Blue | True: Red
     details_pulled  BOOLEAN,
     timeline_pulled BOOLEAN
-)
+);

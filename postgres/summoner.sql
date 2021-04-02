@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS summoner
+CREATE TABLE IF NOT EXISTS kr.summoner
 (
 
     summoner_id         VARCHAR(63) PRIMARY KEY,

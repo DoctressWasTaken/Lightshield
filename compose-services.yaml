@@ -10,10 +10,10 @@ services:
     entrypoint: [ 'ls' ]
 
   league_ranking:
-    hostname: league_rankings
+    hostname: league_ranking
     build:
       dockerfile: Dockerfile
-      context: services/league_rankings
+      context: services/league_ranking
       args:
         TAG: ${TAG}
     image: lightshield/league_ranking:${TAG}
@@ -28,10 +28,10 @@ services:
       - ranking_progress:/project/configs/
 
   summoner_id_manager:
-    hostname: summoner_ids
+    hostname: summoner_id
     build:
       dockerfile: Dockerfile
-      context: services/summoner_ids_manager
+      context: services/summoner_id_manager
       args:
         TAG: ${TAG}
     image: lightshield/summoner_id_manager:${TAG}
@@ -41,10 +41,10 @@ services:
       - secrets.env
 
   summoner_id: # SI
-    hostname: summoner_ids
+    hostname: summoner_id
     build:
       dockerfile: Dockerfile
-      context: services/summoner_ids
+      context: services/summoner_id
       args:
         TAG: ${TAG}
     image: lightshield/summoner_id:${TAG}

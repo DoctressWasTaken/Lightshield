@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS team
+CREATE TABLE IF NOT EXISTS kr.team
 (
     match_id          BIGINT,
     timestamp         TIMESTAMP,
@@ -22,4 +22,4 @@ CREATE TABLE IF NOT EXISTS team
     PRIMARY KEY (match_id, side)
 );
 
-CREATE INDEX ON team (timestamp);
+CREATE INDEX ON kr.team (timestamp);
