@@ -92,6 +92,9 @@ The individual project name is passed through the stack name.
 ```shell script
 SERVER=EUW1 docker stack deploy -c compose-services.yaml lightshield_euw1
 ```
+The compose file includes the base_image service which is just a unified default image for all other services. As such
+this isn't an actual runnable service and would usually just immediatly exit when run in docker-compose. Swarm however tries
+to rebuild and restart the service continuously as such you need to manually remove it from the stack to avoid that.
 
 <hr>
 
