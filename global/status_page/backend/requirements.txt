@@ -1,4 +1,0 @@
-asyncpg
-uvloop
-aiohttp
-gunicorn
