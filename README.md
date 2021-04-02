@@ -111,7 +111,7 @@ The manager service looks at both lists to determine if it should add a new task
   therefore making space for new tasks. As this is the only way tasks are being removed make sure to keep the limit just high enough
   to assure that tasks currently being worked on are not removed while not having the queue overflow with already done tasks.
   
-###Services
+### Services
 
 #### League Ranking
 Uses the league-exp endpoint to crawl all ranked user in a continuous circle. This service has no manager and only requires a one-off.
