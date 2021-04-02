@@ -33,6 +33,9 @@ Lightshield runs on docker and can either be built through this repository or by
 
 ## Setup
 
+### Env variables
+Copy and rename the included secrets_template.env into secrets.env
+
 ### I. Network
 
 Initialize the network used to bundle all services together and allow communication: 
@@ -40,6 +43,7 @@ Initialize the network used to bundle all services together and allow communicat
 docker network create lightshield
 ```
 The name can be changed but has to be updated in the compose files as well.
+If you are planning on running it through docker swarm use the appropriate network type.
 
 ### II. Database
 Set up a postgres database either locally, in docker (attached to the network) or remotely. The services currently expect
@@ -47,18 +51,24 @@ no password verification as such using a remote postgres library should only be 
 
 DB Connection details can be configured through a secrets.env file (template file included).
 
-Lightshield requires the in the postgres folder listed tables to be set up in the specified database under schemas
-corresponding to the server they will contain data for. E.g. pulling data for NA1 means setting up a schema `na1` (lower case)
-with all tables inside said schema.
+Lightshield requires the in the postgres/ folder listed tables to be set up in the specified database under schemas
+corresponding to the server they will contain data for. E.g. pulling data for NA1 requires setting up a schema `na1` (lower case)
+with all tables inside said schema as well as a user `na1` which will be used to pull data from said schema.
 
 ### III. Centralized Services
-Services included in the `compose-global.yaml` file are centralized and as such do not run per-server.
-This currently mainly includes the redis buffer database which should be started ahead of the other services.
+Services included in the `compose-global.yaml` file are meant to be run centralized meaning they run server-agnostic (usually as a one-off).
+Currently this refers to the proxy service as well as the buffer redis db.
+Start the services by properly refering to the compose file:
+```shell
+# Pull (specify a tag if needed, defaults to latest)
+TAG=latest docker-compose -f compose-global.yaml pull
+# Or build
+docker-compose -f compose-global.yaml build
+# And then run
+docker-compose -f compose-global.yaml up -d
+```
 
 ### IV. Server Specific Structure
-
-#### IV.0 Proxy
-See the [Proxy Repository](https://github.com/LightshieldDotDev/Lightshield_proxy) for setup description.
 
 #### For docker-compose
 Run docker compose with default parameters. The services require the selected server to be passed into the container via
@@ -68,7 +78,7 @@ or through the env variable `COMPOSE_PROJECT_NAME`. This will stop multiple serv
 ```shell script
 # Build from source
 docker-compose build
-# Or pull from docker hub using TAG to specify the version you want
+# Or pull from docker hub (specify a tag if needed, defaults to latest)
 TAG=latest docker-compose pull
 # Run either with the -p tag
 SERVER=EUW1 docker-compose -p lightshield_euw1 up -d
@@ -85,6 +95,44 @@ SERVER=EUW1 docker stack deploy -c compose-services.yaml lightshield_euw1
 
 <hr>
 
-## Config
-In addition to the configs listed in the secrets.env file there are default values used by docker in the .env file
-as well as in the individual compose files (on the services) themselves.
+## Functionality
+
+Services are structured in general in a triangular form using the persistent postgres DB as source of truth,
+a singular non-scalable manager to select new tasks and a scalable amount of microservices to work through those tasks.
+
+2 lists are used to buffer tasks:
+- A list of non-selected tasks that are yet to be worked on.
+- A list of selected tasks that are being or have been work on  
+The manager service looks at both lists to determine if it should add a new task to the first non-selected task list.
+  Each worker service pulls tasks from the first list and adds them to the secondary list. Tasks are never marked as done
+  as the tasks are by default no longer eligible once inserted in the DB, e.g. if a summonerId has to be pulled then the manager
+  will only select accounts without summonerId as tasks. Once the summonerId is added it will automatically be ineligible.
+  All tasks that are older than `TASK_BLOCKING` (secrets.env) minutes in the secondary selected list are periodically removed by the manager
+  therefore making space for new tasks. As this is the only way tasks are being removed make sure to keep the limit just high enough
+  to assure that tasks currently being worked on are not removed while not having the queue overflow with already done tasks.
+  
+###Services
+
+#### League Ranking
+Uses the league-exp endpoint to crawl all ranked user in a continuous circle. This service has no manager and only requires a one-off.
+via the `UPDATE_INTERVAL=1` variable in the compose file you can limit the delay between cycles in hours. By default after finishing
+with challenger the service will wait 1 hour to restart on Iron games.
+
+### Summoner ID
+Using the summoner endpoint pulls the remaining IDs for each account that were not included in the league ranking response.
+This is a one time tasks for each user but it will take alot of initial requests until all are done.
+
+### Match History
+Pull and update the match history of user. Prioritizes user for which no calls have been made so far and, once all user have
+had their history pulled user that have had the most soloQ matches played since their last update.
+Use the `MIN_MATCHES=20` variable to limit how many new matches a player has to play to even be considered for an update.
+Because for each match 10 match-history are updated one should consider keeping this number high as to not make 10 match history
+calls per new match. Setting it to 10 or 20 means that for each match played on average only 1 or .5 calls have to be made.
+
+### Match Details
+Pull match details for a buffered match_id. This service pulls match details and adds a select number of attributes to the DB 
+(check the SQL files for more info). If more/less data is needed you have to update the service + db schema accordingly.
+Matches are pulled newest to oldest and are not pulled  for matches older than defined through `DETAILS_CUTOFF` (secrets.env).
+
+### Match History
+Currently not implemented, WIP.
