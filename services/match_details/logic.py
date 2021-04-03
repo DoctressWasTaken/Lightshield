@@ -1,18 +1,17 @@
 """Match History updater. Pulls matchlists for all player."""
 import asyncio
+import json
 import logging
 import os
 import traceback
 from datetime import datetime, timedelta
 
 import aiohttp
-import aioredis
-import asyncpg
-from exceptions import RatelimitException, NotFoundException, Non200Exception
-from helper import format_queue
-from runes import get_ids, get_trees
 from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
+from exceptions import RatelimitException, NotFoundException, Non200Exception
+
+from runes import get_ids, get_trees
 
 shard_id = {5001: 1, 5002: 2, 5003: 3, 5005: 2, 5007: 3, 5008: 1}
 
@@ -48,8 +47,8 @@ class Service:
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-            f"http://{self.server.lower()}.api.riotgames.com/lol/"
-            + "match/v4/matches/%s"
+                f"http://{self.server.lower()}.api.riotgames.com/lol/"
+                + "match/v4/matches/%s"
         )
 
         self.buffered_elements = (
@@ -63,50 +62,13 @@ class Service:
         self.stopped = True
 
     async def prepare(self, conn):
-        template = (
-            """
-                        INSERT INTO %s.team
-                            (match_id, timestamp, win, side, bans, tower_kills, inhibitor_kills,
-                             first_tower, first_rift_herald, first_dragon, first_baron, 
-                             rift_herald_kills, dragon_kills, baron_kills)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-                        ON CONFLICT DO NOTHING;
-                        """
-            % self.server.lower()
-        )
-        self.team_insert = await conn.prepare(template)
-
-        template = (
-            """
-                                        INSERT INTO %s.participant
-                        (match_id, timestamp, win, participant_id, summoner_id, summoner_spell,
-                         rune_main_tree, rune_sec_tree, rune_main_select,
-                         rune_sec_select,  -- 10
-                         rune_shards, item, trinket, champ_level, champ_id, kills, deaths, assists, gold_earned,
-                         neutral_minions_killed, neutral_minions_killed_enemy, 
-                         neutral_minions_killed_team, total_minions_killed, 
-                         vision_score, vision_wards_bought, wards_placed,
-                         wards_killed, physical_taken, magical_taken, true_taken, 
-                         damage_mitigated, physical_dealt, magical_dealt, 
-                         true_dealt, turret_dealt, objective_dealt, total_heal,
-                         total_units_healed, time_cc_others, total_cc_dealt)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                                $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-                                $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-                                $31,$32,$33,$34,$35,$36,$37,$38, $39, $40)
-                        ON CONFLICT DO NOTHING
-                        """
-            % self.server.lower()
-        )
-        self.participant_insert = await conn.prepare(template)
-
         self.match_update = await conn.prepare(
             """
         UPDATE %s.match
             SET duration = $1,
                 win = $2,
-                details_pulled = TRUE
-            WHERE match_id = $3
+                details = $3
+            WHERE match_id = $4
         """
             % self.server.lower()
         )
@@ -114,29 +76,9 @@ class Service:
     async def flush_manager(self, match_details):
         """Update entries in postgres once enough tasks are done."""
         try:
-            match_ids = []
-            for match in match_details:
-                match_ids.append(match[0])
-
-            async with self.db.get_connection() as db:
-                existing_ids = [
-                    match["match_id"]
-                    for match in await db.fetch(
-                        """
-                    SELECT DISTINCT match_id
-                    FROM %s.team
-                    WHERE match_id IN (%s);
-                    """
-                        % (self.server.lower(), ",".join(match_ids))
-                    )
-                ]
-            team_sets = []
-            participant_sets = []
             update_sets = []
             for match in match_details:
                 if not match[1]:
-                    continue
-                if match[0] in existing_ids:
                     continue
                 details = match[1]
                 # Team Details
@@ -144,122 +86,10 @@ class Service:
                     (
                         details["gameDuration"],
                         details["teams"][0]["win"] == "Win",
-                        int(match[0]),
+                        json.dumps(details),
+                        int(match[0])
                     )
                 )
-                for team in details["teams"]:
-                    bans = [ban["championId"] for ban in team["bans"]]
-                    team_sets.append(
-                        (
-                            int(match[0]),
-                            datetime.fromtimestamp(details["gameCreation"] // 1000),
-                            team["win"] == "Win",
-                            team["teamId"] == 200,
-                            bans,
-                            team["towerKills"],
-                            team["inhibitorKills"],
-                            team["firstTower"],
-                            team["firstRiftHerald"],
-                            team["firstDragon"],
-                            team["firstBaron"],
-                            team["riftHeraldKills"],
-                            team["dragonKills"],
-                            team["baronKills"],
-                        )
-                    )
-                participants = {}
-                for entry in details["participants"]:
-                    participants[entry["participantId"]] = entry
-                for entry in details["participantIdentities"]:
-                    participants[entry["participantId"]].update(entry)
-
-                for participant in participants.values():
-                    try:
-                        participant_sets.append(
-                            (
-                                int(match[0]),
-                                datetime.fromtimestamp(details["gameCreation"] // 1000),
-                                details["teams"][participant["participantId"] // 6][
-                                    "win"
-                                ]
-                                == "Win",
-                                participant["participantId"],
-                                participant["player"]["summonerId"],
-                                [participant["spell1Id"], participant["spell2Id"]],
-                                self.rune_tree[participant["stats"]["perk0"]],
-                                self.rune_tree[participant["stats"]["perk4"]],
-                                self.rune_ids[participant["stats"]["perk0"]]
-                                + self.rune_ids[participant["stats"]["perk1"]]
-                                + self.rune_ids[participant["stats"]["perk2"]]
-                                + self.rune_ids[participant["stats"]["perk3"]],
-                                self.rune_ids[participant["stats"]["perk4"]]
-                                + self.rune_ids[participant["stats"]["perk5"]],
-                                shard_id[participant["stats"]["statPerk0"]] * 100
-                                + shard_id[participant["stats"]["statPerk1"]] * 10
-                                + shard_id[participant["stats"]["statPerk2"]],
-                                [
-                                    participant["stats"]["item0"],
-                                    participant["stats"]["item1"],
-                                    participant["stats"]["item2"],
-                                    participant["stats"]["item3"],
-                                    participant["stats"]["item4"],
-                                    participant["stats"]["item5"],
-                                ],
-                                participant["stats"]["item6"],
-                                participant["stats"]["champLevel"],
-                                participant["championId"],
-                                participant["stats"]["kills"],
-                                participant["stats"]["deaths"],
-                                participant["stats"]["assists"],
-                                participant["stats"]["goldEarned"],
-                                participant["stats"]["neutralMinionsKilled"],
-                                participant["stats"]["neutralMinionsKilledEnemyJungle"],
-                                participant["stats"]["neutralMinionsKilledTeamJungle"],
-                                participant["stats"]["totalMinionsKilled"],
-                                participant["stats"]["visionScore"],
-                                participant["stats"]["visionWardsBoughtInGame"],
-                                participant["stats"]["wardsPlaced"],
-                                participant["stats"]["wardsKilled"],
-                                participant["stats"]["physicalDamageTaken"],
-                                participant["stats"]["magicalDamageTaken"],
-                                participant["stats"]["trueDamageTaken"],
-                                participant["stats"]["damageSelfMitigated"],
-                                participant["stats"]["physicalDamageDealtToChampions"],
-                                participant["stats"]["magicDamageDealtToChampions"],
-                                participant["stats"]["trueDamageDealtToChampions"],
-                                participant["stats"]["damageDealtToTurrets"],
-                                participant["stats"]["damageDealtToObjectives"],
-                                participant["stats"]["totalHeal"],
-                                participant["stats"]["totalUnitsHealed"],
-                                participant["stats"]["timeCCingOthers"],
-                                participant["stats"]["totalTimeCrowdControlDealt"],
-                            )
-                        )
-                    except Exception as err:
-                        self.logging.info(int(match[0]))
-                        raise err
-            if team_sets:
-                lines = []
-                async with self.db.get_connection() as db:
-                    await self.team_insert.executemany(team_sets)
-
-            if participant_sets:
-                template = await format_queue(participant_sets[0])
-                lines = []
-                for line in participant_sets:
-                    lines.append(
-                        template
-                        % tuple(
-                            [
-                                str(param) if type(param) in (list, bool) else param
-                                for param in line
-                            ]
-                        )
-                    )
-                values = ",".join(lines)
-                async with self.db.get_connection() as db:
-                    await self.participant_insert.executemany(participant_sets)
-
             if update_sets:
                 async with self.db.get_connection() as db:
                     await self.match_update.executemany(update_sets)
@@ -273,9 +103,9 @@ class Service:
         """Return tasks to the async worker."""
         async with self.redis.get_connection() as buffer:
             if not (
-                tasks := await buffer.spop(
-                    "%s_match_details_tasks" % self.server, self.batch_size
-                )
+                    tasks := await buffer.spop(
+                        "%s_match_details_tasks" % self.server, self.batch_size
+                    )
             ):
                 return tasks
             if self.stopped:
