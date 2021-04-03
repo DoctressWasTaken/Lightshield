@@ -50,7 +50,7 @@ class Manager:
                 """
                 SELECT match_id
                 FROM %s.match
-                WHERE details IS NULL
+                WHERE details_pulled IS NULL
                 AND DATE(timestamp) >= %s
                 ORDER BY timestamp DESC
                 LIMIT $1;
