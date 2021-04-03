@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS kr.match
+CREATE TABLE IF NOT EXISTS euw1.match
 (
     match_id  BIGINT PRIMARY KEY,
     queue     SMALLINT,

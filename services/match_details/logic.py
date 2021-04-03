@@ -47,8 +47,8 @@ class Service:
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-                f"http://{self.server.lower()}.api.riotgames.com/lol/"
-                + "match/v4/matches/%s"
+            f"http://{self.server.lower()}.api.riotgames.com/lol/"
+            + "match/v4/matches/%s"
         )
 
         self.buffered_elements = (
@@ -87,7 +87,7 @@ class Service:
                         details["gameDuration"],
                         details["teams"][0]["win"] == "Win",
                         json.dumps(details),
-                        int(match[0])
+                        int(match[0]),
                     )
                 )
             if update_sets:
@@ -103,9 +103,9 @@ class Service:
         """Return tasks to the async worker."""
         async with self.redis.get_connection() as buffer:
             if not (
-                    tasks := await buffer.spop(
-                        "%s_match_details_tasks" % self.server, self.batch_size
-                    )
+                tasks := await buffer.spop(
+                    "%s_match_details_tasks" % self.server, self.batch_size
+                )
             ):
                 return tasks
             if self.stopped:

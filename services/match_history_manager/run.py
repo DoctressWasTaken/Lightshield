@@ -51,6 +51,7 @@ class Manager:
                                     FROM %s.summoner
                                     WHERE wins_last_updated IS NULL 
                                     AND account_id IS NOT NULL
+                                    ORDER BY (wins + losses) DESC
                                     LIMIT 2000;
                                     """
                 % self.server.lower()
