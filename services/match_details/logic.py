@@ -11,6 +11,7 @@ from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 
+
 class Service:
     """Core service worker object."""
 

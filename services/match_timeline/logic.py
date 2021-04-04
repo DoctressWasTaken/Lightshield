@@ -11,10 +11,6 @@ from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 
-from runes import get_ids, get_trees
-
-shard_id = {5001: 1, 5002: 2, 5003: 3, 5005: 2, 5007: 3, 5008: 1}
-
 
 class Service:
     """Core service worker object."""
@@ -23,18 +19,15 @@ class Service:
 
     def __init__(self):
         """Initiate sync elements on creation."""
-        self.logging = logging.getLogger("MatchDetails")
+        self.logging = logging.getLogger("MatchTimeline")
         level = logging.INFO
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(
-            logging.Formatter("%(asctime)s [MatchDetails] %(message)s")
+            logging.Formatter("%(asctime)s [MatchTimeline] %(message)s")
         )
         self.logging.addHandler(handler)
-
-        self.rune_ids = get_ids()
-        self.rune_tree = get_trees()
 
         self.proxy = os.environ["PROXY_URL"]
         self.server = os.environ["SERVER"]
@@ -48,7 +41,7 @@ class Service:
         self.retry_after = datetime.now()
         self.url = (
             f"http://{self.server.lower()}.api.riotgames.com/lol/"
-            + "match/v4/matches/%s"
+            + "match/v4/timelines/by-match/%s"
         )
 
         self.buffered_elements = (
@@ -65,9 +58,7 @@ class Service:
         self.match_update = await conn.prepare(
             """
         UPDATE %s.match
-            SET duration = $1,
-                win = $2,
-                details = $3
+            SET timeline = $3
             WHERE match_id = $4
         """
             % self.server.lower()
@@ -84,8 +75,6 @@ class Service:
                 # Team Details
                 update_sets.append(
                     (
-                        details["gameDuration"],
-                        details["teams"][0]["win"] == "Win",
                         json.dumps(details),
                         int(match[0]),
                     )

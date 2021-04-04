@@ -40,7 +40,7 @@ services:
     env_file:
       - secrets.env
 
-  summoner_id: # SI
+  summoner_id:
     hostname: summoner_id
     build:
       dockerfile: Dockerfile
@@ -68,7 +68,7 @@ services:
     env_file:
       - secrets.env
 
-  match_history: # MH
+  match_history:
     hostname: match_history
     build:
       dockerfile: Dockerfile
@@ -84,7 +84,7 @@ services:
       - secrets.env
 
   match_details_manager:
-    hostname: match_details
+    hostname: match_details_manager
     build:
       dockerfile: Dockerfile
       context: services/match_details_manager
@@ -97,7 +97,7 @@ services:
     env_file:
       - secrets.env
 
-  match_details: # MH
+  match_details:
     hostname: match_details
     build:
       dockerfile: Dockerfile
@@ -105,6 +105,35 @@ services:
       args:
         TAG: ${TAG}
     image: lightshield/match_details:${TAG}
+    environment:
+      - SERVER=${SERVER}
+      - BATCH_SIZE=30
+    restart: always
+    env_file:
+      - secrets.env
+
+  match_timeline_manager:
+    hostname: match_timeline_manager
+    build:
+      dockerfile: Dockerfile
+      context: services/match_timeline_manager
+      args:
+        TAG: ${TAG}
+    image: lightshield/match_timeline_manager:${TAG}
+    environment:
+      - LIMIT=5000
+      - SERVER=${SERVER}
+    env_file:
+      - secrets.env
+
+  match_timeline:
+    hostname: match_timeline
+    build:
+      dockerfile: Dockerfile
+      context: services/match_timeline
+      args:
+        TAG: ${TAG}
+    image: lightshield/match_timeline:${TAG}
     environment:
       - SERVER=${SERVER}
       - BATCH_SIZE=30
@@ -120,33 +149,3 @@ networks:
   default:
     external:
       name: lightshield
-
-x-disabled:
-  match_details_manager:
-    hostname: match_details
-    build:
-      dockerfile: Dockerfile
-      context: services/match_details_manager
-      args:
-        TAG: ${TAG}
-    image: lightshield/match_details_manager:${TAG}
-    environment:
-      - LIMIT=5000
-      - SERVER=${SERVER}
-    env_file:
-      - secrets.env
-
-  match_details: # MH
-    hostname: match_details
-    build:
-      dockerfile: Dockerfile
-      context: services/match_details
-      args:
-        TAG: ${TAG}
-    image: lightshield/match_details:${TAG}
-    environment:
-      - SERVER=${SERVER}
-      - BATCH_SIZE=30
-    restart: always
-    env_file:
-      - secrets.env
