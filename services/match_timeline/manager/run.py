@@ -70,7 +70,7 @@ class Manager:
                 # Drop timed out tasks
                 limit = int(
                     (
-                            datetime.utcnow() - timedelta(minutes=self.block_limit)
+                        datetime.utcnow() - timedelta(minutes=self.block_limit)
                     ).timestamp()
                 )
                 async with self.redis.get_connection() as buffer:
@@ -79,9 +79,9 @@ class Manager:
                     )
                     # Check remaining buffer size
                     if (
-                            size := await buffer.scard(
-                                "%s_match_timeline_tasks" % self.server
-                            )
+                        size := await buffer.scard(
+                            "%s_match_timeline_tasks" % self.server
+                        )
                     ) >= self.limit:
                         await asyncio.sleep(10)
                         continue
@@ -102,8 +102,8 @@ class Manager:
                     for entry in result:
                         # Each entry will always be refered to by account_id
                         if await buffer.zscore(
-                                "%s_match_timeline_in_progress" % self.server,
-                                entry["match_id"],
+                            "%s_match_timeline_in_progress" % self.server,
+                            entry["match_id"],
                         ):
                             continue
                         # Insert task hook

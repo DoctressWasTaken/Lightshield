@@ -150,7 +150,7 @@ services:
         TAG: ${TAG}
     image: lightshield/roleml_standalone:${TAG}
     environment:
-      - BATCH_SIZE=100
+      - BATCH_SIZE=2000
       - SERVER=${SERVER}
     env_file:
       - secrets.env

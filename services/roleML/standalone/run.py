@@ -84,10 +84,12 @@ class Manager:
                     try:
                         results.append(
                             [
-                                json.dumps(roleml.predict(
-                                    json.loads(task["details"]),
-                                    json.loads(task["timeline"]),
-                                )),
+                                json.dumps(
+                                    roleml.predict(
+                                        json.loads(task["details"]),
+                                        json.loads(task["timeline"]),
+                                    )
+                                ),
                                 task["match_id"],
                             ]
                         )
