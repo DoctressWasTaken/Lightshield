@@ -52,7 +52,7 @@ class Manager:
                 FROM %s.match
                 WHERE details IS NULL
                 AND DATE(timestamp) >= %s
-                ORDER BY timestamp DESC
+                ORDER BY CASE WHEN timeline IS NOT NULL THEN 1 ELSE 0 END DESC, timestamp DESC
                 LIMIT $1;
                 """
                 % (self.server.lower(), self.details_cutoff),
@@ -70,7 +70,7 @@ class Manager:
                 # Drop timed out tasks
                 limit = int(
                     (
-                        datetime.utcnow() - timedelta(minutes=self.block_limit)
+                            datetime.utcnow() - timedelta(minutes=self.block_limit)
                     ).timestamp()
                 )
                 async with self.redis.get_connection() as buffer:
@@ -79,9 +79,9 @@ class Manager:
                     )
                     # Check remaining buffer size
                     if (
-                        size := await buffer.scard(
-                            "%s_match_details_tasks" % self.server
-                        )
+                            size := await buffer.scard(
+                                "%s_match_details_tasks" % self.server
+                            )
                     ) >= self.limit:
                         await asyncio.sleep(10)
                         continue
@@ -102,8 +102,8 @@ class Manager:
                     for entry in result:
                         # Each entry will always be refered to by account_id
                         if await buffer.zscore(
-                            "%s_match_details_in_progress" % self.server,
-                            entry["match_id"],
+                                "%s_match_details_in_progress" % self.server,
+                                entry["match_id"],
                         ):
                             continue
                         # Insert task hook

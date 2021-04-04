@@ -22,7 +22,7 @@ class Manager:
         handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         self.logging.addHandler(handler)
         self.server = os.environ["SERVER"]
-        self.batchsize = os.environ["BATCH_SIZE"]
+        self.batchsize = int(os.environ["BATCH_SIZE"])
         self.db = PostgresConnector(user=self.server.lower())
         self.allowed_queues = queues
 
@@ -49,28 +49,30 @@ class Manager:
                 AND duration >= 60 * 12
                 LIMIT $1;
                 """
-                % (self.server.lower(),
-                   ",".join(self.allowed_queues)),
+                % (self.server.lower(), ",".join(self.allowed_queues)),
                 self.batchsize,
             )
-            self.logging.info("Found %s tasks." % len(tasks))
             return tasks
 
     async def update_db(self, results):
         """Update matches in the db."""
         async with self.db.get_connection() as db:
-            await db.executemany("""
+            await db.executemany(
+                """
                 UPDATE  %s.match
                 SET roleml = $1
                 WHERE match_id = $2
-            """ % self.server.lower(), results)
+            """
+                % self.server.lower(),
+                results,
+            )
 
     async def run(self):
         empty = False
         try:
             while not self.stopped:
                 tasks = await self.get_tasks()
-                if not tasks:
+                if len(tasks) == 0:
                     if not empty:
                         self.logging.info("Found no tasks, Sleeping")
                         empty = True
@@ -81,10 +83,16 @@ class Manager:
                 for task in tasks:
                     try:
                         results.append(
-                            [roleml.predict(json.loads(task['details']), json.loads(task['timeline'])),
-                             task['match_id'], ])
+                            [
+                                json.dumps(roleml.predict(
+                                    json.loads(task["details"]),
+                                    json.loads(task["timeline"]),
+                                )),
+                                task["match_id"],
+                            ]
+                        )
                     except (IncorrectMap, MatchTooShort):
-                        results.append([{}, task['match_id']])
+                        results.append(["{}", task["match_id"]])
                 await self.update_db(results)
                 self.logging.info("Predicted %s matches.", len(results))
                 await asyncio.sleep(5)
@@ -96,11 +104,11 @@ class Manager:
 
 async def main():
     allowed_queues = []
-    with open('queues.json', 'r') as queue_file:
+    with open("queues.json", "r") as queue_file:
         queues = json.loads(queue_file.read())
         for queue in queues:
-            if queue['map'] == "Summoner's Rift":
-                allowed_queues.append(queue['queueId'])
+            if queue["map"] == "Summoner's Rift":
+                allowed_queues.append(str(queue["queueId"]))
     manager = Manager(allowed_queues)
 
     def shutdown_handler():
