@@ -13,7 +13,7 @@ services:
     hostname: league_ranking
     build:
       dockerfile: Dockerfile
-      context: services/league_ranking
+      context: services/league_ranking/standalone
       args:
         TAG: ${TAG}
     image: lightshield/league_ranking:${TAG}
@@ -31,7 +31,7 @@ services:
     hostname: summoner_id
     build:
       dockerfile: Dockerfile
-      context: services/summoner_id_manager
+      context: services/summoner_id/manager
       args:
         TAG: ${TAG}
     image: lightshield/summoner_id_manager:${TAG}
@@ -44,7 +44,7 @@ services:
     hostname: summoner_id
     build:
       dockerfile: Dockerfile
-      context: services/summoner_id
+      context: services/summoner_id/worker
       args:
         TAG: ${TAG}
     image: lightshield/summoner_id:${TAG}
@@ -61,7 +61,7 @@ services:
       - SERVER=${SERVER}
     build:
       dockerfile: Dockerfile
-      context: services/match_history_manager
+      context: services/match_history/manager
       args:
         TAG: ${TAG}
     image: lightshield/match_history_manager:${TAG}
@@ -72,7 +72,7 @@ services:
     hostname: match_history
     build:
       dockerfile: Dockerfile
-      context: services/match_history
+      context: services/match_history/worker
       args:
         TAG: ${TAG}
     image: lightshield/match_history:${TAG}
@@ -87,7 +87,7 @@ services:
     hostname: match_details_manager
     build:
       dockerfile: Dockerfile
-      context: services/match_details_manager
+      context: services/match_details/manager
       args:
         TAG: ${TAG}
     image: lightshield/match_details_manager:${TAG}
@@ -101,7 +101,7 @@ services:
     hostname: match_details
     build:
       dockerfile: Dockerfile
-      context: services/match_details
+      context: services/match_details/worker
       args:
         TAG: ${TAG}
     image: lightshield/match_details:${TAG}
@@ -116,7 +116,7 @@ services:
     hostname: match_timeline_manager
     build:
       dockerfile: Dockerfile
-      context: services/match_timeline_manager
+      context: services/match_timeline/manager
       args:
         TAG: ${TAG}
     image: lightshield/match_timeline_manager:${TAG}
@@ -130,7 +130,7 @@ services:
     hostname: match_timeline
     build:
       dockerfile: Dockerfile
-      context: services/match_timeline
+      context: services/match_timeline/worker
       args:
         TAG: ${TAG}
     image: lightshield/match_timeline:${TAG}
@@ -140,6 +140,21 @@ services:
     restart: always
     env_file:
       - secrets.env
+
+  roleml_standalone:
+    hostname: roleml_standalone
+    build:
+      dockerfile: Dockerfile
+      context: services/roleML/standalone
+      args:
+        TAG: ${TAG}
+    image: lightshield/roleml_standalone:${TAG}
+    environment:
+      - BATCH_SIZE=30
+      - SERVER=${SERVER}
+    env_file:
+      - secrets.env
+
 
 volumes:
   ranking_progress:

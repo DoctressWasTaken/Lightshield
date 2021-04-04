@@ -58,31 +58,31 @@ class Service:
         self.match_update = await conn.prepare(
             """
         UPDATE %s.match
-            SET timeline = $3
-            WHERE match_id = $4
+            SET timeline = $1
+            WHERE match_id = $2
         """
             % self.server.lower()
         )
 
-    async def flush_manager(self, match_details):
+    async def flush_manager(self, match_timelines):
         """Update entries in postgres once enough tasks are done."""
         try:
             update_sets = []
-            for match in match_details:
+            for match in match_timelines:
                 if not match[1]:
                     continue
-                details = match[1]
+                timeline = match[1]
                 # Team Details
                 update_sets.append(
                     (
-                        json.dumps(details),
+                        json.dumps(timeline),
                         int(match[0]),
                     )
                 )
             if update_sets:
                 async with self.db.get_connection() as db:
                     await self.match_update.executemany(update_sets)
-            self.logging.info("Inserted %s match_details.", len(update_sets))
+            self.logging.info("Inserted %s match_timelines.", len(update_sets))
 
         except Exception as err:
             traceback.print_tb(err.__traceback__)
@@ -93,7 +93,7 @@ class Service:
         async with self.redis.get_connection() as buffer:
             if not (
                 tasks := await buffer.spop(
-                    "%s_match_details_tasks" % self.server, self.batch_size
+                    "%s_match_timeline_tasks" % self.server, self.batch_size
                 )
             ):
                 return tasks
@@ -102,7 +102,7 @@ class Service:
             start = int(datetime.utcnow().timestamp())
             for entry in tasks:
                 await buffer.zadd(
-                    "%s_match_details_in_progress" % self.server, start, entry
+                    "%s_match_timeline_in_progress" % self.server, start, entry
                 )
             return tasks
 

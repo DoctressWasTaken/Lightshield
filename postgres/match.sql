@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS euw1.match
     win       BOOLEAN  DEFAULT NULL, -- False: Blue | True: Red
     details   JSON,
     timeline  JSON,
-    roleML    JSON
+    roleml    JSON
 );
 
 
