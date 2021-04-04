@@ -11,6 +11,11 @@ from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
 from exceptions import RatelimitException, NotFoundException, Non200Exception
 
+from runes import get_ids, get_trees
+
+shard_id = {5001: 1, 5002: 2, 5003: 3, 5005: 2, 5007: 3, 5008: 1}
+
+
 class Service:
     """Core service worker object."""
 
@@ -27,6 +32,9 @@ class Service:
             logging.Formatter("%(asctime)s [MatchDetails] %(message)s")
         )
         self.logging.addHandler(handler)
+
+        self.rune_ids = get_ids()
+        self.rune_tree = get_trees()
 
         self.proxy = os.environ["PROXY_URL"]
         self.server = os.environ["SERVER"]
