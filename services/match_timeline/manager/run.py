@@ -52,7 +52,6 @@ class Manager:
                 FROM %s.match
                 WHERE timeline IS NULL
                 AND DATE(timestamp) >= %s
-                ORDER BY CASE WHEN details IS NOT NULL THEN 1 ELSE 0 END DESC, timestamp DESC
                 LIMIT $1;
                 """
                 % (self.server.lower(), self.details_cutoff),

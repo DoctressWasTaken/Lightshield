@@ -13,6 +13,15 @@ check the SQL schemas in the postgres folder). Changes can be made easily by sim
 Lightshield is optimized to not repeat calls unecessarily. This comes at cost of having data added in a less than
 real time fashion.
  
+
+## What Lightshield does **not** do well
+####*Deliver up to date data*  
+While it can get up to date data on user its not set up for this by default
+
+####*Gather data on unranked player*  
+By default Lightshield pulls data through the league endpoint which requires a user to be ranked.
+As such getting information over unranked player is not supported by default but can be manually added.
+
 ## Structure in Short
 
 Lightshield handles data through a distributable scalable network of triangular microservice structures.
