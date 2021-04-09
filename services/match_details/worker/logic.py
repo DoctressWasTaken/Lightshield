@@ -40,8 +40,8 @@ class Service:
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-            f"http://{self.server.lower()}.api.riotgames.com/lol/"
-            + "match/v4/matches/%s"
+                f"http://{self.server.lower()}.api.riotgames.com/lol/"
+                + "match/v4/matches/%s"
         )
 
         self.buffered_elements = (
@@ -96,9 +96,9 @@ class Service:
         """Return tasks to the async worker."""
         async with self.redis.get_connection() as buffer:
             if not (
-                tasks := await buffer.spop(
-                    "%s_match_details_tasks" % self.server, self.batch_size
-                )
+                    tasks := await buffer.spop(
+                        "%s_match_details_tasks" % self.server, self.batch_size
+                    )
             ):
                 return tasks
             if self.stopped:
@@ -175,14 +175,15 @@ class Service:
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
         if response.status in [429, 430]:
-            if response.status == 429:
-                self.logging.info(response.status)
-            delay = 0.1
-            if "Retry-After" in response.headers:
-                delay = int(response.headers["Retry-After"])
+            if response.status == 430:
+                if "Retry-At" in response.headers:
+                    self.retry_after = datetime.strptime(response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f")
             elif response.status == 429:
+                self.logging.info(response.status)
                 delay = 1
-            self.retry_after = datetime.now() + timedelta(seconds=delay)
+                if "Retry-After" in response.headers:
+                    delay = int(response.headers["Retry-After"])
+                self.retry_after = datetime.now() + timedelta(seconds=delay)
             raise RatelimitException()
         if response.status == 404:
             raise NotFoundException()

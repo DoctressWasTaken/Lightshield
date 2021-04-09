@@ -24,6 +24,8 @@ services:
     restart: always
     env_file:
       - secrets.env
+    environment:
+      - LIMIT_SHARE=100
     logging:
       driver: "json-file"
       options:

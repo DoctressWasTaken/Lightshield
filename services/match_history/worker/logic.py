@@ -246,13 +246,15 @@ class Service:
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
         if response.status in [429, 430]:
-            if response.status == 429:
+            if response.status == 430:
+                if "Retry-At" in response.headers:
+                    self.retry_after = datetime.strptime(response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f")
+            elif response.status == 429:
                 self.logging.info(response.status)
-            if "Retry-After" in response.headers:
-                delay = int(response.headers["Retry-After"])
-            else:
                 delay = 1
-            self.retry_after = datetime.now() + timedelta(seconds=delay)
+                if "Retry-After" in response.headers:
+                    delay = int(response.headers["Retry-After"])
+                self.retry_after = datetime.now() + timedelta(seconds=delay)
             raise RatelimitException()
         if response.status == 404:
             raise NotFoundException()
