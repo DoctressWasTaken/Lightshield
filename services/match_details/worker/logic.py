@@ -90,7 +90,8 @@ class Service:
                 async with self.db.get_connection() as db:
                     async with db.transaction():
                         await self.match_data_update.executemany(update_match_data_sets)
-                        await db.execute("""
+                        await db.execute(
+                            """
                             UPDATE %s.match
                                 SET details_pulled = TRUE
                                 WHERE match_id = any($1::bigint[])
