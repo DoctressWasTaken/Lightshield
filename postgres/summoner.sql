@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS kr.summoner
+CREATE TABLE IF NOT EXISTS euw1.summoner
 (
 
     summoner_id         VARCHAR(63) PRIMARY KEY,
@@ -18,3 +18,6 @@ CREATE TABLE IF NOT EXISTS kr.summoner
 
     last_updated        DATE DEFAULT CURRENT_DATE
 );
+-- Improved lookup speed for summoner_id service
+-- and match_history service (full refresh tasks)
+CREATE INDEX ON euw1.summoner ((account_id IS NULL), (wins_last_updated IS NULL));

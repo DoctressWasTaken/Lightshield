@@ -41,10 +41,10 @@ class Manager:
                 SELECT match_id,
                        details,
                        timeline
-                FROM %s.match
-                WHERE roleml IS NULL
+                FROM %s.match_data
+                WHERE details IS NOT NULL
                 AND timeline IS NOT NULL
-                AND details IS NOT NULL
+                AND roleml IS NULL
                 AND queue IN (%s)
                 AND duration >= 60 * 12
                 LIMIT $1;
@@ -59,7 +59,7 @@ class Manager:
         async with self.db.get_connection() as db:
             await db.executemany(
                 """
-                UPDATE  %s.match
+                UPDATE  %s.match_data
                 SET roleml = $1
                 WHERE match_id = $2
             """

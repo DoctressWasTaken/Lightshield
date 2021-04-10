@@ -49,8 +49,8 @@ class Service:  # pylint: disable=R0902
         self.db = PostgresConnector(user=self.server.lower())
 
         self.url = (
-                f"http://{self.server.lower()}.api.riotgames.com/lol/"
-                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+            f"http://{self.server.lower()}.api.riotgames.com/lol/"
+            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
         self.rankmanager = RankManager()
         self.retry_after = datetime.now()
@@ -99,10 +99,10 @@ class Service:  # pylint: disable=R0902
                 if line["summoner_id"] in tasks:
                     task = tasks[line["summoner_id"]]
                     if task == (
-                            line["summoner_id"],
-                            int(line["rank"]),
-                            int(line["wins"]),
-                            int(line["losses"]),
+                        line["summoner_id"],
+                        int(line["rank"]),
+                        int(line["wins"]),
+                        int(line["losses"]),
                     ):
                         del tasks[line["summoner_id"]]
             self.logging.info("Upserting %s changed user.", len(tasks))
@@ -183,7 +183,9 @@ class Service:  # pylint: disable=R0902
             raise Non200Exception()
         if response.status in [429, 430]:
             if "Retry-At" in response.headers:
-                self.retry_after = datetime.strptime(response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f")
+                self.retry_after = datetime.strptime(
+                    response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f"
+                )
             raise RatelimitException()
         if response.status == 404:
             raise NotFoundException()

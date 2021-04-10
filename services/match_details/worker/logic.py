@@ -40,8 +40,8 @@ class Service:
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-                f"http://{self.server.lower()}.api.riotgames.com/lol/"
-                + "match/v4/matches/%s"
+            f"http://{self.server.lower()}.api.riotgames.com/lol/"
+            + "match/v4/matches/%s"
         )
 
         self.buffered_elements = (
@@ -58,35 +58,44 @@ class Service:
         self.match_update = await conn.prepare(
             """
         UPDATE %s.match
-            SET duration = $1,
-                win = $2,
-                details = $3
-            WHERE match_id = $4
+            SET details_pulled = TRUE
+            WHERE match_id = $1
         """
             % self.server.lower()
+        )
+        self.match_data_update = await conn.prepare(
+            """
+            INSERT INTO %s.match_data (match_id, duration, win, details)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (match_id) DO UPDATE
+            SET details = EXCLUDED.details
+            """ % self.server.lower()
         )
 
     async def flush_manager(self, match_details):
         """Update entries in postgres once enough tasks are done."""
         try:
-            update_sets = []
+            update_match_sets = []
+            update_match_data_sets = []
             for match in match_details:
                 if not match[1]:
                     continue
                 details = match[1]
                 # Team Details
-                update_sets.append(
+                update_match_sets.append((int(match[0]),))
+                update_match_data_sets.append(
                     (
+                        int(match[0]),
                         details["gameDuration"],
                         details["teams"][0]["win"] == "Win",
                         json.dumps(details),
-                        int(match[0]),
                     )
                 )
-            if update_sets:
+            if update_match_sets:
                 async with self.db.get_connection() as db:
-                    await self.match_update.executemany(update_sets)
-            self.logging.info("Inserted %s match_details.", len(update_sets))
+                    await self.match_data_update.executemany(update_match_data_sets)
+                    await self.match_update.executemany(update_match_sets)
+            self.logging.info("Inserted %s match_details.", len(update_match_sets))
 
         except Exception as err:
             traceback.print_tb(err.__traceback__)
@@ -96,9 +105,9 @@ class Service:
         """Return tasks to the async worker."""
         async with self.redis.get_connection() as buffer:
             if not (
-                    tasks := await buffer.spop(
-                        "%s_match_details_tasks" % self.server, self.batch_size
-                    )
+                tasks := await buffer.spop(
+                    "%s_match_details_tasks" % self.server, self.batch_size
+                )
             ):
                 return tasks
             if self.stopped:
@@ -177,7 +186,9 @@ class Service:
         if response.status in [429, 430]:
             if response.status == 430:
                 if "Retry-At" in response.headers:
-                    self.retry_after = datetime.strptime(response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f")
+                    self.retry_after = datetime.strptime(
+                        response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f"
+                    )
             elif response.status == 429:
                 self.logging.info(response.status)
                 delay = 1

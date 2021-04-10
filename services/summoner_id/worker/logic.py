@@ -138,7 +138,9 @@ class Service:
         if response.status in [429, 430]:
             if response.status == 430:
                 if "Retry-At" in response.headers:
-                    self.retry_after = datetime.strptime(response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f")
+                    self.retry_after = datetime.strptime(
+                        response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f"
+                    )
             elif response.status == 429:
                 self.logging.info(response.status)
                 delay = 1

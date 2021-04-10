@@ -58,31 +58,42 @@ class Service:
         self.match_update = await conn.prepare(
             """
         UPDATE %s.match
-            SET timeline = $1
-            WHERE match_id = $2
+            SET timeline_pulled = TRUE
+            WHERE match_id = $1
         """
             % self.server.lower()
+        )
+        self.match_data_update = await conn.prepare(
+            """
+            INSERT INTO %s.match_data (match_id, timeline)
+            VALUES ($1, $2)
+            ON CONFLICT (match_id) DO UPDATE
+            SET timeline = EXCLUDED.timeline
+            """ % self.server.lower()
         )
 
     async def flush_manager(self, match_timelines):
         """Update entries in postgres once enough tasks are done."""
         try:
-            update_sets = []
+            update_match_sets = []
+            update_match_data_sets = []
             for match in match_timelines:
                 if not match[1]:
                     continue
                 timeline = match[1]
                 # Team Details
-                update_sets.append(
+                update_match_sets.append((int(match[0]),))
+                update_match_data_sets.append(
                     (
-                        json.dumps(timeline),
                         int(match[0]),
+                        json.dumps(timeline),
                     )
                 )
-            if update_sets:
+            if update_match_sets:
                 async with self.db.get_connection() as db:
-                    await self.match_update.executemany(update_sets)
-            self.logging.info("Inserted %s match_timelines.", len(update_sets))
+                    await self.match_data_update.executemany(update_match_data_sets)
+                    await self.match_update.executemany(update_match_sets)
+            self.logging.info("Inserted %s match_timelines.", len(update_match_sets))
 
         except Exception as err:
             traceback.print_tb(err.__traceback__)
@@ -173,7 +184,9 @@ class Service:
         if response.status in [429, 430]:
             if response.status == 430:
                 if "Retry-At" in response.headers:
-                    self.retry_after = datetime.strptime(response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f")
+                    self.retry_after = datetime.strptime(
+                        response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f"
+                    )
             elif response.status == 429:
                 self.logging.info(response.status)
                 delay = 1

@@ -50,8 +50,8 @@ class Manager:
                 """
                 SELECT match_id
                 FROM %s.match
-                WHERE details IS NULL
-                AND DATE(timestamp) >= %s
+                WHERE details_pulled IS NULL
+                AND timestamp::date >= %s
                 LIMIT $1;
                 """
                 % (self.server.lower(), self.details_cutoff),

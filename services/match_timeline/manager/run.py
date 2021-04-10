@@ -50,7 +50,7 @@ class Manager:
                 """
                 SELECT match_id
                 FROM %s.match
-                WHERE timeline IS NULL
+                WHERE timeline_pulled IS NULL
                 AND DATE(timestamp) >= %s
                 LIMIT $1;
                 """
