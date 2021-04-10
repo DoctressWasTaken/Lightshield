@@ -57,7 +57,6 @@ class Manager:
                 % (self.server.lower(), self.details_cutoff),
                 self.limit * 2,
             )
-            self.logging.info("Found %s tasks." % len(tasks))
             return tasks
 
     async def run(self):

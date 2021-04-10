@@ -55,20 +55,14 @@ class Service:
         self.stopped = True
 
     async def prepare(self, conn):
-        self.match_update = await conn.prepare(
-            """
-        UPDATE %s.match
-            SET details_pulled = TRUE
-            WHERE match_id = $1
-        """
-            % self.server.lower()
-        )
         self.match_data_update = await conn.prepare(
             """
             INSERT INTO %s.match_data (match_id, duration, win, details)
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (match_id) DO UPDATE
-            SET details = EXCLUDED.details
+            SET details = EXCLUDED.details,
+            duration = EXCLUDED.duration,
+            win = EXCLUDED.win 
             """
             % self.server.lower()
         )
@@ -83,7 +77,7 @@ class Service:
                     continue
                 details = match[1]
                 # Team Details
-                update_match_sets.append((int(match[0]),))
+                update_match_sets.append(int(match[0]))
                 update_match_data_sets.append(
                     (
                         int(match[0]),
@@ -94,8 +88,17 @@ class Service:
                 )
             if update_match_sets:
                 async with self.db.get_connection() as db:
-                    await self.match_data_update.executemany(update_match_data_sets)
-                    await self.match_update.executemany(update_match_sets)
+                    async with db.transaction():
+                        await self.match_data_update.executemany(update_match_data_sets)
+                        await db.execute("""
+                            UPDATE %s.match
+                                SET details_pulled = TRUE
+                                WHERE match_id = any($1::bigint[])
+                            """
+                            % self.server.lower(),
+                            update_match_sets,
+                        )
+
             self.logging.info("Inserted %s match_details.", len(update_match_sets))
 
         except Exception as err:
@@ -144,7 +147,11 @@ class Service:
 
     async def async_worker(self):
         afk_alert = False
+        flushing_task = None
         while not self.stopped:
+            if flushing_task:
+                await flushing_task
+                flushing_task = None
             if not (tasks := await self.get_task()):
                 if not afk_alert:
                     self.logging.info("Found no tasks.")
@@ -161,7 +168,7 @@ class Service:
                         for index, matchId in enumerate(tasks)
                     ]
                 )
-            await self.flush_manager(results)
+            flushing_task = asyncio.create_task(self.flush_manager(results))
             await asyncio.sleep(0.01)
 
     async def fetch(self, session, url) -> dict:

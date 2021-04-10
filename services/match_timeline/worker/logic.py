@@ -92,8 +92,9 @@ class Service:
                 )
             if update_match_sets:
                 async with self.db.get_connection() as db:
-                    await self.match_data_update.executemany(update_match_data_sets)
-                    await self.match_update.executemany(update_match_sets)
+                    async with db.transaction():
+                        await self.match_data_update.executemany(update_match_data_sets)
+                        await self.match_update.executemany(update_match_sets)
             self.logging.info("Inserted %s match_timelines.", len(update_match_sets))
 
         except Exception as err:
@@ -142,7 +143,11 @@ class Service:
 
     async def async_worker(self):
         afk_alert = False
+        flushing_task = None
         while not self.stopped:
+            if flushing_task:
+                await flushing_task
+                flushing_task = None
             if not (tasks := await self.get_task()):
                 if not afk_alert:
                     self.logging.info("Found no tasks.")
@@ -159,7 +164,7 @@ class Service:
                         for index, matchId in enumerate(tasks)
                     ]
                 )
-            await self.flush_manager(results)
+            flushing_task = asyncio.create_task(self.flush_manager(results))
             await asyncio.sleep(0.01)
 
     async def fetch(self, session, url) -> dict:

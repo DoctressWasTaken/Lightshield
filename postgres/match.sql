@@ -22,9 +22,9 @@ CREATE TABLE IF NOT EXISTS euw1.match_data
     timestamp TIMESTAMP,
     duration  SMALLINT DEFAULT NULL,
     win       BOOLEAN  DEFAULT NULL,
-    details   JSONB, -- If you want to reduce space required use JSON instead of JSONB
-    timeline  JSONB,
-    roleml    JSONB
+    details   JSON, -- If you want to reduce space required use JSON instead of JSONB
+    timeline  JSON,
+    roleml    JSON
 );
 -- General lookups
 CREATE INDEX ON euw1.match_data ((timestamp::date), queue, duration, win);
