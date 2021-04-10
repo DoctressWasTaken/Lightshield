@@ -69,7 +69,8 @@ class Service:
             VALUES ($1, $2)
             ON CONFLICT (match_id) DO UPDATE
             SET timeline = EXCLUDED.timeline
-            """ % self.server.lower()
+            """
+            % self.server.lower()
         )
 
     async def flush_manager(self, match_timelines):

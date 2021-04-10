@@ -69,7 +69,8 @@ class Service:
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (match_id) DO UPDATE
             SET details = EXCLUDED.details
-            """ % self.server.lower()
+            """
+            % self.server.lower()
         )
 
     async def flush_manager(self, match_details):
