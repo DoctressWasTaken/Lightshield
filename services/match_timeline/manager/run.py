@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 import uvloop
 
-#uvloop.install()
+# uvloop.install()
 
 from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
@@ -46,7 +46,8 @@ class Manager:
             INSERT INTO %s.match_data (match_id, queue, timestamp)
             VALUES ($1, $2, $3)
             ON CONFLICT DO NOTHING;
-            """ % self.server.lower()
+            """
+            % self.server.lower()
         )
 
     async def get_tasks(self):
@@ -67,7 +68,10 @@ class Manager:
                 % (self.server.lower(), self.details_cutoff),
                 self.limit * 2,
             )
-            tasks_formatted = [[int(task['match_id']), int(task['queue']), task['timestamp']] for task in tasks]
+            tasks_formatted = [
+                [int(task["match_id"]), int(task["queue"]), task["timestamp"]]
+                for task in tasks
+            ]
             await self.insert_data_entry.executemany(tasks_formatted)
             return tasks
 
