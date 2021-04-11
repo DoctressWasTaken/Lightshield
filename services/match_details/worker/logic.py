@@ -57,12 +57,11 @@ class Service:
     async def prepare(self, conn):
         self.match_data_update = await conn.prepare(
             """
-            INSERT INTO %s.match_data (match_id, duration, win, details)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (match_id) DO UPDATE
-            SET details = EXCLUDED.details,
-            duration = EXCLUDED.duration,
-            win = EXCLUDED.win 
+            UPDATE %s.match_data
+            SET duration = $1,
+            win = $2,
+            details = $3
+            WHERE match_id = $4
             """
             % self.server.lower()
         )
@@ -80,10 +79,10 @@ class Service:
                 update_match_sets.append(int(match[0]))
                 update_match_data_sets.append(
                     (
-                        int(match[0]),
                         details["gameDuration"],
                         details["teams"][0]["win"] == "Win",
                         json.dumps(details),
+                        int(match[0]),
                     )
                 )
             if update_match_sets:

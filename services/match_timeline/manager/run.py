@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 import uvloop
 
-uvloop.install()
+#uvloop.install()
 
 from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
@@ -30,6 +30,7 @@ class Manager:
         self.details_cutoff = os.environ["DETAILS_CUTOFF"]
         self.redis = RedisConnector()
         self.db = PostgresConnector(user=self.server.lower())
+        self.db.set_prepare(self.prepare)
 
     async def init(self):
         async with self.redis.get_connection() as buffer:
@@ -38,6 +39,15 @@ class Manager:
 
     def shutdown(self):
         self.stopped = True
+
+    async def prepare(self, conn):
+        self.insert_data_entry = await conn.prepare(
+            """
+            INSERT INTO %s.match_data (match_id, queue, timestamp)
+            VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING;
+            """ % self.server.lower()
+        )
 
     async def get_tasks(self):
         """Return tasks and full_refresh flag.
@@ -48,7 +58,7 @@ class Manager:
         async with self.db.get_connection() as db:
             tasks = await db.fetch(
                 """
-                SELECT match_id
+                SELECT match_id, queue, timestamp
                 FROM %s.match
                 WHERE timeline_pulled IS NULL
                 AND DATE(timestamp) >= %s
@@ -57,6 +67,8 @@ class Manager:
                 % (self.server.lower(), self.details_cutoff),
                 self.limit * 2,
             )
+            tasks_formatted = [[int(task['match_id']), int(task['queue']), task['timestamp']] for task in tasks]
+            await self.insert_data_entry.executemany(tasks_formatted)
             return tasks
 
     async def run(self):

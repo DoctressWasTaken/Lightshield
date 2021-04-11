@@ -65,10 +65,9 @@ class Service:
         )
         self.match_data_update = await conn.prepare(
             """
-            INSERT INTO %s.match_data (match_id, timeline)
-            VALUES ($1, $2)
-            ON CONFLICT (match_id) DO UPDATE
-            SET timeline = EXCLUDED.timeline
+            UPDATE %s.match_data
+            SET timeline = $1
+            WHERE match_id = $2
             """
             % self.server.lower()
         )
@@ -86,8 +85,8 @@ class Service:
                 update_match_sets.append((int(match[0]),))
                 update_match_data_sets.append(
                     (
-                        int(match[0]),
                         json.dumps(timeline),
+                        int(match[0]),
                     )
                 )
             if update_match_sets:
