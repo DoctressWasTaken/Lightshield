@@ -3,8 +3,7 @@ CREATE TABLE IF NOT EXISTS euw1.match
     match_id        BIGINT PRIMARY KEY,
     queue           SMALLINT,
     timestamp       TIMESTAMP,
-    details_pulled  BOOLEAN,
-    timeline_pulled BOOLEAN
+    details_pulled  BOOLEAN
 );
 -- General lookups
 CREATE INDEX ON euw1.match ((timestamp::date), queue);
@@ -13,7 +12,6 @@ CREATE INDEX ON euw1.match ((timestamp::date), queue);
 -- so to use it data older than your minimum match_details age should be removed
 -- see https://stackoverflow.com/questions/5203755/why-does-postgresql-perform-sequential-scan-on-indexed-column
 CREATE INDEX ON euw1.match ((details_pulled IS NULL));
-CREATE INDEX ON euw1.match ((timeline_pulled IS NULL));
 
 CREATE TABLE IF NOT EXISTS euw1.match_data
 (
@@ -28,7 +26,9 @@ CREATE TABLE IF NOT EXISTS euw1.match_data
 );
 -- General lookups
 CREATE INDEX ON euw1.match_data ((timestamp::date), queue, duration, win);
+-- Ready for timeline index
+CREATE  INDEX ON euw1.match_data ((timeline IS NULL));
 -- Ready for roleml index
-CREATE INDEX ON euw1.match_data ((details IS NOT NULL AND timeline IS NOT NULL AND roleml IS NULL));
+CREATE INDEX ON euw1.match_data ((timeline IS NOT NULL AND roleml IS NULL));
 -- Find finished roleml
 CREATE INDEX ON euw1.match_data ((roleml IS NOT NULL));

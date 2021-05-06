@@ -5,7 +5,7 @@ import logging
 import os
 import traceback
 from datetime import datetime, timedelta
-
+import settings
 import aiohttp
 from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
@@ -21,6 +21,8 @@ class Service:
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("MatchDetails")
         level = logging.INFO
+        if settings.DEBUG:
+            level = logging.DEBUG
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
@@ -29,19 +31,15 @@ class Service:
         )
         self.logging.addHandler(handler)
 
-        self.proxy = os.environ["PROXY_URL"]
-        self.server = os.environ["SERVER"]
-        self.batch_size = int(os.environ["BATCH_SIZE"])
-
         self.redis = RedisConnector()
-        self.db = PostgresConnector(user=self.server.lower())
+        self.db = PostgresConnector(user=settings.SERVER)
         self.db.set_prepare(self.prepare)
 
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-            f"http://{self.server.lower()}.api.riotgames.com/lol/"
-            + "match/v4/matches/%s"
+                f"http://{settings.server}.api.riotgames.com/lol/"
+                + "match/v4/matches/%s"
         )
 
         self.buffered_elements = (
@@ -55,15 +53,14 @@ class Service:
         self.stopped = True
 
     async def prepare(self, conn):
-        self.match_data_update = await conn.prepare(
+        self.match_update = await conn.prepare(
             """
             UPDATE %s.match_data
-            SET duration = $1,
-            win = $2,
-            details = $3
-            WHERE match_id = $4
-            """
-            % self.server.lower()
+            SET queue = $1,
+                win = $2,
+                details_pulled = TRUE
+                WHERE match_id = $3
+            """ % settings.SERVER
         )
 
     async def flush_manager(self, match_details):
@@ -76,29 +73,32 @@ class Service:
                     continue
                 details = match[1]
                 # Team Details
-                update_match_sets.append(int(match[0]))
-                update_match_data_sets.append(
+                update_match_sets.append(
                     (
                         details["gameDuration"],
                         details["teams"][0]["win"] == "Win",
-                        json.dumps(details),
+                        int(match[0])
+                    )
+                )
+                update_match_data_sets.append(
+                    (
                         int(match[0]),
+                        details["queueId"],
+                        details["gameCreation"],
+                        details["gameDuration"],
+                        details["teams"][0]["win"] == "Win",
+                        json.dumps(details),
                     )
                 )
             if update_match_sets:
                 async with self.db.get_connection() as db:
                     async with db.transaction():
-                        await self.match_data_update.executemany(update_match_data_sets)
-                        await db.execute(
-                            """
-                            UPDATE %s.match
-                                SET details_pulled = TRUE
-                                WHERE match_id = any($1::bigint[])
-                            """
-                            % self.server.lower(),
-                            update_match_sets,
+                        await self.match_update.executemany(update_match_sets)
+                        await db.copy_records_to_table(
+                            'match_data', records=update_match_data_sets,
+                            columns=['match_id', 'queue', 'timestamp', 'duration', 'win', 'details'],
+                            schema_name=settings.SERVER
                         )
-
             self.logging.info("Inserted %s match_details.", len(update_match_sets))
 
         except Exception as err:
@@ -109,9 +109,9 @@ class Service:
         """Return tasks to the async worker."""
         async with self.redis.get_connection() as buffer:
             if not (
-                tasks := await buffer.spop(
-                    "%s_match_details_tasks" % self.server, self.batch_size
-                )
+                    tasks := await buffer.spop(
+                        "%s_match_details_tasks" % settings.SERVER, settings.BATCH_SIZE
+                    )
             ):
                 return tasks
             if self.stopped:
@@ -119,14 +119,14 @@ class Service:
             start = int(datetime.utcnow().timestamp())
             for entry in tasks:
                 await buffer.zadd(
-                    "%s_match_details_in_progress" % self.server, start, entry
+                    "%s_match_details_in_progress" % settings.SERVER, start, entry
                 )
             return tasks
 
     async def worker(self, matchId, session, delay) -> list:
-        """Multiple started per separate processor.
-        Does calls continuously until it reaches an empty page."""
-        await asyncio.sleep(0.8 / self.batch_size * delay)
+        """Multiple started per separate processor. 
+        Does calls continuously until it reaches an empty page."""  # TODO: Fix docstring
+        await asyncio.sleep(0.8 / settings.BATCH_SIZE * delay)
         while not self.stopped:
             if datetime.now() < self.retry_after:
                 delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
@@ -187,7 +187,7 @@ class Service:
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy=self.proxy) as response:
+            async with session.get(url, proxy=settings.PROXY_URL) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:
             raise Non200Exception()

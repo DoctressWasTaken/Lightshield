@@ -8,7 +8,7 @@ import logging
 import os
 import traceback
 from datetime import datetime, timedelta
-
+import settings
 import aiohttp
 from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
@@ -22,22 +22,20 @@ class Service:
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("SummonerIDs")
         level = logging.INFO
-        if "LOGGING" in os.environ:
-            level = getattr(logging, os.environ["LOGGING"])
+        if settings.DEBUG:
+            level = logging.DEBUG
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(logging.Formatter("%(asctime)s [SummonerIDs] %(message)s"))
         self.logging.addHandler(handler)
-        self.proxy = os.environ["PROXY_URL"]
-        self.server = os.environ["SERVER"].lower()
         self.url = (
-            f"http://{self.server}.api.riotgames.com/lol/" + "summoner/v4/summoners/%s"
+            f"http://{settings.SERVER}.api.riotgames.com/lol/" + "summoner/v4/summoners/%s"
         )
         self.stopped = False
         self.retry_after = datetime.now()
         self.redis = RedisConnector()
-        self.db = PostgresConnector(user=self.server)
+        self.db = PostgresConnector(user=settings.SERVER)
         self.db.set_prepare(self.prepare)
         self.completed_tasks = []
         self.to_delete = []
@@ -64,11 +62,11 @@ class Service:
     async def get_task(self):
         """Return tasks to the async worker."""
         async with self.redis.get_connection() as buffer:
-            task = await buffer.spop("%s_summoner_id_tasks" % self.server)
+            task = await buffer.spop("%s_summoner_id_tasks" % settings.SERVER)
             if not task or self.stopped:
                 return
             start = int(datetime.utcnow().timestamp())
-            await buffer.zadd("%s_summoner_id_in_progress" % self.server, start, task)
+            await buffer.zadd("%s_summoner_id_in_progress" % settings.SERVER, start, task)
             return task
 
     async def logic(self, session, summoner_id):
@@ -131,7 +129,7 @@ class Service:
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy=self.proxy) as response:
+            async with session.get(url, proxy=settings.PROXY_URL) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
@@ -161,14 +159,14 @@ class Service:
             SET account_id = $1, puuid = $2
             WHERE summoner_id = $3;
             """
-            % self.server.lower()
+            % settings.SERVER
         )
         self.prep_drop = await connection.prepare(
             """
                     DELETE FROM %s.summoner
                     WHERE summoner_id = $1;
                     """
-            % self.server.lower()
+            % settings.SERVER
         )
 
     async def run(self):

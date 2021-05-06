@@ -3,7 +3,7 @@ import logging
 import os
 import signal
 from datetime import datetime, timedelta
-
+import settings
 import uvloop
 
 uvloop.install()
@@ -17,21 +17,22 @@ class Manager:
     def __init__(self):
         self.logging = logging.getLogger("Main")
         level = logging.INFO
+        if settings.DEBUG:
+            level = logging.DEBUG
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
-        self.min_matches = int(os.environ["MIN_MATCHES"])
-        self.server = os.environ["SERVER"]
+
         self.logging.addHandler(handler)
 
         self.redis = RedisConnector()
-        self.db = PostgresConnector(user=self.server.lower())
+        self.db = PostgresConnector(user=settings.SERVER)
 
     async def init(self):
         async with self.redis.get_connection() as buffer:
-            await buffer.delete("%s_match_history_in_progress" % self.server)
-            await buffer.delete("%s_match_history_tasks" % self.server)
+            await buffer.delete("%s_match_history_in_progress" % settings.SERVER)
+            await buffer.delete("%s_match_history_tasks" % settings.SERVER)
 
     def shutdown(self):
         self.stopped = True
@@ -54,7 +55,7 @@ class Manager:
                                     ORDER BY (wins + losses) DESC
                                     LIMIT 2000;
                                     """
-                % self.server.lower()
+                % settings.SERVER
             )
             if len(full_refresh) >= 100:
                 self.logging.info("Found %s full refresh tasks." % len(full_refresh))
@@ -73,8 +74,8 @@ class Manager:
             ORDER BY (wins + losses - wins_last_updated - losses_last_updated) DESC
             LIMIT 2000;
             """
-                % self.server.lower(),
-                self.min_matches,
+                % settings.SERVER,
+                settings.MATCHES_THRESH,
             )
             self.logging.info("Found %s partial refresh tasks." % len(partial_refresh))
             return partial_refresh, False
@@ -87,11 +88,11 @@ class Manager:
             limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
             async with self.redis.get_connection() as buffer:
                 await buffer.zremrangebyscore(
-                    "%s_match_history_in_progress" % self.server, max=limit
+                    "%s_match_history_in_progress" % settings.SERVER, max=limit
                 )
                 # Check remaining buffer size
                 if (
-                    size := await buffer.zcard("%s_match_history_tasks" % self.server)
+                    size := await buffer.zcard("%s_match_history_tasks" % settings.SERVER)
                 ) >= 1000:
                     await asyncio.sleep(10)
                     continue
@@ -106,7 +107,7 @@ class Manager:
                 for entry in result:
                     # Each entry will always be refered to by account_id
                     if await buffer.zscore(
-                        "%s_match_history_in_progress" % self.server,
+                        "%s_match_history_in_progress" % settings.SERVER,
                         entry["account_id"],
                     ):
                         continue
@@ -132,18 +133,18 @@ class Manager:
 
                     # Insert task hook
                     await buffer.zadd(
-                        "%s_match_history_tasks" % self.server,
+                        "%s_match_history_tasks" % settings.SERVER,
                         z_index,
                         entry["account_id"],
                     )
                     # Insert task hash
                     await buffer.hmset_dict(
-                        "%s:%s:%s" % (self.server, entry["account_id"], z_index),
+                        "%s:%s:%s" % (settings.SERVER, entry["account_id"], z_index),
                         package,
                     )
                 self.logging.info(
                     "Filled tasks to %s.",
-                    await buffer.zcard("%s_match_history_tasks" % self.server),
+                    await buffer.zcard("%s_match_history_tasks" % settings.SERVER),
                 )
 
         await asyncio.sleep(5)

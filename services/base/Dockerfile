@@ -9,6 +9,7 @@ COPY pyproject.toml .
 RUN poetry install
 
 COPY exceptions.py .
+COPY settings.py .
 COPY connection_manager/ connection_manager/
 
 CMD ["/project/startup.sh"]

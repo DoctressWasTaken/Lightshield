@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import traceback
-
+import settings
 import roleml
 from connection_manager.persistent import PostgresConnector
 from roleml.exceptions import IncorrectMap, MatchTooShort
@@ -16,14 +16,14 @@ class Manager:
     def __init__(self, queues):
         self.logging = logging.getLogger("Main")
         level = logging.INFO
+        if settings.DEBUG:
+            level = logging.DEBUG
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         self.logging.addHandler(handler)
-        self.server = os.environ["SERVER"]
-        self.batchsize = int(os.environ["BATCH_SIZE"])
-        self.db = PostgresConnector(user=self.server.lower())
+        self.db = PostgresConnector(user=settings.SERVER)
         self.allowed_queues = queues
 
     def shutdown(self):
@@ -49,8 +49,8 @@ class Manager:
                 AND duration >= 60 * 12
                 LIMIT $1;
                 """
-                % (self.server.lower(), ",".join(self.allowed_queues)),
-                self.batchsize,
+                % (settings.SERVER, ",".join(self.allowed_queues)),
+                settings.BATCH_SIZE,
             )
             return tasks
 
@@ -63,7 +63,7 @@ class Manager:
                 SET roleml = $1
                 WHERE match_id = $2
             """
-                % self.server.lower(),
+                % settings.SERVER,
                 results,
             )
 

@@ -8,7 +8,7 @@ from datetime import datetime
 import aiohttp
 from connection_manager.persistent import PostgresConnector
 from exceptions import RatelimitException, NotFoundException, Non200Exception
-
+import settings
 from rank_manager import RankManager
 
 # uvloop.install()
@@ -38,18 +38,19 @@ class Service:  # pylint: disable=R0902
     def __init__(self):
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("LeagueRankings")
-        self.logging.setLevel(logging.INFO)
+        level = logging.INFO
+        if settings.DEBUG:
+            level = logging.DEBUG
+        self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(logging.INFO)
         handler.setFormatter(logging.Formatter("%(asctime)s [Subscriber] %(message)s"))
         self.logging.addHandler(handler)
 
-        self.proxy = os.environ["PROXY_URL"]
-        self.server = os.environ["SERVER"]
-        self.db = PostgresConnector(user=self.server.lower())
+        self.db = PostgresConnector(user=settings.SERVER)
 
         self.url = (
-            f"http://{self.server.lower()}.api.riotgames.com/lol/"
+            f"http://{settings.SERVER}.api.riotgames.com/lol/"
             + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
         self.rankmanager = RankManager()
@@ -91,7 +92,7 @@ class Service:  # pylint: disable=R0902
                 WHERE rank >= $1 
                 AND rank <= $2
             """
-                % self.server.lower(),
+                % settings.SERVER,
                 min_rank,
                 min_rank + 100,
             )
@@ -115,7 +116,7 @@ class Service:  # pylint: disable=R0902
                                    wins = EXCLUDED.wins,
                                    losses = EXCLUDED.losses  
                     """
-                    % self.server.lower()
+                    % settings.SERVER
                 )
                 await prepared.executemany(tasks.values())
 
@@ -174,7 +175,7 @@ class Service:  # pylint: disable=R0902
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy=self.proxy) as response:
+            async with session.get(url, proxy=settings.PROXY_URL) as response:
                 await response.text()
                 if response.status == 429:
                     self.logging.info(429)

@@ -2,11 +2,11 @@
 import asyncio
 import json
 import logging
-import os
 import traceback
 from datetime import datetime, timedelta
 
 import aiohttp
+import settings
 from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
 from exceptions import RatelimitException, NotFoundException, Non200Exception
@@ -21,6 +21,8 @@ class Service:
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("MatchTimeline")
         level = logging.INFO
+        if settings.DEBUG:
+            level = logging.DEBUG
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
@@ -29,21 +31,18 @@ class Service:
         )
         self.logging.addHandler(handler)
 
-        self.proxy = os.environ["PROXY_URL"]
-        self.server = os.environ["SERVER"]
-        self.batch_size = int(os.environ["BATCH_SIZE"])
+        self.task_backlog = []
 
         self.redis = RedisConnector()
-        self.db = PostgresConnector(user=self.server.lower())
+        self.db = PostgresConnector(user=settings.SERVER)
         self.db.set_prepare(self.prepare)
 
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-            f"http://{self.server.lower()}.api.riotgames.com/lol/"
-            + "match/v4/timelines/by-match/%s"
+                f"http://{settings.SERVER}.api.riotgames.com/lol/"
+                + "match/v4/timelines/by-match/%s"
         )
-
         self.buffered_elements = (
             {}
         )  # Short term buffer to keep track of currently ongoing requests
@@ -55,45 +54,34 @@ class Service:
         self.stopped = True
 
     async def prepare(self, conn):
-        self.match_update = await conn.prepare(
-            """
-        UPDATE %s.match
-            SET timeline_pulled = TRUE
-            WHERE match_id = $1
-        """
-            % self.server.lower()
-        )
         self.match_data_update = await conn.prepare(
             """
             UPDATE %s.match_data
             SET timeline = $1
             WHERE match_id = $2
             """
-            % self.server.lower()
+            % settings.SERVER
         )
 
     async def flush_manager(self, match_timelines):
         """Update entries in postgres once enough tasks are done."""
         try:
             update_match_sets = []
-            update_match_data_sets = []
             for match in match_timelines:
                 if not match[1]:
                     continue
                 timeline = match[1]
                 # Team Details
-                update_match_sets.append((int(match[0]),))
-                update_match_data_sets.append(
+                update_match_sets.append(
                     (
-                        json.dumps(timeline),
                         int(match[0]),
+                        json.dumps(timeline)
                     )
                 )
             if update_match_sets:
                 async with self.db.get_connection() as db:
                     async with db.transaction():
-                        await self.match_data_update.executemany(update_match_data_sets)
-                        await self.match_update.executemany(update_match_sets)
+                        await self.match_data_update.executemany(update_match_sets)
             self.logging.info("Inserted %s match_timelines.", len(update_match_sets))
 
         except Exception as err:
@@ -104,24 +92,22 @@ class Service:
         """Return tasks to the async worker."""
         async with self.redis.get_connection() as buffer:
             if not (
-                tasks := await buffer.spop(
-                    "%s_match_timeline_tasks" % self.server, self.batch_size
-                )
+                    task := await buffer.spop(
+                        "%s_match_timeline_tasks" % settings.SERVER, settings.BATCH_SIZE
+                    )
             ):
-                return tasks
+                return task
             if self.stopped:
                 return
             start = int(datetime.utcnow().timestamp())
-            for entry in tasks:
-                await buffer.zadd(
-                    "%s_match_timeline_in_progress" % self.server, start, entry
-                )
-            return tasks
+            await buffer.zadd(
+                "%s_match_timeline_in_progress" % settings.SERVER, start, task
+            )
+            return task
 
     async def worker(self, matchId, session, delay) -> list:
-        """Multiple started per separate processor.
-        Does calls continuously until it reaches an empty page."""
-        await asyncio.sleep(0.8 / self.batch_size * delay)
+        """Execute calls until the ratelimit is reached or the internal buffer overflows."""
+        await asyncio.sleep(0.8 / settings.BATCH_SIZE * delay)
         while not self.stopped:
             if datetime.now() < self.retry_after:
                 delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
@@ -182,7 +168,7 @@ class Service:
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy=self.proxy) as response:
+            async with session.get(url, proxy=settings.PROXY_URL) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:
             raise Non200Exception()
@@ -209,4 +195,5 @@ class Service:
         """
         Runner.
         """
+        await self.redis.create_lock()
         await self.async_worker()

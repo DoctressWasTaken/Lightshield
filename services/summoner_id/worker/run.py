@@ -16,4 +16,3 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, shutdown_handler)
 
     asyncio.run(service.run())
-    service.rabbit.shutdown()

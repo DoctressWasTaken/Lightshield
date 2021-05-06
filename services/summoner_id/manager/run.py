@@ -3,7 +3,7 @@ import logging
 import os
 import signal
 from datetime import datetime, timedelta
-
+import settings
 import uvloop
 from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
@@ -17,20 +17,20 @@ class Manager:
     def __init__(self):
         self.logging = logging.getLogger("Main")
         level = logging.INFO
+        if settings.DEBUG:
+            level = logging.DEBUG
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         self.logging.addHandler(handler)
-        self.server = os.environ["SERVER"].lower()
-        self.block_limit = int(os.environ["TASK_BLOCKING"])
         self.redis = RedisConnector()
-        self.db = PostgresConnector(user=self.server.lower())
+        self.db = PostgresConnector(user=settings.SERVER)
 
     async def init(self):
         async with self.redis.get_connection() as connection:
-            await connection.delete("%s_summoner_id_in_progress" % self.server)
-            await connection.delete("%s_summoner_id_tasks" % self.server)
+            await connection.delete("%s_summoner_id_in_progress" % settings.SERVER)
+            await connection.delete("%s_summoner_id_tasks" % settings.SERVER)
 
     def shutdown(self):
         self.stopped = True
@@ -42,15 +42,15 @@ class Manager:
         while not self.stopped:
             # Drop timed out tasks
             limit = int(
-                (datetime.utcnow() - timedelta(minutes=self.block_limit)).timestamp()
+                (datetime.utcnow() - timedelta(minutes=settings.RESERVE_MINUTES)).timestamp()
             )
             async with self.redis.get_connection() as buffer:
                 await buffer.zremrangebyscore(
-                    "%s_summoner_id_in_progress" % self.server, max=limit
+                    "%s_summoner_id_in_progress" % settings.SERVER, max=limit
                 )
                 # Check remaining buffer size
                 if (
-                    size := await buffer.scard("%s_summoner_id_tasks" % self.server)
+                    size := await buffer.scard("%s_summoner_id_tasks" % settings.SERVER)
                 ) >= 1000:
                     await asyncio.sleep(10)
                     continue
@@ -62,7 +62,7 @@ class Manager:
                     WHERE account_id IS NULL
                     LIMIT 2000;
                     """
-                    % self.server.lower()
+                    % settings.SERVER
                 )
             if len(result) - size < minimum:
                 if not blocked:
@@ -76,17 +76,17 @@ class Manager:
             async with self.redis.get_connection() as buffer:
                 for entry in result:
                     if await buffer.sismember(
-                        "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
+                        "%s_summoner_id_tasks" % settings.SERVER, entry["summoner_id"]
                     ):
                         continue
                     await buffer.sadd(
-                        "%s_summoner_id_tasks" % self.server, entry["summoner_id"]
+                        "%s_summoner_id_tasks" % settings.SERVER, entry["summoner_id"]
                     )
-                    if await buffer.scard("%s_summoner_id_tasks" % self.server) >= 2000:
+                    if await buffer.scard("%s_summoner_id_tasks" % settings.SERVER) >= 2000:
                         break
                 self.logging.info(
                     "Filled tasks to %s.",
-                    await buffer.scard("%s_summoner_id_tasks" % self.server),
+                    await buffer.scard("%s_summoner_id_tasks" % settings.SERVER),
                 )
             await asyncio.sleep(5)
         await self.redis.close()

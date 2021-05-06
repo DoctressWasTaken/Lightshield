@@ -4,7 +4,7 @@ import logging
 import os
 import traceback
 from datetime import datetime, timedelta
-
+import settings
 import aiohttp
 import aioredis
 import asyncpg
@@ -23,6 +23,8 @@ class Service:
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("MatchHistory")
         level = logging.INFO
+        if settings.DEBUG:
+            level = logging.DEBUG
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
@@ -30,17 +32,15 @@ class Service:
             logging.Formatter("%(asctime)s [MatchHistory] %(message)s")
         )
         self.logging.addHandler(handler)
-        self.proxy = os.environ["PROXY_URL"]
-        self.server = os.environ["SERVER"]
 
         self.redis = RedisConnector()
-        self.db = PostgresConnector(user=self.server.lower())
+        self.db = PostgresConnector(user=settings.SERVER)
         self.db.set_prepare(self.prepare)
 
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-            f"http://{self.server.lower()}.api.riotgames.com/lol/"
+            f"http://{settings.SERVER}.api.riotgames.com/lol/"
             + "match/v4/matchlists/by-account/%s?beginIndex=%s&endIndex=%s"
         )
 
@@ -85,7 +85,7 @@ class Service:
                         losses_last_updated = $2
                     WHERE account_id = $3
                     """
-                    % self.server.lower(),
+                    % settings.SERVER,
                     int(keys["wins"]),
                     int(keys["losses"]),
                     account_id,
@@ -101,7 +101,7 @@ class Service:
                                 VALUES ($1, $2, $3)
                                 ON CONFLICT DO NOTHING;
                                 """
-            % self.server.lower()
+            % settings.SERVER
         )
 
     async def get_task(self):
@@ -110,7 +110,7 @@ class Service:
             while (
                 not (
                     task := await buffer.zpopmax(
-                        "%s_match_history_tasks" % self.server, 1
+                        "%s_match_history_tasks" % settings.SERVER, 1
                     )
                 )
                 and not self.stopped
@@ -118,8 +118,8 @@ class Service:
                 await asyncio.sleep(5)
             if self.stopped:
                 return
-            keys = await buffer.hgetall("%s:%s:%s" % (self.server, task[0], task[1]))
-            await buffer.delete("%s:%s:%s" % (self.server, task[0], task[1]))
+            keys = await buffer.hgetall("%s:%s:%s" % (settings.SERVER, task[0], task[1]))
+            await buffer.delete("%s:%s:%s" % (settings.SERVER, task[0], task[1]))
             start = int(datetime.utcnow().timestamp())
             await buffer.zadd("match_history_in_progress", start, task[0])
             return [task[0], int(task[1])], keys
@@ -182,7 +182,7 @@ class Service:
                 return [
                     match
                     for match in matches
-                    if match["platformId"] == self.server.upper()
+                    if match["platformId"] == settings.SERVER.upper()
                 ]
             if datetime.now() < self.retry_after:
                 delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
@@ -195,7 +195,7 @@ class Service:
                     return [
                         match
                         for match in matches
-                        if match["platformId"] == self.server.upper()
+                        if match["platformId"] == settings.SERVER.upper()
                     ]
                 matches += result["matches"]
                 start += 100 * worker
@@ -205,7 +205,7 @@ class Service:
                 return [
                     match
                     for match in matches
-                    if match["platformId"] == self.server.upper()
+                    if match["platformId"] == settings.SERVER.upper()
                 ]
             except (Non200Exception, RatelimitException):
                 continue
@@ -241,7 +241,7 @@ class Service:
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
         try:
-            async with session.get(url, proxy=self.proxy) as response:
+            async with session.get(url, proxy=settings.PROXY_URL) as response:
                 await response.text()
         except aiohttp.ClientConnectionError:
             raise Non200Exception()

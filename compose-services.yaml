@@ -19,8 +19,6 @@ services:
     image: lightshield/league_ranking:${TAG}
     environment:
       - SERVER=${SERVER}
-      - UPDATE_INTERVAL=1
-      - WORKER=5
     env_file:
       - secrets.env
     restart: always
@@ -57,7 +55,6 @@ services:
   match_history_manager:
     hostname: match_history
     environment:
-      - MIN_MATCHES=20
       - SERVER=${SERVER}
     build:
       dockerfile: Dockerfile
@@ -92,7 +89,6 @@ services:
         TAG: ${TAG}
     image: lightshield/match_details_manager:${TAG}
     environment:
-      - LIMIT=5000
       - SERVER=${SERVER}
     env_file:
       - secrets.env
@@ -107,7 +103,6 @@ services:
     image: lightshield/match_details:${TAG}
     environment:
       - SERVER=${SERVER}
-      - BATCH_SIZE=30
     restart: always
     env_file:
       - secrets.env
@@ -121,7 +116,6 @@ services:
         TAG: ${TAG}
     image: lightshield/match_timeline_manager:${TAG}
     environment:
-      - LIMIT=5000
       - SERVER=${SERVER}
     env_file:
       - secrets.env
@@ -136,7 +130,6 @@ services:
     image: lightshield/match_timeline:${TAG}
     environment:
       - SERVER=${SERVER}
-      - BATCH_SIZE=30
     restart: always
     env_file:
       - secrets.env

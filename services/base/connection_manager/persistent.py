@@ -39,6 +39,7 @@ class PostgresConnector:
                     await self.prepare(self.connection)
             yield self.connection
         except Exception as err:
+            self.logging.info("Error in persistent manager.")
             traceback.print_tb(err.__traceback__)
             self.logging.info(err)
             raise err

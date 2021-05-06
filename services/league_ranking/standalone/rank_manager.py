@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
+import settings
 
 tiers = [
     "IRON",
@@ -32,7 +33,6 @@ class RankManager:
         self.logging.addHandler(handler)
 
         self.ranks = None
-        self.update_interval = int(os.environ["UPDATE_INTERVAL"])
 
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
@@ -46,7 +46,7 @@ class RankManager:
         except FileNotFoundError:
             self.logging.info("File not found. Recreating.")
             now = datetime.timestamp(
-                datetime.now() - timedelta(hours=self.update_interval)
+                datetime.now() - timedelta(hours=settings.LEAGUE_UPDATE)
             )
             self.ranks = []
             for tier in tiers:

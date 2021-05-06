@@ -4,7 +4,7 @@ import os
 import signal
 import traceback
 from datetime import datetime, timedelta
-
+import settings
 import uvloop
 
 # uvloop.install()
@@ -19,36 +19,23 @@ class Manager:
     def __init__(self):
         self.logging = logging.getLogger("Main")
         level = logging.INFO
+        if settings.DEBUG:
+            level = logging.DEBUG
         self.logging.setLevel(level)
         handler = logging.StreamHandler()
         handler.setLevel(level)
         handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
         self.logging.addHandler(handler)
-        self.limit = int(os.environ["LIMIT"])
-        self.server = os.environ["SERVER"]
-        self.block_limit = int(os.environ["TASK_BLOCKING"])
-        self.details_cutoff = os.environ["DETAILS_CUTOFF"]
         self.redis = RedisConnector()
-        self.db = PostgresConnector(user=self.server.lower())
-        self.db.set_prepare(self.prepare)
+        self.db = PostgresConnector(user=settings.SERVER)
 
     async def init(self):
         async with self.redis.get_connection() as buffer:
-            await buffer.delete("%s_match_details_in_progress" % self.server)
-            await buffer.delete("%s_match_details_tasks" % self.server)
+            await buffer.delete("%s_match_details_in_progress" % settings.SERVER)
+            await buffer.delete("%s_match_details_tasks" % settings.SERVER)
 
     def shutdown(self):
         self.stopped = True
-
-    async def prepare(self, conn):
-        self.insert_data_entry = await conn.prepare(
-            """
-            INSERT INTO %s.match_data (match_id, queue, timestamp)
-            VALUES ($1, $2, $3)
-            ON CONFLICT DO NOTHING;
-            """
-            % self.server.lower()
-        )
 
     async def get_tasks(self):
         """Return tasks and full_refresh flag.
@@ -62,17 +49,12 @@ class Manager:
                 SELECT match_id, queue, timestamp
                 FROM %s.match
                 WHERE details_pulled IS NULL
-                AND timestamp::date >= %s
+                AND (timestamp::date >= %s OR timestamp IS NULL) 
                 LIMIT $1;
                 """
-                % (self.server.lower(), self.details_cutoff),
-                self.limit * 2,
+                % (settings.SERVER, settings.MAX_AGE),
+                settings.QUEUE_LIMIT * 2,
             )
-            tasks_formatted = [
-                [int(task["match_id"]), int(task["queue"]), task["timestamp"]]
-                for task in tasks
-            ]
-            await self.insert_data_entry.executemany(tasks_formatted)
             return tasks
 
     async def run(self):
@@ -84,19 +66,19 @@ class Manager:
                 # Drop timed out tasks
                 limit = int(
                     (
-                        datetime.utcnow() - timedelta(minutes=self.block_limit)
+                        datetime.utcnow() - timedelta(minutes=settings.RESERVE_MINUTES)
                     ).timestamp()
                 )
                 async with self.redis.get_connection() as buffer:
                     await buffer.zremrangebyscore(
-                        "%s_match_details_in_progress" % self.server, max=limit
+                        "%s_match_details_in_progress" % settings.SERVER, max=limit
                     )
                     # Check remaining buffer size
                     if (
                         size := await buffer.scard(
-                            "%s_match_details_tasks" % self.server
+                            "%s_match_details_tasks" % settings.SERVER
                         )
-                    ) >= self.limit:
+                    ) >= settings.QUEUE_LIMIT:
                         await asyncio.sleep(10)
                         continue
                     # Pull new tasks
@@ -116,18 +98,18 @@ class Manager:
                     for entry in result:
                         # Each entry will always be refered to by account_id
                         if await buffer.zscore(
-                            "%s_match_details_in_progress" % self.server,
+                            "%s_match_details_in_progress" % settings.SERVER,
                             entry["match_id"],
                         ):
                             continue
                         # Insert task hook
                         await buffer.sadd(
-                            "%s_match_details_tasks" % self.server, entry["match_id"]
+                            "%s_match_details_tasks" % settings.SERVER, entry["match_id"]
                         )
 
                     self.logging.info(
                         "Filled tasks to %s.",
-                        await buffer.scard("%s_match_details_tasks" % self.server),
+                        await buffer.scard("%s_match_details_tasks" % settings.SERVER),
                     )
                     await asyncio.sleep(1)
 
