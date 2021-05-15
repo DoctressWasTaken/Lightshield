@@ -40,8 +40,8 @@ class Service:
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-                f"http://{settings.SERVER}.api.riotgames.com/lol/"
-                + "match/v4/timelines/by-match/%s"
+            f"http://{settings.SERVER}.api.riotgames.com/lol/"
+            + "match/v4/timelines/by-match/%s"
         )
         self.buffered_elements = (
             {}
@@ -72,12 +72,7 @@ class Service:
                     continue
                 timeline = match[1]
                 # Team Details
-                update_match_sets.append(
-                    (
-                        int(match[0]),
-                        json.dumps(timeline)
-                    )
-                )
+                update_match_sets.append((int(match[0]), json.dumps(timeline)))
             if update_match_sets:
                 async with self.db.get_connection() as db:
                     async with db.transaction():
@@ -92,9 +87,9 @@ class Service:
         """Return tasks to the async worker."""
         async with self.redis.get_connection() as buffer:
             if not (
-                    task := await buffer.spop(
-                        "%s_match_timeline_tasks" % settings.SERVER, settings.BATCH_SIZE
-                    )
+                task := await buffer.spop(
+                    "%s_match_timeline_tasks" % settings.SERVER, settings.BATCH_SIZE
+                )
             ):
                 return task
             if self.stopped:

@@ -4,13 +4,14 @@ import asyncio
 import asyncpg
 import traceback
 import logging
+import settings
 
 
 class PostgresConnector:
     def __init__(self, user="postgres"):
-        self.host = os.environ["PERSISTENT_HOST"]
-        self.port = int(os.environ["PERSISTENT_PORT"])
-        self.db = os.environ["PERSISTENT_DATABASE"]
+        self.host = settings.PERSISTENT_HOST
+        self.port = settings.PERSISTENT_PORT
+        self.db = settings.PERSISTENT_DATABASE
         self.user = user
         self.connection = None
         self.prepare = None

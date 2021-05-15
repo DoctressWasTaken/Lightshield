@@ -42,7 +42,9 @@ class Manager:
         while not self.stopped:
             # Drop timed out tasks
             limit = int(
-                (datetime.utcnow() - timedelta(minutes=settings.RESERVE_MINUTES)).timestamp()
+                (
+                    datetime.utcnow() - timedelta(minutes=settings.RESERVE_MINUTES)
+                ).timestamp()
             )
             async with self.redis.get_connection() as buffer:
                 await buffer.zremrangebyscore(
@@ -82,7 +84,10 @@ class Manager:
                     await buffer.sadd(
                         "%s_summoner_id_tasks" % settings.SERVER, entry["summoner_id"]
                     )
-                    if await buffer.scard("%s_summoner_id_tasks" % settings.SERVER) >= 2000:
+                    if (
+                        await buffer.scard("%s_summoner_id_tasks" % settings.SERVER)
+                        >= 2000
+                    ):
                         break
                 self.logging.info(
                     "Filled tasks to %s.",

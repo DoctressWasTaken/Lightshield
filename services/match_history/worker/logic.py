@@ -118,7 +118,9 @@ class Service:
                 await asyncio.sleep(5)
             if self.stopped:
                 return
-            keys = await buffer.hgetall("%s:%s:%s" % (settings.SERVER, task[0], task[1]))
+            keys = await buffer.hgetall(
+                "%s:%s:%s" % (settings.SERVER, task[0], task[1])
+            )
             await buffer.delete("%s:%s:%s" % (settings.SERVER, task[0], task[1]))
             start = int(datetime.utcnow().timestamp())
             await buffer.zadd("match_history_in_progress", start, task[0])

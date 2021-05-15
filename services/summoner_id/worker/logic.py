@@ -30,7 +30,8 @@ class Service:
         handler.setFormatter(logging.Formatter("%(asctime)s [SummonerIDs] %(message)s"))
         self.logging.addHandler(handler)
         self.url = (
-            f"http://{settings.SERVER}.api.riotgames.com/lol/" + "summoner/v4/summoners/%s"
+            f"http://{settings.SERVER}.api.riotgames.com/lol/"
+            + "summoner/v4/summoners/%s"
         )
         self.stopped = False
         self.retry_after = datetime.now()
@@ -66,7 +67,9 @@ class Service:
             if not task or self.stopped:
                 return
             start = int(datetime.utcnow().timestamp())
-            await buffer.zadd("%s_summoner_id_in_progress" % settings.SERVER, start, task)
+            await buffer.zadd(
+                "%s_summoner_id_in_progress" % settings.SERVER, start, task
+            )
             return task
 
     async def logic(self, session, summoner_id):

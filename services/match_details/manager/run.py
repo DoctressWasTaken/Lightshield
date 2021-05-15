@@ -104,7 +104,8 @@ class Manager:
                             continue
                         # Insert task hook
                         await buffer.sadd(
-                            "%s_match_details_tasks" % settings.SERVER, entry["match_id"]
+                            "%s_match_details_tasks" % settings.SERVER,
+                            entry["match_id"],
                         )
 
                     self.logging.info(

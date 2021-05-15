@@ -38,8 +38,7 @@ class Service:
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-                f"http://{settings.server}.api.riotgames.com/lol/"
-                + "match/v4/matches/%s"
+            f"http://{settings.server}.api.riotgames.com/lol/" + "match/v4/matches/%s"
         )
 
         self.buffered_elements = (
@@ -60,7 +59,8 @@ class Service:
                 win = $2,
                 details_pulled = TRUE
                 WHERE match_id = $3
-            """ % settings.SERVER
+            """
+            % settings.SERVER
         )
 
     async def flush_manager(self, match_details):
@@ -77,7 +77,7 @@ class Service:
                     (
                         details["gameDuration"],
                         details["teams"][0]["win"] == "Win",
-                        int(match[0])
+                        int(match[0]),
                     )
                 )
                 update_match_data_sets.append(
@@ -95,9 +95,17 @@ class Service:
                     async with db.transaction():
                         await self.match_update.executemany(update_match_sets)
                         await db.copy_records_to_table(
-                            'match_data', records=update_match_data_sets,
-                            columns=['match_id', 'queue', 'timestamp', 'duration', 'win', 'details'],
-                            schema_name=settings.SERVER
+                            "match_data",
+                            records=update_match_data_sets,
+                            columns=[
+                                "match_id",
+                                "queue",
+                                "timestamp",
+                                "duration",
+                                "win",
+                                "details",
+                            ],
+                            schema_name=settings.SERVER,
                         )
             self.logging.info("Inserted %s match_details.", len(update_match_sets))
 
@@ -109,9 +117,9 @@ class Service:
         """Return tasks to the async worker."""
         async with self.redis.get_connection() as buffer:
             if not (
-                    tasks := await buffer.spop(
-                        "%s_match_details_tasks" % settings.SERVER, settings.BATCH_SIZE
-                    )
+                tasks := await buffer.spop(
+                    "%s_match_details_tasks" % settings.SERVER, settings.BATCH_SIZE
+                )
             ):
                 return tasks
             if self.stopped:
@@ -124,7 +132,7 @@ class Service:
             return tasks
 
     async def worker(self, matchId, session, delay) -> list:
-        """Multiple started per separate processor. 
+        """Multiple started per separate processor.
         Does calls continuously until it reaches an empty page."""  # TODO: Fix docstring
         await asyncio.sleep(0.8 / settings.BATCH_SIZE * delay)
         while not self.stopped:

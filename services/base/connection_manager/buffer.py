@@ -2,12 +2,13 @@ import os
 from contextlib import asynccontextmanager
 import asyncio
 import aioredis
+import settings
 
 
 class RedisConnector:
     def __init__(self):
-        self.host = os.environ["BUFFER_HOST"]
-        self.port = int(os.environ["BUFFER_PORT"])
+        self.host = settings.BUFFER_HOST
+        self.port = settings.BUFFER_PORT
         self.lock = None
 
         self.connection = None

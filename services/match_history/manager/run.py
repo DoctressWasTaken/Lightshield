@@ -92,7 +92,9 @@ class Manager:
                 )
                 # Check remaining buffer size
                 if (
-                    size := await buffer.zcard("%s_match_history_tasks" % settings.SERVER)
+                    size := await buffer.zcard(
+                        "%s_match_history_tasks" % settings.SERVER
+                    )
                 ) >= 1000:
                     await asyncio.sleep(10)
                     continue
