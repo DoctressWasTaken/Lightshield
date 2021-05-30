@@ -16,7 +16,7 @@ from lightshield.exceptions import (
     RatelimitException,
     NotFoundException,
     Non200Exception,
-    LimitBlocked
+    LimitBlocked,
 )
 from lightshield.proxy import Proxy
 
@@ -28,8 +28,8 @@ class Service:
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("SummonerIDs")
         self.url = (
-                f"https://{settings.SERVER}.api.riotgames.com/lol/"
-                + "summoner/v4/summoners/%s"
+            f"https://{settings.SERVER}.api.riotgames.com/lol/"
+            + "summoner/v4/summoners/%s"
         )
         self.stopped = False
         self.retry_after = datetime.now()
@@ -37,7 +37,9 @@ class Service:
         self.db = None
         # Proxy
         self.proxy = Proxy()
-        self.endpoint_url = f"https://{settings.SERVER}.api.riotgames.com/lol/summoner/v4/summoners/"
+        self.endpoint_url = (
+            f"https://{settings.SERVER}.api.riotgames.com/lol/summoner/v4/summoners/"
+        )
         # Redis
         self.redis = None
 
@@ -74,7 +76,8 @@ class Service:
                 WHERE summoner_id = $3;
                 """
                 % settings.SERVER,
-                batch)
+                batch,
+            )
 
     async def drop(self, summoner_id):
         async with self.db.acquire() as connection:
@@ -109,9 +112,8 @@ class Service:
                 response = await self.fetch(session, self.url % summoner_id)
                 return [response["accountId"], response["puuid"], summoner_id]
             except LimitBlocked as err:
-                self.retry_after = datetime.now() + timedelta(
-                    seconds=err.retry_after
-                )
+                self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
+                failed = summoner_id
             except NotFoundException:
                 await self.drop(summoner_id)
             except (RatelimitException, Non200Exception):
@@ -128,7 +130,9 @@ class Service:
         failed = None
         while not self.stopped:
             batch = []
-            async with aiohttp.ClientSession(headers={'X-Riot-Token': settings.API_KEY}) as session:
+            async with aiohttp.ClientSession(
+                headers={"X-Riot-Token": settings.API_KEY}
+            ) as session:
                 for _ in range(50):
                     summoner_id = await self.get_task()
                     if not summoner_id:
@@ -141,7 +145,7 @@ class Service:
                     await asyncio.sleep(60)
                     continue
                 batch_results = await asyncio.gather(*batch)
-            self.logging.info("Inserted %s summoner_ids.", len(batch))
+            self.logging.info("Inserted %s summoner_ids.", len(batch_results))
             await self.insert(batch_results)
 
         self.logging.info("Stopped worker.")
