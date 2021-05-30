@@ -8,16 +8,25 @@ import signal
 import uvloop
 from datetime import datetime, timedelta
 from lightshield import settings
-from lightshield.exceptions import LimitBlocked, RatelimitException, NotFoundException, Non200Exception
+from lightshield.exceptions import (
+    LimitBlocked,
+    RatelimitException,
+    NotFoundException,
+    Non200Exception,
+)
 from lightshield.proxy import Proxy
 
 from rank_manager import RankManager
 
 uvloop.install()
-if 'DEBUG' in os.environ:
-    logging.basicConfig(level=logging.DEBUG, format='%(levelname)8s %(asctime)s %(name)15s| %(message)s')
+if "DEBUG" in os.environ:
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
+    )
 else:
-    logging.basicConfig(level=logging.INFO, format='%(levelname)8s %(asctime)s %(name)15s| %(message)s')
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
+    )
 
 tiers = {
     "IRON": 0,
@@ -49,11 +58,13 @@ class Service:  # pylint: disable=R0902
         self.db = None
         # Proxy
         self.proxy = Proxy()
-        self.endpoint_url = f"https://{settings.SERVER}.api.riotgames.com/lol/league-exp/v4/entries/"
+        self.endpoint_url = (
+            f"https://{settings.SERVER}.api.riotgames.com/lol/league-exp/v4/entries/"
+        )
         self.endpoint = None
         self.url = (
-                f"https://{settings.SERVER}.api.riotgames.com/lol/"
-                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+            f"https://{settings.SERVER}.api.riotgames.com/lol/"
+            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
         self.rankmanager = RankManager()
         self.retry_after = datetime.now()
@@ -70,7 +81,8 @@ class Service:  # pylint: disable=R0902
             user="postgres",
             password=settings.PERSISTENT_PASSWORD,
             database=settings.PERSISTENT_DATABASE,
-            max_inactive_connection_lifetime=60)
+            max_inactive_connection_lifetime=60,
+        )
 
         await self.proxy.init(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
         self.logging.info(self.endpoint_url)
@@ -109,10 +121,10 @@ class Service:  # pylint: disable=R0902
                 if line["summoner_id"] in tasks:
                     task = tasks[line["summoner_id"]]
                     if task == (
-                            line["summoner_id"],
-                            int(line["rank"]),
-                            int(line["wins"]),
-                            int(line["losses"]),
+                        line["summoner_id"],
+                        int(line["rank"]),
+                        int(line["wins"]),
+                        int(line["losses"]),
                     ):
                         del tasks[line["summoner_id"]]
             self.logging.info("Upserting %s changed user.", len(tasks))
@@ -127,7 +139,7 @@ class Service:  # pylint: disable=R0902
                                        losses = EXCLUDED.losses  
                         """
                         % settings.SERVER,
-                        tasks.values()
+                        tasks.values(),
                     )
                 except Exception as err:
                     self.logging.critical(err)
@@ -140,7 +152,9 @@ class Service:  # pylint: disable=R0902
         while (not empty or failed) and not self.stopped:
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
-            async with aiohttp.ClientSession(headers={'X-Riot-Token': settings.API_KEY}) as session:
+            async with aiohttp.ClientSession(
+                headers={"X-Riot-Token": settings.API_KEY}
+            ) as session:
                 try:
                     content = await self.fetch(
                         session, url=self.url % (tier, division, page)
@@ -151,7 +165,9 @@ class Service:  # pylint: disable=R0902
                         continue
                     tasks += content
                 except LimitBlocked as err:
-                    self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
+                    self.retry_after = datetime.now() + timedelta(
+                        seconds=err.retry_after
+                    )
                 except (RatelimitException, Non200Exception):
                     failed = True
                 except NotFoundException:

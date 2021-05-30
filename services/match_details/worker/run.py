@@ -5,10 +5,14 @@ import logging
 from logic import Service
 
 # uvloop.install()
-if 'DEBUG' in os.environ:
-    logging.basicConfig(level=logging.DEBUG, format='%(levelname)8s %(name)s %(message)s')
+if "DEBUG" in os.environ:
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(levelname)8s %(name)s %(message)s"
+    )
 else:
-    logging.basicConfig(level=logging.INFO, format='%(levelname)8s %(name)s %(message)s')
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)8s %(name)s %(message)s"
+    )
 
 
 if __name__ == "__main__":

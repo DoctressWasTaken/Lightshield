@@ -10,8 +10,14 @@ from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
 import asyncpg
 from lightshield.proxy import Proxy
-from lightshield.exceptions import LimitBlocked, RatelimitException, NotFoundException, Non200Exception
+from lightshield.exceptions import (
+    LimitBlocked,
+    RatelimitException,
+    NotFoundException,
+    Non200Exception,
+)
 from lightshield import settings
+
 
 class Service:
     """Core service worker object."""
@@ -36,7 +42,9 @@ class Service:
         self.db = None
         # Proxy
         self.proxy = Proxy()
-        self.endpoint_url = f"https://{settings.server}.api.riotgames.com/lol/" + "match/v4/matches/"
+        self.endpoint_url = (
+            f"https://{settings.server}.api.riotgames.com/lol/" + "match/v4/matches/"
+        )
         # Redis
         self.redis = None
 
@@ -59,11 +67,11 @@ class Service:
             host=settings.PERSISTENT_HOST,
             port=settings.PERSISTENT_PORT,
             user=settings.PERSISTENT_USER,
-            database=settings.PERSISTENT_DATABASE)
+            database=settings.PERSISTENT_DATABASE,
+        )
         await self.proxy.init(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
         self.logging.info(self.endpoint_url)
         self.endpoint = await self.proxy.get_endpoint(self.endpoint_url)
-
 
     def shutdown(self):
         """Called on shutdown init."""
