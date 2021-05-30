@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-import settings
+from lightshield import settings
 
 tiers = [
     "IRON",
@@ -26,11 +26,6 @@ class RankManager:
     def __init__(self):
         """Initiate logging."""
         self.logging = logging.getLogger("RankManager")
-        self.logging.setLevel(logging.INFO)
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.INFO)
-        handler.setFormatter(logging.Formatter("%(asctime)s [RankManager] %(message)s"))
-        self.logging.addHandler(handler)
 
         self.ranks = None
 

@@ -19,6 +19,7 @@ services:
     image: lightshield/league_ranking:${TAG}
     environment:
       - SERVER=${SERVER}
+      - DEBUG=${DEBUG}
     env_file:
       - secrets.env
     restart: always

@@ -1,17 +1,23 @@
 """League Updater Module."""
+import aiohttp
 import asyncio
+import asyncpg
 import logging
 import os
 import signal
-from datetime import datetime
+import uvloop
+from datetime import datetime, timedelta
+from lightshield import settings
+from lightshield.exceptions import LimitBlocked, RatelimitException, NotFoundException, Non200Exception
+from lightshield.proxy import Proxy
 
-import aiohttp
-from connection_manager.persistent import PostgresConnector
-from exceptions import RatelimitException, NotFoundException, Non200Exception
-import settings
 from rank_manager import RankManager
 
-# uvloop.install()
+uvloop.install()
+if 'DEBUG' in os.environ:
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)8s %(asctime)s %(name)15s| %(message)s')
+else:
+    logging.basicConfig(level=logging.INFO, format='%(levelname)8s %(asctime)s %(name)15s| %(message)s')
 
 tiers = {
     "IRON": 0,
@@ -37,21 +43,17 @@ class Service:  # pylint: disable=R0902
 
     def __init__(self):
         """Initiate sync elements on creation."""
-        self.logging = logging.getLogger("LeagueRankings")
-        level = logging.INFO
-        if settings.DEBUG:
-            level = logging.DEBUG
-        self.logging.setLevel(level)
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.INFO)
-        handler.setFormatter(logging.Formatter("%(asctime)s [Subscriber] %(message)s"))
-        self.logging.addHandler(handler)
+        self.logging = logging.getLogger("Service")
 
-        self.db = PostgresConnector(user=settings.SERVER)
-
+        # Postgres
+        self.db = None
+        # Proxy
+        self.proxy = Proxy()
+        self.endpoint_url = f"https://{settings.SERVER}.api.riotgames.com/lol/league-exp/v4/entries/"
+        self.endpoint = None
         self.url = (
-            f"http://{settings.SERVER}.api.riotgames.com/lol/"
-            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+                f"https://{settings.SERVER}.api.riotgames.com/lol/"
+                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
         self.rankmanager = RankManager()
         self.retry_after = datetime.now()
@@ -61,11 +63,18 @@ class Service:  # pylint: disable=R0902
         self.stopped = True
 
     async def init(self):
-        """Override of the default init function.
-
-        Initiate the Rankmanager object.
-        """
         await self.rankmanager.init()
+        self.db = await asyncpg.create_pool(
+            host=settings.PERSISTENT_HOST,
+            port=settings.PERSISTENT_PORT,
+            user="postgres",
+            password=settings.PERSISTENT_PASSWORD,
+            database=settings.PERSISTENT_DATABASE,
+            max_inactive_connection_lifetime=60)
+
+        await self.proxy.init(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
+        self.logging.info(self.endpoint_url)
+        self.endpoint = await self.proxy.get_endpoint(self.endpoint_url)
 
     async def process_rank(self, tier, division, worker=5):
 
@@ -84,8 +93,8 @@ class Service:  # pylint: disable=R0902
         min_rank = tiers[tier] * 400 + rank[division] * 100
         self.logging.info("Found %s unique user.", len(tasks))
 
-        async with self.db.get_connection() as db:
-            latest = await db.fetch(
+        async with self.db.acquire() as connection:
+            latest = await connection.fetch(
                 """
                 SELECT summoner_id, rank, wins, losses
                 FROM %s.summoner
@@ -100,25 +109,28 @@ class Service:  # pylint: disable=R0902
                 if line["summoner_id"] in tasks:
                     task = tasks[line["summoner_id"]]
                     if task == (
-                        line["summoner_id"],
-                        int(line["rank"]),
-                        int(line["wins"]),
-                        int(line["losses"]),
+                            line["summoner_id"],
+                            int(line["rank"]),
+                            int(line["wins"]),
+                            int(line["losses"]),
                     ):
                         del tasks[line["summoner_id"]]
             self.logging.info("Upserting %s changed user.", len(tasks))
             if tasks:
-                prepared = await db.prepare(
-                    """                INSERT INTO %s.summoner (summoner_id, rank, wins, losses)
-                        VALUES ($1, $2, $3, $4)
-                        ON CONFLICT (summoner_id) DO 
-                        UPDATE SET rank = EXCLUDED.rank,
-                                   wins = EXCLUDED.wins,
-                                   losses = EXCLUDED.losses  
-                    """
-                    % settings.SERVER
-                )
-                await prepared.executemany(tasks.values())
+                try:
+                    await connection.executemany(
+                        """INSERT INTO %s.summoner (summoner_id, rank, wins, losses)
+                            VALUES ($1, $2, $3, $4)
+                            ON CONFLICT (summoner_id) DO 
+                            UPDATE SET rank = EXCLUDED.rank,
+                                       wins = EXCLUDED.wins,
+                                       losses = EXCLUDED.losses  
+                        """
+                        % settings.SERVER,
+                        tasks.values()
+                    )
+                except Exception as err:
+                    self.logging.critical(err)
 
     async def async_worker(self, tier, division, offset, worker):
         failed = False
@@ -128,7 +140,7 @@ class Service:  # pylint: disable=R0902
         while (not empty or failed) and not self.stopped:
             if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(delay)
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(headers={'X-Riot-Token': settings.API_KEY}) as session:
                 try:
                     content = await self.fetch(
                         session, url=self.url % (tier, division, page)
@@ -138,6 +150,8 @@ class Service:  # pylint: disable=R0902
                         empty = True
                         continue
                     tasks += content
+                except LimitBlocked as err:
+                    self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
                 except (RatelimitException, Non200Exception):
                     failed = True
                 except NotFoundException:
@@ -174,25 +188,7 @@ class Service:  # pylint: disable=R0902
         :raises NotFoundException: on 404 HTTP Code.
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
-        try:
-            async with session.get(url, proxy=settings.PROXY_URL) as response:
-                await response.text()
-                if response.status == 429:
-                    self.logging.info(429)
-        except aiohttp.ClientConnectionError as err:
-            self.logging.info("Error %s", err)
-            raise Non200Exception()
-        if response.status in [429, 430]:
-            if "Retry-At" in response.headers:
-                self.retry_after = datetime.strptime(
-                    response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f"
-                )
-            raise RatelimitException()
-        if response.status == 404:
-            raise NotFoundException()
-        if response.status != 200:
-            raise Non200Exception()
-        return await response.json(content_type=None)
+        return await self.endpoint.request(url, session)
 
     async def run(self):
         """Override the default run method due to special case.

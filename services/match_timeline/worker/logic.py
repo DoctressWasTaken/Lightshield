@@ -171,7 +171,7 @@ class Service:
             if response.status == 430:
                 if "Retry-At" in response.headers:
                     self.retry_after = datetime.strptime(
-                        response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f"
+                        response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S"
                     )
             elif response.status == 429:
                 self.logging.info(response.status)

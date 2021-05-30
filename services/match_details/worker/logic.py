@@ -5,12 +5,13 @@ import logging
 import os
 import traceback
 from datetime import datetime, timedelta
-import settings
 import aiohttp
 from connection_manager.buffer import RedisConnector
 from connection_manager.persistent import PostgresConnector
-from exceptions import RatelimitException, NotFoundException, Non200Exception
-
+import asyncpg
+from lightshield.proxy import Proxy
+from lightshield.exceptions import LimitBlocked, RatelimitException, NotFoundException, Non200Exception
+from lightshield import settings
 
 class Service:
     """Core service worker object."""
@@ -31,14 +32,20 @@ class Service:
         )
         self.logging.addHandler(handler)
 
-        self.redis = RedisConnector()
-        self.db = PostgresConnector(user=settings.SERVER)
+        # Postgres
+        self.db = None
+        # Proxy
+        self.proxy = Proxy()
+        self.endpoint_url = f"https://{settings.server}.api.riotgames.com/lol/" + "match/v4/matches/"
+        # Redis
+        self.redis = None
+
         self.db.set_prepare(self.prepare)
 
         self.stopped = False
         self.retry_after = datetime.now()
         self.url = (
-            f"http://{settings.server}.api.riotgames.com/lol/" + "match/v4/matches/%s"
+            f"https://{settings.server}.api.riotgames.com/lol/" + "match/v4/matches/%s"
         )
 
         self.buffered_elements = (
@@ -47,21 +54,20 @@ class Service:
 
         self.active_tasks = []
 
+    def init(self):
+        self.db = await asyncpg.create_pool(
+            host=settings.PERSISTENT_HOST,
+            port=settings.PERSISTENT_PORT,
+            user=settings.PERSISTENT_USER,
+            database=settings.PERSISTENT_DATABASE)
+        await self.proxy.init(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
+        self.logging.info(self.endpoint_url)
+        self.endpoint = await self.proxy.get_endpoint(self.endpoint_url)
+
+
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
-
-    async def prepare(self, conn):
-        self.match_update = await conn.prepare(
-            """
-            UPDATE %s.match_data
-            SET queue = $1,
-                win = $2,
-                details_pulled = TRUE
-                WHERE match_id = $3
-            """
-            % settings.SERVER
-        )
 
     async def flush_manager(self, match_details):
         """Update entries in postgres once enough tasks are done."""
@@ -91,8 +97,18 @@ class Service:
                     )
                 )
             if update_match_sets:
-                async with self.db.get_connection() as db:
-                    async with db.transaction():
+                async with self.db.acquire() as connection:
+                    self.match_update = await connection.prepare(
+                        """
+                        UPDATE %s.match_data
+                        SET queue = $1,
+                            win = $2,
+                            details_pulled = TRUE
+                            WHERE match_id = $3
+                        """
+                        % settings.SERVER
+                    )
+                    async with connection.transaction():
                         await self.match_update.executemany(update_match_sets)
                         await db.copy_records_to_table(
                             "match_data",
@@ -203,7 +219,7 @@ class Service:
             if response.status == 430:
                 if "Retry-At" in response.headers:
                     self.retry_after = datetime.strptime(
-                        response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S.%f"
+                        response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S"
                     )
             elif response.status == 429:
                 self.logging.info(response.status)
@@ -222,4 +238,5 @@ class Service:
         """
         Runner.
         """
+        await self.init()
         await self.async_worker()
