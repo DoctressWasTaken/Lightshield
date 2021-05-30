@@ -8,32 +8,22 @@ import uvloop
 from datetime import datetime, timedelta
 from lightshield import settings
 
-# uvloop.install()
+uvloop.install()
 if "DEBUG" in os.environ:
     logging.basicConfig(
-        level=logging.DEBUG, format="%(levelname)8s %(name)s %(message)s"
+        level=logging.DEBUG, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
     )
 else:
     logging.basicConfig(
-        level=logging.INFO, format="%(levelname)8s %(name)s %(message)s"
+        level=logging.INFO, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
     )
-
-uvloop.install()
 
 
 class Manager:
     stopped = False
 
     def __init__(self):
-        self.logging = logging.getLogger("Main")
-        level = logging.INFO
-        if settings.DEBUG:
-            level = logging.DEBUG
-        self.logging.setLevel(level)
-        handler = logging.StreamHandler()
-        handler.setLevel(level)
-        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
-        self.logging.addHandler(handler)
+        self.logging = logging.getLogger("Service")
         # Buffer
         self.redis = None
         # Postgres
@@ -43,7 +33,8 @@ class Manager:
         self.db = await asyncpg.create_pool(
             host=settings.PERSISTENT_HOST,
             port=settings.PERSISTENT_PORT,
-            user=settings.PERSISTENT_USER,
+            user=settings.SERVER,
+            password=settings.PERSISTENT_PASSWORD,
             database=settings.PERSISTENT_DATABASE,
         )
 
@@ -67,18 +58,17 @@ class Manager:
                     datetime.utcnow() - timedelta(minutes=settings.RESERVE_MINUTES)
                 ).timestamp()
             )
-            async with self.redis.get_connection() as buffer:
-                await buffer.zremrangebyscore(
-                    "%s_summoner_id_in_progress" % settings.SERVER, max=limit
-                )
-                # Check remaining buffer size
-                if (
-                    size := await buffer.scard("%s_summoner_id_tasks" % settings.SERVER)
-                ) >= 1000:
-                    await asyncio.sleep(10)
-                    continue
-            async with self.db.get_connection() as db:
-                result = await db.fetch(
+            await self.redis.zremrangebyscore(
+                "%s_summoner_id_in_progress" % settings.SERVER, max=limit
+            )
+            # Check remaining buffer size
+            if (
+                size := await self.redis.scard("%s_summoner_id_tasks" % settings.SERVER)
+            ) >= 1000:
+                await asyncio.sleep(10)
+                continue
+            async with self.db.acquire() as connection:
+                result = await connection.fetch(
                     """
                     SELECT summoner_id
                     FROM %s.summoner
@@ -96,24 +86,23 @@ class Manager:
                 continue
             minimum = 100
             self.logging.info("%s tasks remaining.", size)
-            async with self.redis.get_connection() as buffer:
-                for entry in result:
-                    if await buffer.sismember(
-                        "%s_summoner_id_tasks" % settings.SERVER, entry["summoner_id"]
-                    ):
-                        continue
-                    await buffer.sadd(
-                        "%s_summoner_id_tasks" % settings.SERVER, entry["summoner_id"]
-                    )
-                    if (
-                        await buffer.scard("%s_summoner_id_tasks" % settings.SERVER)
-                        >= 2000
-                    ):
-                        break
-                self.logging.info(
-                    "Filled tasks to %s.",
-                    await buffer.scard("%s_summoner_id_tasks" % settings.SERVER),
+            for entry in result:
+                if await self.redis.sismember(
+                    "%s_summoner_id_tasks" % settings.SERVER, entry["summoner_id"]
+                ):
+                    continue
+                await self.redis.sadd(
+                    "%s_summoner_id_tasks" % settings.SERVER, entry["summoner_id"]
                 )
+                if (
+                    await self.redis.scard("%s_summoner_id_tasks" % settings.SERVER)
+                    >= 2000
+                ):
+                    break
+            self.logging.info(
+                "Filled tasks to %s.",
+                await self.redis.scard("%s_summoner_id_tasks" % settings.SERVER),
+            )
             await asyncio.sleep(5)
         await self.redis.close()
         await self.db.close()

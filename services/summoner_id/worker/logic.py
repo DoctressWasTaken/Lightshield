@@ -3,16 +3,22 @@
 No Service defined as the service is exactly the same as the default case.
 Import is done directly.
 """
-import asyncio
-import logging
-import os
 import traceback
-from datetime import datetime, timedelta
-import settings
+
 import aiohttp
-from connection_manager.buffer import RedisConnector
-from connection_manager.persistent import PostgresConnector
-from exceptions import RatelimitException, NotFoundException, Non200Exception
+import aioredis
+import asyncio
+import asyncpg
+import logging
+from datetime import datetime, timedelta
+from lightshield import settings
+from lightshield.exceptions import (
+    RatelimitException,
+    NotFoundException,
+    Non200Exception,
+    LimitBlocked
+)
+from lightshield.proxy import Proxy
 
 
 class Service:
@@ -21,23 +27,20 @@ class Service:
     def __init__(self):
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("SummonerIDs")
-        level = logging.INFO
-        if settings.DEBUG:
-            level = logging.DEBUG
-        self.logging.setLevel(level)
-        handler = logging.StreamHandler()
-        handler.setLevel(level)
-        handler.setFormatter(logging.Formatter("%(asctime)s [SummonerIDs] %(message)s"))
-        self.logging.addHandler(handler)
         self.url = (
-            f"http://{settings.SERVER}.api.riotgames.com/lol/"
-            + "summoner/v4/summoners/%s"
+                f"https://{settings.SERVER}.api.riotgames.com/lol/"
+                + "summoner/v4/summoners/%s"
         )
         self.stopped = False
         self.retry_after = datetime.now()
-        self.redis = RedisConnector()
-        self.db = PostgresConnector(user=settings.SERVER)
-        self.db.set_prepare(self.prepare)
+        # Postgres
+        self.db = None
+        # Proxy
+        self.proxy = Proxy()
+        self.endpoint_url = f"https://{settings.SERVER}.api.riotgames.com/lol/summoner/v4/summoners/"
+        # Redis
+        self.redis = None
+
         self.completed_tasks = []
         self.to_delete = []
 
@@ -45,14 +48,37 @@ class Service:
         """Called on shutdown init."""
         self.stopped = True
 
+    async def init(self):
+        self.db = await asyncpg.create_pool(
+            host=settings.PERSISTENT_HOST,
+            port=settings.PERSISTENT_PORT,
+            user=settings.SERVER,
+            password=settings.PERSISTENT_PASSWORD,
+            database=settings.PERSISTENT_DATABASE,
+        )
+        self.redis = await aioredis.create_redis_pool(
+            (settings.BUFFER_HOST, settings.BUFFER_PORT), encoding="utf-8"
+        )
+
+        await self.proxy.init(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
+        self.logging.info(self.endpoint_url)
+        self.endpoint = await self.proxy.get_endpoint(self.endpoint_url)
+
     async def insert(self, batch):
         """Update entry in postgres."""
-        async with self.db.get_connection(exclusive=True):
-            await self.prep_insert.executemany(batch)
+        async with self.db.acquire() as connection:
+            await connection.executemany(
+                """
+                UPDATE %s.summoner
+                SET account_id = $1, puuid = $2
+                WHERE summoner_id = $3;
+                """
+                % settings.SERVER,
+                batch)
 
     async def drop(self, summoner_id):
-        async with self.db.get_connection(exclusive=True) as db:
-            await db.execute(
+        async with self.db.acquire() as connection:
+            await connection.execute(
                 """
                     DELETE FROM %s.summoner
                     WHERE summoner_id = $1;
@@ -62,15 +88,14 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        async with self.redis.get_connection() as buffer:
-            task = await buffer.spop("%s_summoner_id_tasks" % settings.SERVER)
-            if not task or self.stopped:
-                return
-            start = int(datetime.utcnow().timestamp())
-            await buffer.zadd(
-                "%s_summoner_id_in_progress" % settings.SERVER, start, task
-            )
-            return task
+        task = await self.redis.spop("%s_summoner_id_tasks" % settings.SERVER)
+        if not task or self.stopped:
+            return
+        start = int(datetime.utcnow().timestamp())
+        await self.redis.zadd(
+            "%s_summoner_id_in_progress" % settings.SERVER, start, task
+        )
+        return task
 
     async def logic(self, session, summoner_id):
         failed = summoner_id
@@ -83,6 +108,10 @@ class Service:
                 failed = None
                 response = await self.fetch(session, self.url % summoner_id)
                 return [response["accountId"], response["puuid"], summoner_id]
+            except LimitBlocked as err:
+                self.retry_after = datetime.now() + timedelta(
+                    seconds=err.retry_after
+                )
             except NotFoundException:
                 await self.drop(summoner_id)
             except (RatelimitException, Non200Exception):
@@ -99,7 +128,7 @@ class Service:
         failed = None
         while not self.stopped:
             batch = []
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(headers={'X-Riot-Token': settings.API_KEY}) as session:
                 for _ in range(50):
                     summoner_id = await self.get_task()
                     if not summoner_id:
@@ -131,47 +160,9 @@ class Service:
         :raises NotFoundException: on 404 HTTP Code.
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
-        try:
-            async with session.get(url, proxy=settings.PROXY_URL) as response:
-                await response.text()
-        except aiohttp.ClientConnectionError:
-            raise Non200Exception()
-        if response.status in [429, 430]:
-            if response.status == 430:
-                if "Retry-At" in response.headers:
-                    self.retry_after = datetime.strptime(
-                        response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S"
-                    )
-            elif response.status == 429:
-                self.logging.info(response.status)
-                delay = 1
-                if "Retry-After" in response.headers:
-                    delay = int(response.headers["Retry-After"])
-                self.retry_after = datetime.now() + timedelta(seconds=delay)
-            raise RatelimitException()
-        if response.status == 404:
-            raise NotFoundException()
-        if response.status != 200:
-            raise Non200Exception()
-        return await response.json(content_type=None)
-
-    async def prepare(self, connection):
-        self.prep_insert = await connection.prepare(
-            """
-            UPDATE %s.summoner
-            SET account_id = $1, puuid = $2
-            WHERE summoner_id = $3;
-            """
-            % settings.SERVER
-        )
-        self.prep_drop = await connection.prepare(
-            """
-                    DELETE FROM %s.summoner
-                    WHERE summoner_id = $1;
-                    """
-            % settings.SERVER
-        )
+        return await self.endpoint.request(url, session)
 
     async def run(self):
         """Runner."""
+        await self.init()
         await self.async_worker()

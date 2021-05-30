@@ -78,10 +78,9 @@ class Service:  # pylint: disable=R0902
         self.db = await asyncpg.create_pool(
             host=settings.PERSISTENT_HOST,
             port=settings.PERSISTENT_PORT,
-            user="postgres",
+            user=settings.SERVER,
             password=settings.PERSISTENT_PASSWORD,
             database=settings.PERSISTENT_DATABASE,
-            max_inactive_connection_lifetime=60,
         )
 
         await self.proxy.init(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
