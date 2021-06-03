@@ -6,7 +6,7 @@ import aioredis
 
 from .endpoint import Endpoint
 
-pattern = 'https://([\w\d]*)\.api\.riotgames\.com(/[^/]*/[^/]*/[v\d]*/[^/]+).*'
+pattern = "https://([\w\d]*)\.api\.riotgames\.com(/[^/]*/[^/]*/[v\d]*/[^/]+).*"
 compiled = re.compile(pattern)
 
 
@@ -18,9 +18,9 @@ class Proxy:
 
         self.redis = None
         self.endpoints = {}
-        self.logging = logging.getLogger('Proxy')
+        self.logging = logging.getLogger("Proxy")
 
-    async def init(self, host='localhost', port=6379):
+    async def init(self, host="localhost", port=6379):
         self.redis = await aioredis.create_redis_pool(
             (host, port), encoding="utf-8", maxsize=20
         )

@@ -10,7 +10,7 @@ import json
 import logging
 import os
 
-logger = logging.getLogger('Settings')
+logger = logging.getLogger("Settings")
 
 
 class JsonConfig:  # pragma: no cover
@@ -59,14 +59,14 @@ class JsonConfig:  # pragma: no cover
 CONFIG = JsonConfig.read()
 
 # Universal keys
-SERVER = CONFIG.get("SERVER", '').lower()
-if SERVER == '':
-    logger.warning('Running without a provided server value.')
+SERVER = CONFIG.get("SERVER", "").lower()
+if SERVER == "":
+    logger.warning("Running without a provided server value.")
 # Parallel worker processes
 WORKER = int(CONFIG.get("WORKER", 5))
 API_KEY = CONFIG.get("API_KEY", None)
 if not API_KEY:
-    logger.warning('Running without a provided API key.')
+    logger.warning("Running without a provided API key.")
 
 # Dependent services
 # Proxy Sync Redis
@@ -84,7 +84,9 @@ PERSISTENT_PASSWORD = CONFIG.get("PERSISTENT_PASSWORD", None)
 #  Manager max queue sizes
 QUEUE_LIMIT = int(CONFIG.get("LIMIT", 5000))
 # Worker Task reservation duration in minutes
-RESERVE_MINUTES = int(CONFIG.get("RESERVE_MINUTES", 2))  # Task blocking duration in minutes
+RESERVE_MINUTES = int(
+    CONFIG.get("RESERVE_MINUTES", 2)
+)  # Task blocking duration in minutes
 
 #  ##### League Ranking Scraper
 # Minimum duration before the next cycle starts in hours
