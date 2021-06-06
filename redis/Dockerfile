@@ -6,6 +6,4 @@ COPY *.sh ./
 COPY lua_scripts/ lua_scripts/
 RUN chmod 500 *.sh
 
-COPY *.py ./
-
 CMD ["/project/startup.sh"]

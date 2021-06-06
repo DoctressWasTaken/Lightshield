@@ -13,7 +13,6 @@ services:
     environment:
       - "LOG_LEVEL=debug"
 
-
 networks:
   default:
     external:
