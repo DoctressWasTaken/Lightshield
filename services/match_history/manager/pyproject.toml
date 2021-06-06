@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "Lightshield_Summoner_Id_Manager"
+name = "Lightshield_Match_History_Manager"
 version = "2.0.0"
 description = "Base image for Lightshield services."
 authors = ["Doctress"]

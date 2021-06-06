@@ -18,7 +18,22 @@ for range = 1, #KEYS do
     if not bucket_data[1] then -- Create bucket if not existent
         -- redis.log(redis.LOG_WARNING, '[UPDATE] Bucket doesnt exist. ')
         redis.call('hset', KEYS[range], 'count', count, 'start', send_time, 'end', tonumber(send_time) + span)
+
+        -- Inflight handling
+        local previous = redis.call('set', KEYS[range]..':inflight', 0, 'GET')
+        if not previous or previous == nil
+        then
+            previous = 0
+        end
+        redis.call('set', KEYS[range]..':rollover', previous)
+        -- / Inflight handling
     else -- Handle existing bucket
+        -- Inflight handling
+        if redis.call('decr', KEYS[range]..':inflight') < 0
+        then
+            redis.call('set', KEYS[range]..':inflight', 0)
+        end
+        -- / Inflight handling
         local end_point, start_point, saved_count = unpack(bucket_data)
         if tonumber(send_time) < tonumber(start_point) then  -- Pass if the request returned before the new bucket was initiated
             -- redis.log(redis.LOG_WARNING, '[UPDATE] Returned before the bucket started.')

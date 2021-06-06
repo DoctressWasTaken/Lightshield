@@ -6,10 +6,17 @@ import traceback
 from datetime import datetime, timedelta
 
 import aiohttp
-import settings
-from connection_manager.buffer import RedisConnector
-from connection_manager.persistent import PostgresConnector
-from exceptions import RatelimitException, NotFoundException, Non200Exception
+import aioredis
+import asyncpg
+
+from lightshield import settings
+from lightshield.exceptions import (
+    RatelimitException,
+    NotFoundException,
+    Non200Exception,
+    LimitBlocked,
+)
+from lightshield.proxy import Proxy
 
 
 class Service:
@@ -20,29 +27,20 @@ class Service:
     def __init__(self):
         """Initiate sync elements on creation."""
         self.logging = logging.getLogger("MatchTimeline")
-        level = logging.INFO
-        if settings.DEBUG:
-            level = logging.DEBUG
-        self.logging.setLevel(level)
-        handler = logging.StreamHandler()
-        handler.setLevel(level)
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s [MatchTimeline] %(message)s")
-        )
-        self.logging.addHandler(handler)
 
         self.task_backlog = []
 
-        self.redis = RedisConnector()
-        self.db = PostgresConnector(user=settings.SERVER)
-        self.db.set_prepare(self.prepare)
+        # Postgres
+        self.db = None
+        # Proxy
+        self.proxy = Proxy()
+        self.endpoint_url = f"https://{settings.SERVER}.api.riotgames.com/lol/match/v4/timelines/by-match/"
+        # Redis
+        self.redis = None
 
         self.stopped = False
         self.retry_after = datetime.now()
-        self.url = (
-            f"http://{settings.SERVER}.api.riotgames.com/lol/"
-            + "match/v4/timelines/by-match/%s"
-        )
+        self.url = f"https://{settings.SERVER}.api.riotgames.com/lol/match/v4/timelines/by-match/%s"
         self.buffered_elements = (
             {}
         )  # Short term buffer to keep track of currently ongoing requests
@@ -52,6 +50,22 @@ class Service:
     def shutdown(self):
         """Called on shutdown init."""
         self.stopped = True
+
+    async def init(self):
+        self.db = await asyncpg.create_pool(
+            host=settings.PERSISTENT_HOST,
+            port=settings.PERSISTENT_PORT,
+            user=settings.SERVER,
+            password=settings.PERSISTENT_PASSWORD,
+            database=settings.PERSISTENT_DATABASE,
+        )
+        self.redis = await aioredis.create_redis_pool(
+            (settings.REDIS_HOST, settings.REDIS_PORT), encoding="utf-8"
+        )
+
+        await self.proxy.init(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
+        self.logging.info(self.endpoint_url)
+        self.endpoint = await self.proxy.get_endpoint(self.endpoint_url)
 
     async def prepare(self, conn):
         self.match_data_update = await conn.prepare(
@@ -72,11 +86,19 @@ class Service:
                     continue
                 timeline = match[1]
                 # Team Details
-                update_match_sets.append((int(match[0]), json.dumps(timeline)))
+                update_match_sets.append((json.dumps(timeline), int(match[0])))
             if update_match_sets:
-                async with self.db.get_connection() as db:
-                    async with db.transaction():
-                        await self.match_data_update.executemany(update_match_sets)
+                async with self.db.acquire() as connection:
+                    async with connection.transaction():
+                        await connection.executemany(
+                            """
+                                        UPDATE %s.match_data
+                                        SET timeline = $1
+                                        WHERE match_id = $2
+                                        """
+                            % settings.SERVER,
+                            update_match_sets,
+                        )
             self.logging.info("Inserted %s match_timelines.", len(update_match_sets))
 
         except Exception as err:
@@ -85,33 +107,34 @@ class Service:
 
     async def get_task(self):
         """Return tasks to the async worker."""
-        async with self.redis.get_connection() as buffer:
-            if not (
-                task := await buffer.spop(
-                    "%s_match_timeline_tasks" % settings.SERVER, settings.BATCH_SIZE
-                )
-            ):
-                return task
-            if self.stopped:
-                return
-            start = int(datetime.utcnow().timestamp())
-            await buffer.zadd(
-                "%s_match_timeline_in_progress" % settings.SERVER, start, task
+        if not (
+            tasks := await self.redis.spop(
+                "%s_match_timeline_tasks" % settings.SERVER, settings.BATCH_SIZE
             )
-            return task
+        ):
+            return tasks
+        if self.stopped:
+            return
+        start = int(datetime.utcnow().timestamp())
+        for entry in tasks:
+            await self.redis.zadd(
+                "%s_match_timeline_in_progress" % settings.SERVER, start, entry
+            )
+        return tasks
 
     async def worker(self, matchId, session, delay) -> list:
         """Execute calls until the ratelimit is reached or the internal buffer overflows."""
         await asyncio.sleep(0.8 / settings.BATCH_SIZE * delay)
         while not self.stopped:
-            if datetime.now() < self.retry_after:
-                delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
-                await asyncio.sleep(delay)
+            while (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
+                await asyncio.sleep(min(0.1, delay))
             try:
                 return [
                     matchId,
                     await self.fetch(session=session, url=self.url % matchId),
                 ]
+            except LimitBlocked as err:
+                self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
             except NotFoundException:
                 return [matchId, None]
             except (Non200Exception, RatelimitException):
@@ -135,7 +158,9 @@ class Service:
                 await asyncio.sleep(10)
                 continue
             afk_alert = False
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(
+                headers={"X-Riot-Token": settings.API_KEY}
+            ) as session:
                 results = await asyncio.gather(
                     *[
                         asyncio.create_task(
@@ -162,33 +187,11 @@ class Service:
         :raises NotFoundException: on 404 HTTP Code.
         :raises Non200Exception: on any other non 200 HTTP Code.
         """
-        try:
-            async with session.get(url, proxy=settings.PROXY_URL) as response:
-                await response.text()
-        except aiohttp.ClientConnectionError:
-            raise Non200Exception()
-        if response.status in [429, 430]:
-            if response.status == 430:
-                if "Retry-At" in response.headers:
-                    self.retry_after = datetime.strptime(
-                        response.headers["Retry-At"], "%Y-%m-%d %H:%M:%S"
-                    )
-            elif response.status == 429:
-                self.logging.info(response.status)
-                delay = 1
-                if "Retry-After" in response.headers:
-                    delay = int(response.headers["Retry-After"])
-                self.retry_after = datetime.now() + timedelta(seconds=delay)
-            raise RatelimitException()
-        if response.status == 404:
-            raise NotFoundException()
-        if response.status != 200:
-            raise Non200Exception()
-        return await response.json(content_type=None)
+        return await self.endpoint.request(url, session)
 
     async def run(self):
         """
         Runner.
         """
-        await self.redis.create_lock()
+        await self.init()
         await self.async_worker()

@@ -18,6 +18,7 @@ class JsonConfig:  # pragma: no cover
 
     def __init__(self, config):
         """Initialize config with dictionary."""
+        self.logging = logging.getLogger("Settings")
         self._config = config
 
     @classmethod
@@ -39,10 +40,10 @@ class JsonConfig:  # pragma: no cover
         value = os.environ.get(key)
 
         if value:
-            logger.debug("Got %s from environment." % key)
+            self.logging.debug("Got %s from environment: %s.", key, value)
             return_val = value
         elif key in self._config.keys():
-            logger.debug("Got %s from config file." % key)
+            self.logging.debug("Got %s from config file: %s.", key, value)
             return_val = self._config[key]
         else:
             return_val = default
@@ -69,12 +70,12 @@ if not API_KEY:
     logger.warning("Running without a provided API key.")
 
 # Dependent services
-# Proxy Sync Redis
-PROXY_SYNC_HOST = CONFIG.get("PROXY_SYNC_HOST", "proxy_sync")
-PROXY_SYNC_PORT = CONFIG.get("PROXY_SYNC_PORT", 6379)
-# Buffer Redis
-BUFFER_HOST = CONFIG.get("BUFFER_HOST", "localhost")
-BUFFER_PORT = CONFIG.get("BUFFER_PORT", 6379)
+# Redis
+REDIS_HOST = CONFIG.get("REDIS_HOST", "localhost")
+REDIS_PORT = CONFIG.get("REDIS_PORT", 6379)
+# Proxy Sync Redis (Defaults to the same as the standard redis)
+PROXY_SYNC_HOST = CONFIG.get("PROXY_SYNC_HOST", REDIS_HOST)
+PROXY_SYNC_PORT = CONFIG.get("PROXY_SYNC_PORT", REDIS_PORT)
 # Persistent Postgres DB
 PERSISTENT_HOST = CONFIG.get("PERSISTENT_HOST", "localhost")
 PERSISTENT_PORT = int(CONFIG.get("PERSISTENT_PORT", 5432))

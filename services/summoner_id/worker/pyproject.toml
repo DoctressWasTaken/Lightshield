@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "Lightshield_base"
+name = "Lightshield_Summoner_Id_Worker"
 version = "2.0.0"
 description = "Base image for Lightshield services."
 authors = ["Doctress"]

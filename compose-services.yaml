@@ -2,13 +2,6 @@ version: '3.7'
 services:
   ### Services
 
-  base_image:
-    build:
-      dockerfile: Dockerfile
-      context: services/base
-    image: lightshield/base_image:${TAG}
-    entrypoint: [ 'ls' ]
-
   league_ranking:
     hostname: league_ranking
     build:
@@ -132,20 +125,6 @@ services:
     environment:
       - SERVER=${SERVER}
     restart: always
-    env_file:
-      - secrets.env
-
-  roleml_standalone:
-    hostname: roleml_standalone
-    build:
-      dockerfile: Dockerfile
-      context: services/roleML/standalone
-      args:
-        TAG: ${TAG}
-    image: lightshield/roleml_standalone:${TAG}
-    environment:
-      - BATCH_SIZE=2000
-      - SERVER=${SERVER}
     env_file:
       - secrets.env
 

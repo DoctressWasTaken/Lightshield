@@ -1,5 +1,6 @@
 venv/*
 .idea/*
+dist/*
 secrets.env
 
 .py3/

@@ -7,6 +7,15 @@ import os
 import signal
 import uvloop
 from datetime import datetime, timedelta
+
+if "DEBUG" in os.environ:
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
+    )
+else:
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
+    )
 from lightshield import settings
 from lightshield.exceptions import (
     LimitBlocked,
@@ -19,14 +28,6 @@ from lightshield.proxy import Proxy
 from rank_manager import RankManager
 
 uvloop.install()
-if "DEBUG" in os.environ:
-    logging.basicConfig(
-        level=logging.DEBUG, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
-    )
-else:
-    logging.basicConfig(
-        level=logging.INFO, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
-    )
 
 tiers = {
     "IRON": 0,
@@ -149,8 +150,8 @@ class Service:  # pylint: disable=R0902
         page = offset + 1
         tasks = []
         while (not empty or failed) and not self.stopped:
-            if (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
-                await asyncio.sleep(delay)
+            while (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
+                await asyncio.sleep(min(0.1, delay))
             async with aiohttp.ClientSession(
                 headers={"X-Riot-Token": settings.API_KEY}
             ) as session:

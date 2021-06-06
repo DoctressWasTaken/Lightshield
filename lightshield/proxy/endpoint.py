@@ -70,7 +70,7 @@ class Endpoint:
                     raise LimitBlocked(1000)
 
         for max, key in self.server_limits:
-            keys.append(self.server_key + ":%s" % key)
+            keys += [self.server_key + ":%s" % key]
             argv += [max, start_point + key * 1000]
 
         if not self.zone_limits:  # Zone limits can be missing on their own
@@ -88,7 +88,7 @@ class Endpoint:
                     raise LimitBlocked(1000)
 
         for max, key in self.zone_limits:
-            keys.append(self.zone_key + ":%s" % key)
+            keys += [self.zone_key + ":%s" % key]
             argv += [max, start_point + key * 1000]
 
         # print("Sending keys: %s" % keys)

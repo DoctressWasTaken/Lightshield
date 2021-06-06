@@ -39,7 +39,7 @@ class Manager:
         )
 
         self.redis = await aioredis.create_redis_pool(
-            (settings.BUFFER_HOST, settings.BUFFER_PORT), encoding="utf-8"
+            (settings.REDIS_HOST, settings.REDIS_PORT), encoding="utf-8"
         )
         await self.redis.delete("%s_summoner_id_in_progress" % settings.SERVER)
         await self.redis.delete("%s_summoner_id_tasks" % settings.SERVER)

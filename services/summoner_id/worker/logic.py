@@ -3,14 +3,15 @@
 No Service defined as the service is exactly the same as the default case.
 Import is done directly.
 """
+import asyncio
+import logging
 import traceback
+from datetime import datetime, timedelta
 
 import aiohttp
 import aioredis
-import asyncio
 import asyncpg
-import logging
-from datetime import datetime, timedelta
+
 from lightshield import settings
 from lightshield.exceptions import (
     RatelimitException,
@@ -59,7 +60,7 @@ class Service:
             database=settings.PERSISTENT_DATABASE,
         )
         self.redis = await aioredis.create_redis_pool(
-            (settings.BUFFER_HOST, settings.BUFFER_PORT), encoding="utf-8"
+            (settings.REDIS_HOST, settings.REDIS_PORT), encoding="utf-8"
         )
 
         await self.proxy.init(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
@@ -103,9 +104,8 @@ class Service:
     async def logic(self, session, summoner_id):
         failed = summoner_id
         while failed:
-            if datetime.now() < self.retry_after:
-                delay = max(0.5, (self.retry_after - datetime.now()).total_seconds())
-                await asyncio.sleep(delay)
+            while (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
+                await asyncio.sleep(min(0.1, delay))
             try:
                 summoner_id = failed
                 failed = None

@@ -1,22 +1,24 @@
 local blocked = -3  -- -3 as default for non-blocked as -2 and -1 are reserved
 for range = 1, #KEYS do
-    --redis.log(redis.LOG_WARNING , 'Checking bucket '..KEYS[range])
+    -- redis.log(redis.LOG_WARNING , 'Checking bucket '..KEYS[range])
     -- Get if current count if exists
-    local content = redis.call('hget', KEYS[range], 'count')
-    if not content or content == nil then
+    local redis_count = redis.call('hget', KEYS[range], 'count')
+    if not redis_count or redis_count == nil then
         --redis.log(redis.LOG_WARNING, 'Active bucket for '..KEYS[range]..' not found.')
         -- If non-existent create with count 0 and passed timestamp
         redis.call('hset', KEYS[range], 'count', 0, 'start', ARGV[1], 'end', ARGV[range * 2 + 1])
     else
         --redis.log(redis.LOG_WARNING , 'Checking bucket '..KEYS[range]..' for block.')
         -- If existent check if blocked
-        if tonumber(content) >= tonumber(ARGV[range * 2]) then
+        local inflight = tonumber(redis.call('get',  KEYS[range]..':inflight'))
+        local rollover = tonumber(redis.call('get',  KEYS[range]..':rollover'))
+        if tonumber(redis_count) + inflight + rollover >= tonumber(ARGV[range * 2]) then
             --redis.log(redis.LOG_WARNING , 'Bucket '..KEYS[range]..' is blocked. ['..content..' out of '..ARGV[range * 2]..']')
-            local ttl = redis.call('pttl', KEYS[range])
-            if ttl == -1 then
+            local pttl = redis.call('pttl', KEYS[range])
+            if pttl == -1 then
                 blocked = 1000
             else
-                blocked = tonumber(ttl)
+                blocked = tonumber(pttl)
             end
             break
         end
@@ -28,6 +30,7 @@ if blocked == -3 then
     for range = 1, #KEYS do
         --redis.log(redis.LOG_WARNING , 'Incrementing '..KEYS[range]..'.')
         redis.call('hincrby', KEYS[range], 'count', 1)
+        redis.call('incr', KEYS[range]..':inflight')
     end
 end
 --redis.log(redis.LOG_WARNING , 'Returning blocked='..blocked)

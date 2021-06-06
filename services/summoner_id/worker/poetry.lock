@@ -90,7 +90,7 @@ python-versions = ">=3.5"
 
 [[package]]
 name = "lightshield"
-version = "0.1.11b0"
+version = "0.1.16b0"
 description = "Library part of the Lightshield tool."
 category = "main"
 optional = false
@@ -267,8 +267,8 @@ idna = [
     {file = "idna-3.2.tar.gz", hash = "sha256:467fbad99067910785144ce333826c71fb0e63a425657295239737f7ecd125f3"},
 ]
 lightshield = [
-    {file = "Lightshield-0.1.11b0-py3-none-any.whl", hash = "sha256:a47579d7f22dc200959843a5307d2bb890d4b1eb47a9829e5c23dd961b68e8ab"},
-    {file = "Lightshield-0.1.11b0.tar.gz", hash = "sha256:88de9aec056897a2a6b50097088c4a3ca36da91ff499715582fdac11ccf8e348"},
+    {file = "Lightshield-0.1.16b0-py3-none-any.whl", hash = "sha256:ff5b32d67ea40adf59f5013fdfd4f182b24589f8c9c7b42f74171aa9b1d48835"},
+    {file = "Lightshield-0.1.16b0.tar.gz", hash = "sha256:aac6088d167168fd4bf6204bfa0e4dbfb15d5e670f5cd3c3c706ca8f5b6e3ef8"},
 ]
 multidict = [
     {file = "multidict-5.1.0-cp36-cp36m-macosx_10_14_x86_64.whl", hash = "sha256:b7993704f1a4b204e71debe6095150d43b2ee6150fa4f44d6d966ec356a8d61f"},

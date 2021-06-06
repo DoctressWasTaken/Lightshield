@@ -2,13 +2,21 @@ import asyncio
 import logging
 import os
 import signal
+import asyncpg
+import aioredis
 from datetime import datetime, timedelta
-import settings
 import uvloop
+from lightshield import settings
 
 uvloop.install()
-from connection_manager.buffer import RedisConnector
-from connection_manager.persistent import PostgresConnector
+if "DEBUG" in os.environ:
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
+    )
+else:
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
+    )
 
 
 class Manager:
@@ -16,23 +24,25 @@ class Manager:
 
     def __init__(self):
         self.logging = logging.getLogger("Main")
-        level = logging.INFO
-        if settings.DEBUG:
-            level = logging.DEBUG
-        self.logging.setLevel(level)
-        handler = logging.StreamHandler()
-        handler.setLevel(level)
-        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
-
-        self.logging.addHandler(handler)
-
-        self.redis = RedisConnector()
-        self.db = PostgresConnector(user=settings.SERVER)
+        # Buffer
+        self.redis = None
+        # Postgres
+        self.db = None
 
     async def init(self):
-        async with self.redis.get_connection() as buffer:
-            await buffer.delete("%s_match_history_in_progress" % settings.SERVER)
-            await buffer.delete("%s_match_history_tasks" % settings.SERVER)
+        self.db = await asyncpg.create_pool(
+            host=settings.PERSISTENT_HOST,
+            port=settings.PERSISTENT_PORT,
+            user=settings.SERVER,
+            password=settings.PERSISTENT_PASSWORD,
+            database=settings.PERSISTENT_DATABASE,
+        )
+
+        self.redis = await aioredis.create_redis_pool(
+            (settings.REDIS_HOST, settings.REDIS_PORT), encoding="utf-8"
+        )
+        await self.redis.delete("%s_match_history_in_progress" % settings.SERVER)
+        await self.redis.delete("%s_match_history_tasks" % settings.SERVER)
 
     def shutdown(self):
         self.stopped = True
@@ -43,8 +53,8 @@ class Manager:
         If there are non-initialized user found only those will be selected.
         If none are found a list of the user with the most new games are returned.
         """
-        async with self.db.get_connection() as db:
-            full_refresh = await db.fetch(
+        async with self.db.acquire() as connection:
+            full_refresh = await connection.fetch(
                 """
                                     SELECT account_id, 
                                            wins, 
@@ -60,7 +70,7 @@ class Manager:
             if len(full_refresh) >= 100:
                 self.logging.info("Found %s full refresh tasks." % len(full_refresh))
                 return full_refresh, True
-            partial_refresh = await db.fetch(
+            partial_refresh = await connection.fetch(
                 """
             SELECT account_id, 
                    wins, 
@@ -86,68 +96,67 @@ class Manager:
         while not self.stopped:
             # Drop timed out tasks
             limit = int((datetime.utcnow() - timedelta(minutes=10)).timestamp())
-            async with self.redis.get_connection() as buffer:
-                await buffer.zremrangebyscore(
-                    "%s_match_history_in_progress" % settings.SERVER, max=limit
+            await self.redis.zremrangebyscore(
+                "%s_match_history_in_progress" % settings.SERVER, max=limit
+            )
+            # Check remaining buffer size
+            if (
+                size := await self.redis.zcard(
+                    "%s_match_history_tasks" % settings.SERVER
                 )
-                # Check remaining buffer size
-                if (
-                    size := await buffer.zcard(
-                        "%s_match_history_tasks" % settings.SERVER
-                    )
-                ) >= 1000:
-                    await asyncio.sleep(10)
-                    continue
+            ) >= 1000:
+                await asyncio.sleep(10)
+                continue
 
-                result, full_refreshes = await self.get_tasks()
-                if not result:
-                    self.logging.info("No tasks found.")
-                    await asyncio.sleep(60)
+            result, full_refreshes = await self.get_tasks()
+            if not result:
+                self.logging.info("No tasks found.")
+                await asyncio.sleep(60)
+                continue
+            # Add new tasks
+            self.logging.info("%s tasks remaining.", size)
+            for entry in result:
+                # Each entry will always be refered to by account_id
+                if await self.redis.zscore(
+                    "%s_match_history_in_progress" % settings.SERVER,
+                    entry["account_id"],
+                ):
                     continue
-                # Add new tasks
-                self.logging.info("%s tasks remaining.", size)
-                for entry in result:
-                    # Each entry will always be refered to by account_id
-                    if await buffer.zscore(
-                        "%s_match_history_in_progress" % settings.SERVER,
-                        entry["account_id"],
-                    ):
-                        continue
-                    if full_refreshes:
-                        z_index = 9999
-                        package = {key: entry[key] for key in ["wins", "losses"]}
-                    else:
-                        z_index = (
-                            entry["wins"]
-                            + entry["losses"]
-                            - entry["wins_last_updated"]
-                            - entry["losses_last_updated"]
-                        )
-                        package = {
-                            key: entry[key]
-                            for key in [
-                                "wins",
-                                "losses",
-                                "wins_last_updated",
-                                "losses_last_updated",
-                            ]
-                        }
+                if full_refreshes:
+                    z_index = 9999
+                    package = {key: entry[key] for key in ["wins", "losses"]}
+                else:
+                    z_index = (
+                        entry["wins"]
+                        + entry["losses"]
+                        - entry["wins_last_updated"]
+                        - entry["losses_last_updated"]
+                    )
+                    package = {
+                        key: entry[key]
+                        for key in [
+                            "wins",
+                            "losses",
+                            "wins_last_updated",
+                            "losses_last_updated",
+                        ]
+                    }
 
-                    # Insert task hook
-                    await buffer.zadd(
-                        "%s_match_history_tasks" % settings.SERVER,
-                        z_index,
-                        entry["account_id"],
-                    )
-                    # Insert task hash
-                    await buffer.hmset_dict(
-                        "%s:%s:%s" % (settings.SERVER, entry["account_id"], z_index),
-                        package,
-                    )
-                self.logging.info(
-                    "Filled tasks to %s.",
-                    await buffer.zcard("%s_match_history_tasks" % settings.SERVER),
+                # Insert task hook
+                await self.redis.zadd(
+                    "%s_match_history_tasks" % settings.SERVER,
+                    z_index,
+                    entry["account_id"],
                 )
+                # Insert task hash
+                await self.redis.hmset_dict(
+                    "%s:%s:%s" % (settings.SERVER, entry["account_id"], z_index),
+                    package,
+                )
+            self.logging.info(
+                "Filled tasks to %s.",
+                await self.redis.zcard("%s_match_history_tasks" % settings.SERVER),
+            )
 
         await asyncio.sleep(5)
 

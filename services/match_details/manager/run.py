@@ -4,35 +4,46 @@ import os
 import signal
 import traceback
 from datetime import datetime, timedelta
-import settings
 import uvloop
+from lightshield import settings
+import aioredis
+import asyncpg
 
-# uvloop.install()
-
-from connection_manager.buffer import RedisConnector
-from connection_manager.persistent import PostgresConnector
+uvloop.install()
+if "DEBUG" in os.environ:
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
+    )
+else:
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
+    )
 
 
 class Manager:
     stopped = False
 
     def __init__(self):
-        self.logging = logging.getLogger("Main")
-        level = logging.INFO
-        if settings.DEBUG:
-            level = logging.DEBUG
-        self.logging.setLevel(level)
-        handler = logging.StreamHandler()
-        handler.setLevel(level)
-        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
-        self.logging.addHandler(handler)
-        self.redis = RedisConnector()
-        self.db = PostgresConnector(user=settings.SERVER)
+        self.logging = logging.getLogger("Service")
+        # Buffer
+        self.redis = None
+        # Postgres
+        self.db = None
 
     async def init(self):
-        async with self.redis.get_connection() as buffer:
-            await buffer.delete("%s_match_details_in_progress" % settings.SERVER)
-            await buffer.delete("%s_match_details_tasks" % settings.SERVER)
+        self.db = await asyncpg.create_pool(
+            host=settings.PERSISTENT_HOST,
+            port=settings.PERSISTENT_PORT,
+            user=settings.SERVER,
+            password=settings.PERSISTENT_PASSWORD,
+            database=settings.PERSISTENT_DATABASE,
+        )
+
+        self.redis = await aioredis.create_redis_pool(
+            (settings.REDIS_HOST, settings.REDIS_PORT), encoding="utf-8"
+        )
+        await self.redis.delete("%s_match_details_in_progress" % settings.SERVER)
+        await self.redis.delete("%s_match_details_tasks" % settings.SERVER)
 
     def shutdown(self):
         self.stopped = True
@@ -43,8 +54,8 @@ class Manager:
         If there are non-initialized user found only those will be selected.
         If none are found a list of the user with the most new games are returned.
         """
-        async with self.db.get_connection() as db:
-            tasks = await db.fetch(
+        async with self.db.acquire() as connection:
+            tasks = await connection.fetch(
                 """
                 SELECT match_id, queue, timestamp
                 FROM %s.match
@@ -69,50 +80,49 @@ class Manager:
                         datetime.utcnow() - timedelta(minutes=settings.RESERVE_MINUTES)
                     ).timestamp()
                 )
-                async with self.redis.get_connection() as buffer:
-                    await buffer.zremrangebyscore(
-                        "%s_match_details_in_progress" % settings.SERVER, max=limit
+                await self.redis.zremrangebyscore(
+                    "%s_match_details_in_progress" % settings.SERVER, max=limit
+                )
+                # Check remaining buffer size
+                if (
+                    size := await self.redis.scard(
+                        "%s_match_details_tasks" % settings.SERVER
                     )
-                    # Check remaining buffer size
-                    if (
-                        size := await buffer.scard(
-                            "%s_match_details_tasks" % settings.SERVER
-                        )
-                    ) >= settings.QUEUE_LIMIT:
-                        await asyncio.sleep(10)
+                ) >= settings.QUEUE_LIMIT:
+                    await asyncio.sleep(10)
+                    continue
+                # Pull new tasks
+                result = await self.get_tasks()
+                if len(result) - size < min_count:
+                    if not blocked:
+                        self.logging.info("%s tasks remaining.", size)
+                        self.logging.info("No tasks found.")
+                        blocked = True
+                    min_count -= 1
+                    await asyncio.sleep(30)
+                    continue
+                min_count = 100
+                self.logging.info("%s tasks remaining.", size)
+                self.logging.info("Found %s tasks.", len(result))
+                # Add new tasks
+                for entry in result:
+                    # Each entry will always be refered to by account_id
+                    if await self.redis.zscore(
+                        "%s_match_details_in_progress" % settings.SERVER,
+                        entry["match_id"],
+                    ):
                         continue
-                    # Pull new tasks
-                    result = await self.get_tasks()
-                    if len(result) - size < min_count:
-                        if not blocked:
-                            self.logging.info("%s tasks remaining.", size)
-                            self.logging.info("No tasks found.")
-                            blocked = True
-                        min_count -= 1
-                        await asyncio.sleep(30)
-                        continue
-                    min_count = 100
-                    self.logging.info("%s tasks remaining.", size)
-                    self.logging.info("Found %s tasks.", len(result))
-                    # Add new tasks
-                    for entry in result:
-                        # Each entry will always be refered to by account_id
-                        if await buffer.zscore(
-                            "%s_match_details_in_progress" % settings.SERVER,
-                            entry["match_id"],
-                        ):
-                            continue
-                        # Insert task hook
-                        await buffer.sadd(
-                            "%s_match_details_tasks" % settings.SERVER,
-                            entry["match_id"],
-                        )
+                    # Insert task hook
+                    await self.redis.sadd(
+                        "%s_match_details_tasks" % settings.SERVER,
+                        entry["match_id"],
+                    )
 
-                    self.logging.info(
-                        "Filled tasks to %s.",
-                        await buffer.scard("%s_match_details_tasks" % settings.SERVER),
-                    )
-                    await asyncio.sleep(1)
+                self.logging.info(
+                    "Filled tasks to %s.",
+                    await self.redis.scard("%s_match_details_tasks" % settings.SERVER),
+                )
+                await asyncio.sleep(1)
 
                 await asyncio.sleep(5)
 
