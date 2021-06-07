@@ -102,7 +102,6 @@ class Service:
                         """
                         UPDATE %s.match
                         SET queue = $1,
-                            win = $2,
                             details_pulled = TRUE
                             WHERE match_id = $3
                         """
