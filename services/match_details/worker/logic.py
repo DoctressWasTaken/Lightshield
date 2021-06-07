@@ -2,9 +2,9 @@
 import asyncio
 import json
 import logging
-import os
 import traceback
 from datetime import datetime, timedelta
+
 import aiohttp
 import aioredis
 import asyncpg
@@ -81,7 +81,7 @@ class Service:
                 # Team Details
                 update_match_sets.append(
                     (
-                        details["gameDuration"],
+                        details["queueId"],
                         int(match[0]),
                     )
                 )
@@ -89,7 +89,7 @@ class Service:
                     (
                         int(match[0]),
                         details["queueId"],
-                        details["gameCreation"],
+                        datetime.fromtimestamp(details["gameCreation"] / 1000.0),
                         details["gameDuration"],
                         details["teams"][0]["win"] == "Win",
                         json.dumps(details),
@@ -130,9 +130,9 @@ class Service:
     async def get_task(self):
         """Return tasks to the async worker."""
         if not (
-            tasks := await self.redis.spop(
-                "%s_match_details_tasks" % settings.SERVER, settings.BATCH_SIZE
-            )
+                tasks := await self.redis.spop(
+                    "%s_match_details_tasks" % settings.SERVER, settings.BATCH_SIZE
+                )
         ):
             return tasks
         if self.stopped:
@@ -183,7 +183,7 @@ class Service:
                 continue
             afk_alert = False
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": settings.API_KEY}
+                    headers={"X-Riot-Token": settings.API_KEY}
             ) as session:
                 results = await asyncio.gather(
                     *[
