@@ -21,14 +21,9 @@ CREATE TABLE IF NOT EXISTS euw1.match_data
     duration  SMALLINT DEFAULT NULL,
     win       BOOLEAN  DEFAULT NULL,
     details   JSON, -- If you want to reduce space required use JSON instead of JSONB
-    timeline  JSON,
-    roleml    JSON
+    timeline  JSON
 );
 -- General lookups
 CREATE INDEX ON euw1.match_data ((timestamp::date), queue, duration, win);
 -- Ready for timeline index
 CREATE  INDEX ON euw1.match_data ((timeline IS NULL));
--- Ready for roleml index
-CREATE INDEX ON euw1.match_data ((timeline IS NOT NULL AND roleml IS NULL));
--- Find finished roleml
-CREATE INDEX ON euw1.match_data ((roleml IS NOT NULL));

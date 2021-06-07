@@ -60,12 +60,11 @@ class Manager:
             tasks = await connection.fetch(
                 """
                 SELECT match_id, queue, timestamp
-                FROM %s.match
-                WHERE timeline_pulled IS NULL
-                AND DATE(timestamp) >= %s
+                FROM %s.match_data
+                WHERE timeline IS NULL
                 LIMIT $1;
                 """
-                % (settings.SERVER, settings.MAX_AGE),
+                % settings.SERVER,
                 settings.QUEUE_LIMIT * 2,
             )
             return tasks

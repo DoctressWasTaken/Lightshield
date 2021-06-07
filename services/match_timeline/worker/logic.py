@@ -67,16 +67,6 @@ class Service:
         self.logging.info(self.endpoint_url)
         self.endpoint = await self.proxy.get_endpoint(self.endpoint_url)
 
-    async def prepare(self, conn):
-        self.match_data_update = await conn.prepare(
-            """
-            UPDATE %s.match_data
-            SET timeline = $1
-            WHERE match_id = $2
-            """
-            % settings.SERVER
-        )
-
     async def flush_manager(self, match_timelines):
         """Update entries in postgres once enough tasks are done."""
         try:

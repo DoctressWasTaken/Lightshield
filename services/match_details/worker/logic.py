@@ -100,7 +100,7 @@ class Service:
                 async with self.db.acquire() as connection:
                     self.match_update = await connection.prepare(
                         """
-                        UPDATE %s.match_data
+                        UPDATE %s.match
                         SET queue = $1,
                             win = $2,
                             details_pulled = TRUE
