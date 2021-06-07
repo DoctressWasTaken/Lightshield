@@ -82,7 +82,6 @@ class Service:
                 update_match_sets.append(
                     (
                         details["gameDuration"],
-                        details["teams"][0]["win"] == "Win",
                         int(match[0]),
                     )
                 )
@@ -103,7 +102,7 @@ class Service:
                         UPDATE %s.match
                         SET queue = $1,
                             details_pulled = TRUE
-                            WHERE match_id = $3
+                            WHERE match_id = $2
                         """
                         % settings.SERVER
                     )
