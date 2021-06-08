@@ -22,7 +22,7 @@ class Proxy:
 
     async def init(self, host="localhost", port=6379):
         self.redis = await aioredis.create_redis_pool(
-            (host, port), encoding="utf-8", maxsize=20
+            (host, port), encoding="utf-8"
         )
 
     async def request(self, url, session):

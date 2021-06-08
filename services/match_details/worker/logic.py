@@ -130,9 +130,9 @@ class Service:
     async def get_task(self):
         """Return tasks to the async worker."""
         if not (
-                tasks := await self.redis.spop(
-                    "%s_match_details_tasks" % settings.SERVER, settings.BATCH_SIZE
-                )
+            tasks := await self.redis.spop(
+                "%s_match_details_tasks" % settings.SERVER, settings.BATCH_SIZE
+            )
         ):
             return tasks
         if self.stopped:
@@ -183,7 +183,7 @@ class Service:
                 continue
             afk_alert = False
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": settings.API_KEY}
+                headers={"X-Riot-Token": settings.API_KEY}
             ) as session:
                 results = await asyncio.gather(
                     *[
