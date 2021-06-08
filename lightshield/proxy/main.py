@@ -21,9 +21,7 @@ class Proxy:
         self.logging = logging.getLogger("Proxy")
 
     async def init(self, host="localhost", port=6379):
-        self.redis = await aioredis.create_redis_pool(
-            (host, port), encoding="utf-8"
-        )
+        self.redis = await aioredis.create_redis_pool((host, port), encoding="utf-8")
 
     async def request(self, url, session):
         """Request an url."""
