@@ -15,10 +15,10 @@ real time fashion.
  
 
 ## What Lightshield does **not** do well
-####*Deliver up to date data*  
+#### *Deliver up to date data*  
 While it can get up to date data on user its not set up for this by default
 
-####*Gather data on unranked player*  
+#### *Gather data on unranked player*  
 By default Lightshield pulls data through the league endpoint which requires a user to be ranked.
 As such getting information over unranked player is not supported by default but can be manually added.
 

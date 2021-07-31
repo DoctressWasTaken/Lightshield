@@ -68,6 +68,8 @@ WORKER = int(CONFIG.get("WORKER", 5))
 API_KEY = CONFIG.get("API_KEY", None)
 if not API_KEY:
     logger.warning("Running without a provided API key.")
+# Adds prefix to redis keys in case of multiple applications
+NAMESPACE = CONFIG.get("PROXY_NAMESPACE", "")
 
 # Dependent services
 # Redis

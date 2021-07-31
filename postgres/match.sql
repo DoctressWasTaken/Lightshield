@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS euw1.match
+CREATE TABLE IF NOT EXISTS kr.match
 (
     match_id        BIGINT PRIMARY KEY,
     queue           SMALLINT,
@@ -6,14 +6,14 @@ CREATE TABLE IF NOT EXISTS euw1.match
     details_pulled  BOOLEAN
 );
 -- General lookups
-CREATE INDEX ON euw1.match ((timestamp::date), queue);
+CREATE INDEX ON kr.match ((timestamp::date), queue);
 -- Lookup for undone tasks
 -- This will only  be used if most data in the table is not null,
 -- so to use it data older than your minimum match_details age should be removed
 -- see https://stackoverflow.com/questions/5203755/why-does-postgresql-perform-sequential-scan-on-indexed-column
-CREATE INDEX ON euw1.match ((details_pulled IS NULL));
+CREATE INDEX ON kr.match ((details_pulled IS NULL));
 
-CREATE TABLE IF NOT EXISTS euw1.match_data
+CREATE TABLE IF NOT EXISTS kr.match_data
 (
     match_id  BIGINT PRIMARY KEY,
     queue     SMALLINT,
@@ -24,6 +24,6 @@ CREATE TABLE IF NOT EXISTS euw1.match_data
     timeline  JSON
 );
 -- General lookups
-CREATE INDEX ON euw1.match_data ((timestamp::date), queue, duration, win);
+CREATE INDEX ON kr.match_data ((timestamp::date), queue, duration, win);
 -- Ready for timeline index
-CREATE  INDEX ON euw1.match_data ((timeline IS NULL));
+CREATE  INDEX ON kr.match_data ((timeline IS NULL));

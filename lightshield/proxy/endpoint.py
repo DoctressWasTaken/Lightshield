@@ -1,24 +1,25 @@
+import logging
 from datetime import datetime
+
 from lightshield.exceptions import (
     LimitBlocked,
     RatelimitException,
     NotFoundException,
     Non200Exception,
-    NoMessageException,
 )
-import logging
-import os
 
 
 class Endpoint:
-    def __init__(self, server, zone, redis):
+    def __init__(self, server, zone, namespace, redis):
         self.server = server
+        self.namespace = namespace
         self.zone = zone
         self.redis = redis
         self.server_key = (
-            "%s" % server
+                "%s:%s" % (namespace, server)
         )  # Used to identify existence of server wide limits
-        self.zone_key = "%s:%s" % (
+        self.zone_key = "%s:%s:%s" % (
+            namespace,
             server,
             zone,
         )  # Used to identify existence of zone wide limits
@@ -49,7 +50,7 @@ class Endpoint:
         argv = [start_point]
 
         if (
-            not self.server_limits
+                not self.server_limits
         ):  # TODO: Updating limits only happens through responses
             # print("No local server limits found")
             if await self.redis.setnx(self.server_key, "1:57") == 0:
@@ -62,10 +63,10 @@ class Endpoint:
                 self.server_limits = [[1, 57]]
                 # print("No server limits found. Setting to: %s" % self.server_limits)
                 if (
-                    await self.redis.evalsha(
-                        pseudo_sha1, [self.server_key + ":%s" % 57]
-                    )
-                    == 1
+                        await self.redis.evalsha(
+                            pseudo_sha1, [self.server_key + ":%s" % 57]
+                        )
+                        == 1
                 ):
                     raise LimitBlocked(1000)
 
@@ -82,8 +83,8 @@ class Endpoint:
             else:
                 self.zone_limits = [(1, 57)]
                 if (
-                    await self.redis.evalsha(pseudo_sha1, [self.zone_key + ":%s" % 57])
-                    == 1
+                        await self.redis.evalsha(pseudo_sha1, [self.zone_key + ":%s" % 57])
+                        == 1
                 ):
                     raise LimitBlocked(1000)
 
