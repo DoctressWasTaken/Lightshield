@@ -15,8 +15,9 @@ class Endpoint:
         self.namespace = namespace
         self.zone = zone
         self.redis = redis
-        self.server_key = (
-                "%s:%s" % (namespace, server)
+        self.server_key = "%s:%s" % (
+            namespace,
+            server,
         )  # Used to identify existence of server wide limits
         self.zone_key = "%s:%s:%s" % (
             namespace,
@@ -26,6 +27,28 @@ class Endpoint:
         self.server_limits = None
         self.zone_limits = None
         self.logging = logging.getLogger("Proxy")
+
+    async def set_limits(self, key):
+        """Execute while running the first request.
+
+        Set a pseudo limit that will block all but a single request until that first request returns.
+        This allows generation of the actual rate limits through the response data.
+        """
+        try:
+            pseudo_sha1 = self.pseudo_sha1
+        except AttributeError:
+            pseudo_sha1 = self.pseudo_sha1 = await self.redis.get("lightshield_pseudo")
+
+        if await self.redis.setnx(key, "1:57") == 0:
+            limits = [
+                [int(x) for x in limit.split(":")]
+                for limit in (await self.redis.get(key)).split(",")
+            ]
+        else:
+            limits = [[1, 57]]
+            if await self.redis.evalsha(pseudo_sha1, [key + ":%s" % 57]) == 1:
+                raise LimitBlocked(1000)
+        return limits
 
     async def permit(self, start_point) -> None:
         """Handle pre-flight ratelimiting unlock.
@@ -40,63 +63,35 @@ class Endpoint:
         try:
             script_sha1 = self.permit_sha1
         except AttributeError:
-            script_sha1 = self.permit_sha1 = await self.redis.get("permit")
-        try:
-            pseudo_sha1 = self.pseudo_sha1
-        except AttributeError:
-            pseudo_sha1 = self.pseudo_sha1 = await self.redis.get("pseudo")
-
+            script_sha1 = self.permit_sha1 = await self.redis.get("lightshield_permit")
         keys = []
         argv = [start_point]
 
-        if (
-                not self.server_limits
-        ):  # TODO: Updating limits only happens through responses
-            # print("No local server limits found")
-            if await self.redis.setnx(self.server_key, "1:57") == 0:
-                self.server_limits = [
-                    [int(x) for x in limit.split(":")]
-                    for limit in (await self.redis.get(self.server_key)).split(",")
-                ]
-                # print("Found server side limits: %s" % self.server_limits)
-            else:
-                self.server_limits = [[1, 57]]
-                # print("No server limits found. Setting to: %s" % self.server_limits)
-                if (
-                        await self.redis.evalsha(
-                            pseudo_sha1, [self.server_key + ":%s" % 57]
-                        )
-                        == 1
-                ):
-                    raise LimitBlocked(1000)
+        if not self.server_limits:
+            self.server_limits = await self.set_limits(self.server_key)
 
         for max, key in self.server_limits:
             keys += [self.server_key + ":%s" % key]
             argv += [max, start_point + key * 1000]
 
         if not self.zone_limits:  # Zone limits can be missing on their own
-            if await self.redis.setnx(self.zone_key, "1:57") == 0:
-                self.zone_limits = [
-                    [int(x) for x in limit.split(":")]
-                    for limit in (await self.redis.get(self.zone_key)).split(",")
-                ]
-            else:
-                self.zone_limits = [(1, 57)]
-                if (
-                        await self.redis.evalsha(pseudo_sha1, [self.zone_key + ":%s" % 57])
-                        == 1
-                ):
-                    raise LimitBlocked(1000)
+            self.zone_limits = await self.set_limits(self.zone_key)
 
         for max, key in self.zone_limits:
             keys += [self.zone_key + ":%s" % key]
             argv += [max, start_point + key * 1000]
 
-        # print("Sending keys: %s" % keys)
-        # print("Sending argv: %s" % argv)
         if (wait := await self.redis.evalsha(script_sha1, keys, argv)) > 0:
             self.logging.debug("Waiting for %s ms.", wait)
             raise LimitBlocked(retry_after=wait)
+
+    async def update_ratelimiter(self, key, limits):
+        """Update the saved rate limit buckets.
+
+        Set the intervals that are being looked out for in the rate limiter based on the returned
+        'X-App-Rate-Limit' header.
+        """
+        await self.redis.set(key, limits)
 
     async def align(self, start_point, headers, status) -> None:
         """Align limits with response details.
@@ -117,53 +112,47 @@ class Endpoint:
         try:
             script_sha1 = self.align_sha1
         except AttributeError:
-            script_sha1 = self.align_sha1 = await self.redis.get("update")
+            script_sha1 = self.align_sha1 = await self.redis.get("lightshield_update")
+
+        # Update rate limits applied to this server and zone
+        await self.update_ratelimiter(self.server_key, headers["X-App-Rate-Limit"])
+        await self.update_ratelimiter(self.zone_key, headers["X-Method-Rate-Limit"])
 
         keys = []
         argv = [start_point, return_point, retry_after]
 
-        # App Limits
-        await self.redis.set(self.server_key, headers["X-App-Rate-Limit"])
         self.server_limits = [
             [int(x) for x in limit.split(":")]
             for limit in headers["X-App-Rate-Limit"].split(",")
         ]
-        counts = [
+        app_counts = [
             [int(x) for x in limit.split(":")]
             for limit in headers["X-App-Rate-Limit-Count"].split(",")
         ]
-        # print(counts)
-        # print(self.server_limits)
-        zipped = zip(  # Zipped version of Count:Span
-            [entry[0] for entry in counts],
+        app_zipped = zip(  # Zipped version of Count:Span
+            [entry[0] for entry in app_counts],
             [entry[1] for entry in self.server_limits],
         )
-        for limit in zipped:
+        for limit in app_zipped:
             argv += limit[:2]
             keys.append(self.server_key + ":%s" % limit[1])
 
-        # App Limits
-        await self.redis.set(self.zone_key, headers["X-Method-Rate-Limit"])
         self.zone_limits = [
             [int(x) for x in limit.split(":")]
             for limit in headers["X-Method-Rate-Limit"].split(",")
         ]
-        counts = [
+        zone_counts = [
             [int(x) for x in limit.split(":")]
             for limit in headers["X-Method-Rate-Limit-Count"].split(",")
         ]
-        # print(counts)
-        # print(self.zone_limits)
-        zipped = zip(  # Zipped version of Count:Span
-            [entry[0] for entry in counts],
+        zone_zipped = zip(  # Zipped version of Count:Span
+            [entry[0] for entry in zone_counts],
             [entry[1] for entry in self.zone_limits],
         )
-        for limit in zipped:
+        for limit in zone_zipped:
             argv += limit
             keys.append(self.zone_key + ":%s" % limit[1])
 
-        # print(keys)
-        # print(argv)
         await self.redis.evalsha(script_sha1, keys, argv)
 
     async def request(self, url, session) -> dict:

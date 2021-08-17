@@ -6,6 +6,6 @@ hash_pseudo=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/pseudo.lua)")
 echo $hash_pseudo
 hash_update=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/update.lua)")
 echo $hash_update
-redis-cli set 'permit' $hash_permit
-redis-cli set 'pseudo' $hash_pseudo
-redis-cli set 'update' $hash_update
+redis-cli set 'lightshield_permit' $hash_permit
+redis-cli set 'lightshield_pseudo' $hash_pseudo
+redis-cli set 'lightshield_update' $hash_update

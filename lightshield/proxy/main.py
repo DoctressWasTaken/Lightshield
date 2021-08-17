@@ -20,7 +20,7 @@ class Proxy:
         self.endpoints = {}
         self.logging = logging.getLogger("Proxy")
 
-    async def init(self, host="localhost", port=6379, namespace='ratelimiter'):
+    async def init(self, host="localhost", port=6379, namespace="ratelimiter"):
         self.redis = await aioredis.create_redis_pool((host, port), encoding="utf-8")
         self.namespace = namespace
 
@@ -41,5 +41,7 @@ class Proxy:
         try:
             return self.endpoints[limit_key]
         except KeyError:
-            self.endpoints[limit_key] = Endpoint(server, zone, self.namespace, self.redis)
+            self.endpoints[limit_key] = Endpoint(
+                server, zone, self.namespace, self.redis
+            )
             return self.endpoints[limit_key]
