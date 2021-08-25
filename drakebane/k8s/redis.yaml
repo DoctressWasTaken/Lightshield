@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    service: redis
+    app: lightshield
+spec:
+  selector:
+    matchLabels:
+      name: redis
+      app: lightshield
+  template:
+    metadata:
+      labels:
+        name: redis
+        app: lightshield
+    spec:
+      containers:
+        - name: redis
+          image: lightshield_redis:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80

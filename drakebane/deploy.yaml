@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drakebane
+  labels:
+    app: drakebane
+    service: league-ranking-exp
+spec:
+  schedule: "*/12 * * * *"
+  concurrencyPolicy: Forbid
+  template:
+    metadata:
+      labels:
+        app: drakebane
+    spec:
+      containers:
+        - name: league_ranking
+          image: lightshield/league_ranking:latest
+          ports:
+            - containerPort: 80

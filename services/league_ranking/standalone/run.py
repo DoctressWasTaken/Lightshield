@@ -79,7 +79,7 @@ class Service:  # pylint: disable=R0902
         self.db = await asyncpg.create_pool(
             host=settings.PERSISTENT_HOST,
             port=settings.PERSISTENT_PORT,
-            user=settings.SERVER,
+            user='postgres',
             password=settings.PERSISTENT_PASSWORD,
             database=settings.PERSISTENT_DATABASE,
         )

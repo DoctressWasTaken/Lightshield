@@ -30,7 +30,9 @@ class Proxy:
         try:
             return await self.endpoints[limit_key].request(url, session)
         except KeyError:
-            self.endpoints[limit_key] = Endpoint(server, zone, self.namespace, self.redis)
+            self.endpoints[limit_key] = Endpoint(
+                server, zone, self.namespace, self.redis
+            )
             return await self.endpoints[limit_key].request(url, session)
 
     async def get_endpoint(self, url):

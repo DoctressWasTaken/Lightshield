@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "Lightshield_League_Ranking_Standalone"
+name = "Lightshield_Match_Details_Manager"
 version = "2.0.0"
 description = "Base image for Lightshield services."
 authors = ["Doctress"]
@@ -7,10 +7,12 @@ license = "Apache 2.0"
 
 [tool.poetry.dependencies]
 python = "^3.9"
+aioredis = "^1.3.1"
 asyncpg = "^0.23.0"
 aiohttp = "^3.7.4"
 uvloop = "^0.15.2"
-lightshield = "^0.1.20b0"
+lightshield = '*'
+kubernetes = '*'
 
 [tool.poetry.dev-dependencies]
 

@@ -31,33 +31,16 @@ class RankManager:
 
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
-        try:
-            self.ranks = json.loads(
-                open(
-                    f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "r+"
-                ).read()
-            )
-            self.logging.info("Loaded data file.")
-        except FileNotFoundError:
-            self.logging.info("File not found. Recreating.")
-            now = datetime.timestamp(
-                datetime.now() - timedelta(hours=settings.LEAGUE_UPDATE)
-            )
-            self.ranks = []
-            for tier in tiers:
-                if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
-                    self.ranks.append([tier, "I", now])
-                    continue
-                for division in divisions:
-                    self.ranks.append([tier, division, now])
-        await self.save_to_file()
-
-    async def save_to_file(self):
-        """Save the current stats to the tracking file."""
-        with open(
-            f"configs/ranking_cooldown_{os.environ['SERVER']}.json", "w+"
-        ) as datafile:
-            datafile.write(json.dumps(self.ranks))
+        now = datetime.timestamp(
+            datetime.now() - timedelta(hours=settings.LEAGUE_UPDATE)
+        )
+        self.ranks = []
+        for tier in tiers:
+            if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
+                self.ranks.append([tier, "I", now])
+                continue
+            for division in divisions:
+                self.ranks.append([tier, division, now])
 
     async def get_next(self):
         """Return the next tier/division combination to be called."""
@@ -82,5 +65,4 @@ class RankManager:
         for index, entry in enumerate(self.ranks):
             if entry[0] == key[0] and entry[1] == key[1]:
                 self.ranks[index][2] = now
-                await self.save_to_file()
                 return
