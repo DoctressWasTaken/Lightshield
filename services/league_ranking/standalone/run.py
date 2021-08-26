@@ -1,12 +1,13 @@
 """League Updater Module."""
-import aiohttp
 import asyncio
-import asyncpg
 import logging
 import os
 import signal
-import uvloop
 from datetime import datetime, timedelta
+
+import aiohttp
+import asyncpg
+import uvloop
 
 if "DEBUG" in os.environ:
     logging.basicConfig(
@@ -64,8 +65,8 @@ class Service:  # pylint: disable=R0902
         )
         self.endpoint = None
         self.url = (
-            f"https://{settings.SERVER}.api.riotgames.com/lol/"
-            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+                f"https://{settings.SERVER}.api.riotgames.com/lol/"
+                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
         self.rankmanager = RankManager()
         self.retry_after = datetime.now()
@@ -75,6 +76,8 @@ class Service:  # pylint: disable=R0902
         self.stopped = True
 
     async def init(self):
+        self.logging.info(os.environ)
+
         await self.rankmanager.init()
         self.db = await asyncpg.create_pool(
             host=settings.PERSISTENT_HOST,
@@ -121,10 +124,10 @@ class Service:  # pylint: disable=R0902
                 if line["summoner_id"] in tasks:
                     task = tasks[line["summoner_id"]]
                     if task == (
-                        line["summoner_id"],
-                        int(line["rank"]),
-                        int(line["wins"]),
-                        int(line["losses"]),
+                            line["summoner_id"],
+                            int(line["rank"]),
+                            int(line["wins"]),
+                            int(line["losses"]),
                     ):
                         del tasks[line["summoner_id"]]
             self.logging.info("Upserting %s changed user.", len(tasks))
@@ -153,7 +156,7 @@ class Service:  # pylint: disable=R0902
             while (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(min(0.1, delay))
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": settings.API_KEY}
+                    headers={"X-Riot-Token": settings.API_KEY}
             ) as session:
                 try:
                     content = await self.fetch(
@@ -221,7 +224,7 @@ class Service:  # pylint: disable=R0902
         await self.db.close()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  #
     service = Service()
     signal.signal(signal.SIGTERM, service.shutdown)
     asyncio.run(service.run())

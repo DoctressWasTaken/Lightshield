@@ -6,7 +6,7 @@ metadata:
     app: lightshield
 spec:
   selector:
-      service: redis
+      name: redis
       app: lightshield
   ports:
     - protocol: TCP

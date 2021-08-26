@@ -16,9 +16,8 @@ spec:
         name: redis
         app: lightshield
     spec:
+      hostname: redis
       containers:
         - name: redis
           image: lightshield_redis:latest
           imagePullPolicy: Never
-          ports:
-            - containerPort: 80
