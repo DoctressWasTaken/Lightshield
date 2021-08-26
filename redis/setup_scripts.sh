@@ -1,5 +1,9 @@
 #!/bin/bash
 
+echo "Waiting for redis"
+sleep 1
+./wait-for-it.sh localhost:6379
+echo "Redis is up"
 hash_permit=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/permit.lua)")
 echo $hash_permit
 hash_pseudo=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/pseudo.lua)")

@@ -47,7 +47,7 @@ class Endpoint:
         else:
             limits = [[1, 57]]
             if await self.redis.evalsha(pseudo_sha1, [key + ":%s" % 57]) == 1:
-                raise LimitBlocked(1000)
+                raise LimitBlocked(retry_after=1000)
         return limits
 
     async def permit(self, start_point) -> None:
