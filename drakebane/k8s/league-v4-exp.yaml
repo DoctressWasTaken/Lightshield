@@ -37,3 +37,9 @@ spec:
                 secretKeyRef:
                   name: secrets
                   key: API_KEY
+
+            - name: PERSISTENT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: secrets
+                  key: PERSISTENT_PASSWORD

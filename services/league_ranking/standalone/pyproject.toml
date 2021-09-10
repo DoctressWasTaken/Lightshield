@@ -10,7 +10,7 @@ python = "^3.9"
 asyncpg = "^0.23.0"
 aiohttp = "^3.7.4"
 uvloop = "^0.15.2"
-lightshield = "^0.1.20b0"
+lightshield = "*"
 
 [tool.poetry.dev-dependencies]
 

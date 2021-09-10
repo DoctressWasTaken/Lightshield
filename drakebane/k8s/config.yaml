@@ -5,4 +5,4 @@ metadata:
   labels:
     app: lightshield
 data:
-  PERSISTENT_HOST: nightmare.gg
+  PERSISTENT_HOST: 'nightmare.gg'

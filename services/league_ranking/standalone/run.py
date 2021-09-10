@@ -76,7 +76,6 @@ class Service:  # pylint: disable=R0902
         self.stopped = True
 
     async def init(self):
-        self.logging.info(os.environ)
 
         await self.rankmanager.init()
         self.db = await asyncpg.create_pool(
@@ -86,7 +85,7 @@ class Service:  # pylint: disable=R0902
             password=settings.PERSISTENT_PASSWORD,
             database=settings.PERSISTENT_DATABASE,
         )
-
+        print(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
         await self.proxy.init(settings.PROXY_SYNC_HOST, settings.PROXY_SYNC_PORT)
         self.logging.info(self.endpoint_url)
         self.endpoint = await self.proxy.get_endpoint(self.endpoint_url)
@@ -168,6 +167,7 @@ class Service:  # pylint: disable=R0902
                         continue
                     tasks += content
                 except LimitBlocked as err:
+                    self.logging.info("Limit blocked: %s", page)
                     self.retry_after = datetime.now() + timedelta(
                         seconds=err.retry_after
                     )

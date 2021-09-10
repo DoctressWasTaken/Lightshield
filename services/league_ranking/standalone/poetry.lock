@@ -90,7 +90,7 @@ python-versions = ">=3.5"
 
 [[package]]
 name = "lightshield"
-version = "0.1.20b0"
+version = "0.1.23b0"
 description = "Library part of the Lightshield tool."
 category = "main"
 optional = false
@@ -144,7 +144,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "347d75c2d9f4cc032bc8262a042c20e7bceb910587c54fb94b067436ef1e198d"
+content-hash = "2b6efc35f382079df7e2c903651aa22c851daa1332a4651f5c0c84f7a6ada22f"
 
 [metadata.files]
 aiohttp = [
@@ -267,8 +267,8 @@ idna = [
     {file = "idna-3.2.tar.gz", hash = "sha256:467fbad99067910785144ce333826c71fb0e63a425657295239737f7ecd125f3"},
 ]
 lightshield = [
-    {file = "Lightshield-0.1.20b0-py3-none-any.whl", hash = "sha256:321dffc3adf9cdccad5317b344c343f85f9e7cb6f3c4b0431d25db0a0050d585"},
-    {file = "Lightshield-0.1.20b0.tar.gz", hash = "sha256:272932c57b0203fc329bfdec219f2d2a3550a3c2d288f68a75fcf55698bf9ab3"},
+    {file = "Lightshield-0.1.23b0-py3-none-any.whl", hash = "sha256:6e95ef016ef8b9a5ee1abc4b01038b78fcde2775454ce0c27ac6c0ed4f932dbe"},
+    {file = "Lightshield-0.1.23b0.tar.gz", hash = "sha256:b8b821fe4d828fb67b48c0a2295a295c07b1b738a3f35fe2b33833e01ea08028"},
 ]
 multidict = [
     {file = "multidict-5.1.0-cp36-cp36m-macosx_10_14_x86_64.whl", hash = "sha256:b7993704f1a4b204e71debe6095150d43b2ee6150fa4f44d6d966ec356a8d61f"},
