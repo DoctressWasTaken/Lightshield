@@ -9,6 +9,7 @@ Variables are overwritten as follows:
 import json
 import logging
 import os
+from lightshield import statics
 
 logger = logging.getLogger("Settings")
 
@@ -61,13 +62,9 @@ CONFIG = JsonConfig.read()
 
 # Universal keys
 SERVER = CONFIG.get("SERVER", "").lower()
-if SERVER == "":
-    logger.warning("Running without a provided server value.")
 # Parallel worker processes
 WORKER = int(CONFIG.get("WORKER", 5))
 API_KEY = CONFIG.get("API_KEY", None)
-if not API_KEY:
-    logger.warning("Running without a provided API key.")
 # Adds prefix to redis keys in case of multiple applications
 NAMESPACE = CONFIG.get("PROXY_NAMESPACE", "")
 

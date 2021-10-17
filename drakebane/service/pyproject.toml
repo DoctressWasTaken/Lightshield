@@ -1,14 +1,14 @@
 [tool.poetry]
-name = "Lightshield"
+name = "Drakebane - Service"
 version = "0.1.23b"
-description = "Library part of the Lightshield tool."
+description = "A Lightshield service."
 license = 'Apache-2.0'
 repository = 'https://github.com/LightshieldDotDev/Lightshield'
 authors = ["Doctress <lightshielddev@gmail.com>"]
-readme = 'README.md'
 
 [tool.poetry.dependencies]
 python = "^3.9"
+websockets = "*"
 aiohttp = "^3.7.4"
 aioredis = "^1.3.1"
 
@@ -18,6 +18,3 @@ black = "^21.8b0"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-drakebane = "lightshield.drakebane:run"

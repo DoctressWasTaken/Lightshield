@@ -2,6 +2,12 @@ version: '3.7'
 services:
   ### Services
 
+  drakebane:
+    build:
+      dockerfile: Dockerfile
+      context: drakebane
+
+
   league_ranking:
     hostname: league_ranking
     build:
