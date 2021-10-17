@@ -5,8 +5,8 @@ import signal
 
 import websockets
 
-class Server:
 
+class Server:
     def __init__(self):
         pass
 

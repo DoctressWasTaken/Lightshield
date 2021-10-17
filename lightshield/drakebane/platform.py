@@ -7,19 +7,29 @@ class Platform:
     """Manage platforms that are being processed by Lightshield."""
 
     def __init__(self):
-        self.logging = logging.getLogger('Platform')
+        self.logging = logging.getLogger("Platform")
 
     def set_parser(self, parent, subparser):
-        self.parser = subparser.add_parser('platform',
-                                           usage="%(prog)s [args]",
-                                           help=self.__doc__)
+        self.parser = subparser.add_parser(
+            "platform", usage="%(prog)s [args]", help=self.__doc__
+        )
 
         args = self.parser.add_mutually_exclusive_group()
-        args.add_argument('--add', nargs="+", choices=settings.statics.PLATFORMS, help=self.add.__doc__,
-                          metavar='PLATFORM')
-        args.add_argument('--list', action="store_true", help=self.list.__doc__)
-        args.add_argument('--remove', nargs="+", choices=settings.statics.PLATFORMS, help=self.remove.__doc__,
-                          metavar='PLATFORM')
+        args.add_argument(
+            "--add",
+            nargs="+",
+            choices=settings.statics.PLATFORMS,
+            help=self.add.__doc__,
+            metavar="PLATFORM",
+        )
+        args.add_argument("--list", action="store_true", help=self.list.__doc__)
+        args.add_argument(
+            "--remove",
+            nargs="+",
+            choices=settings.statics.PLATFORMS,
+            help=self.remove.__doc__,
+            metavar="PLATFORM",
+        )
         self.parser.set_defaults(func=self)
 
     def run(self, args):
