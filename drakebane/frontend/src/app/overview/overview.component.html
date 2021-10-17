@@ -1,0 +1,50 @@
+<div class="xl:container mx-auto pt-14">
+
+  <div>
+    <form id="data">
+      <table class="table-auto">
+        <tr class="border-2 border-black p-2">
+          <td>Server to pull</td>
+          <td>
+            <select name='servers' [(ngModel)]="selected_servers" multiple>
+              <option *ngFor="let server of servers" (click)="clicked()" [value]="server">{{server}}</option>
+            </select>
+          </td>
+        </tr>
+        <tr class="border-2 border-black p-2">
+          <td>
+            Queues
+          </td>
+          <td>
+            <select name='queues' [(ngModel)]="selected_queues" multiple>
+              <option *ngFor="let queue of queues" (click)="clicked()" [value]="queue">{{queue}}</option>
+            </select>
+          </td>
+        </tr>
+        <tr class="border-2 border-black p-2">
+          <td>
+            Configs
+          </td>
+          <td>
+            <div>
+              <input type="checkbox" [(ngModel)]="non_ranked" class="mr-2 leading-tight"
+                     id="non-ranked" name="non-ranked" (change)="clicked()"/>
+              <label for="non-ranked">Pull Non-Ranked players</label>
+            </div>
+            <div>
+              <input type="number" [(ngModel)]="patch_backtracking" class="mr-2 leading-tight"
+                     id="patch-backlog" name="patch-backlog" (change)="clicked()" placeholder=0/>
+              <label for="patch-backlog">How many patches should be pulled backwards</label>
+            </div>
+          </td>
+        </tr>
+        <tr class="border-2 border-black p-2">
+          <td colspan="2">
+            <button class="p-2 border-2 border-gray-700" (click)="update()">Update</button>
+          </td>
+        </tr>
+      </table>
+    </form>
+  </div>
+
+</div>
