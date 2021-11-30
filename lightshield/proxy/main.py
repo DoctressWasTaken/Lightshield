@@ -4,6 +4,7 @@ import re
 import aioredis
 
 from .endpoint import Endpoint
+from .layers import Server, Zone
 
 pattern = "https://([\w\d]*)\.api\.riotgames\.com(/[^/]*/[^/]*/[v\d]*/[^/]+).*"
 compiled = re.compile(pattern)
@@ -12,11 +13,11 @@ compiled = re.compile(pattern)
 class Proxy:
     """Central proxy element to be imported."""
 
-    def __init__(self):
-        # Setup Logging
+    def __init__(self, server_first=True):
 
         self.redis = None
         self.endpoints = {}
+        self.server_first = server_first
         self.logging = logging.getLogger("Proxy")
 
     async def init(self, host="localhost", port=6379, namespace="ratelimiter"):
@@ -30,8 +31,18 @@ class Proxy:
         try:
             return await self.endpoints[limit_key].request(url, session)
         except KeyError:
+            if self.server_first:
+                order = [
+                    Server(server, self.namespace),
+                    Zone(server, zone, self.namespace),
+                ]
+            else:
+                order = [
+                    Zone(server, zone, self.namespace),
+                    Server(server, self.namespace),
+                ]
             self.endpoints[limit_key] = Endpoint(
-                server, zone, self.namespace, self.redis
+                server, zone, self.redis, order
             )
             return await self.endpoints[limit_key].request(url, session)
 
@@ -42,7 +53,17 @@ class Proxy:
         try:
             return self.endpoints[limit_key]
         except KeyError:
+            if self.server_first:
+                order = [
+                    Server(server, self.namespace),
+                    Zone(server, zone, self.namespace),
+                ]
+            else:
+                order = [
+                    Zone(server, zone, self.namespace),
+                    Server(server, self.namespace),
+                ]
             self.endpoints[limit_key] = Endpoint(
-                server, zone, self.namespace, self.redis
+                server, zone, self.redis, order
             )
             return self.endpoints[limit_key]
