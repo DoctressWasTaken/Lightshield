@@ -19,3 +19,5 @@ db.sqlite3
 logs/
 configs/
 *.db
+/drakebane/frontend/node_modules/
+/drakebane/frontend/.idea/

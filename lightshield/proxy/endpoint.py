@@ -1,5 +1,4 @@
 import logging
-import types
 from datetime import datetime
 
 from lightshield.exceptions import (
@@ -13,81 +12,68 @@ from lightshield.exceptions import (
 class Endpoint:
     """Handle requests for a specific endpoint."""
 
-    def __init__(self, server, zone, redis, middlewares):
+    def __init__(self, server, zone, redis, namespace):
         self.server = server
         self.zone = zone
-        self.middlewares = middlewares
+        self.namespace = namespace
+
         self.redis = redis
         self.logging = logging.getLogger("Proxy")
 
-    def _gen(self):
-        """Generator method to return all methods."""
-        list = [self._align] + [mw.middleware for mw in self.middlewares] + [self._permit, self._request]
+        self.knows_server = False
+        self.knows_zone = False
 
-        for entry in list:
-            yield entry
+        self.permit = None
+        self.align = None
 
-    async def _permit(self, data):
-        """Get permit for request execution."""
-        try:
-            script_sha1 = self.permit_sha1
-        except AttributeError:
-            script_sha1 = self.permit_sha1 = await self.redis.get("lightshield_permit")
+    async def init(self):
+        await self.redis.setnx(
+            "%s:%s:%s" % (self.namespace, self.server, self.zone), "1:7"
+        )
+        await self.redis.setnx("%s:%s" % (self.namespace, self.server), "1:7")
+        self.permit = await self.redis.get("lightshield_permit")
+        self.align = await self.redis.get("lightshield_update")
 
-        if (wait := await self.redis.evalsha(script_sha1, data.keys, data.argv)) > 0:
-            self.logging.debug("Waiting for %s ms.", wait)
-            raise LimitBlocked(retry_after=wait)
+    async def request(self, url, session):
 
-        return await next(data.gen)(data)  # Nothing to execute on the back
-
-    async def _align(self, data):
-        """Align limits based on headers."""
-        try:
-            script_sha1 = self.align_sha1
-        except AttributeError:
-            script_sha1 = self.align_sha1 = await self.redis.get("lightshield_update")
-
-        await next(data.gen)(data)
-        await self.redis.evalsha(script_sha1, data.a_keys, data.a_argv)
-
-    async def _request(self, data):
-        """Execute the query against the API.
-
-        At this point permits are set and the return is passed back through the layers.
-        """
-        async with data.session.get(data.url) as response:
-            data.response_json = await response.json()
-            data.response_headers = response.headers
+        request_stamp = int(datetime.now().timestamp() * 1000)
+        if (
+            response := await self.redis.evalsha(
+                self.permit,
+                [
+                    "%s:%s:%s" % (self.namespace, self.server, self.zone),
+                    "%s:%s" % (self.namespace, self.server),
+                ],
+                [
+                    request_stamp,
+                ],
+            )
+            > 0
+        ):
+            raise LimitBlocked(retry_after=response)
+        async with session.get(url) as response:
+            response_json = await response.json()
             status = response.status
             headers = response.headers
-            # Prefill a_argv
-            retry_after = 0
-            if status != 200 and "Retry-After" in headers:
-                retry_after = headers["Retry-After"]
-            data.a_argv += [int(datetime.now().timestamp() * 1000), retry_after]
-
+        if "X-App-Rate-Limit" in headers and "X-Method-Rate-Limit" in headers:
+            await self.redis.evalsha(
+                self.align,
+                [
+                    "%s:%s:%s" % (self.namespace, self.server, self.zone),
+                    "%s:%s" % (self.namespace, self.server),
+                ],
+                [
+                    request_stamp,
+                    headers.get("X-Method-Rate-Limit"),
+                    headers.get("X-Method-Rate-Limit-Count"),
+                    headers.get("X-App-Rate-Limit"),
+                    headers.get("X-App-Rate-Limit-Count"),
+                ],
+            )
             if status == 200:
-                return
+                return response_json
             if status == 404:
                 raise NotFoundException()
             if status == 429:
-                raise RatelimitException()
+                raise RatelimitException(retry_after=headers.get("Retry-After", 1))
             raise Non200Exception()
-
-    async def request(self, url, session):
-        """Handle requests."""
-        data = types.SimpleNamespace()
-        # Static
-        data.session = session
-        data.url = url
-        data.redis = self.redis
-        # Permit
-        data.keys = []
-        data.argv = [int(datetime.now().timestamp() * 1000)]
-        # Algin
-        data.a_keys = []
-        data.a_argv = data.argv
-        # Generator Method
-        data.gen = self._gen()
-        await next(data.gen)(data)
-        return data.response_json

@@ -8,6 +8,9 @@ class LimitBlocked(Exception):
 class RatelimitException(Exception):
     """On 429 or 430 Response."""
 
+    def __init__(self, retry_after=1):
+        self.retry_after = int(retry_after)
+
 
 class NotFoundException(Exception):
     """On 404-Response."""

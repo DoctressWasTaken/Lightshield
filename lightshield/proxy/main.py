@@ -4,7 +4,6 @@ import re
 import aioredis
 
 from .endpoint import Endpoint
-from .layers import Server, Zone
 
 pattern = "https://([\w\d]*)\.api\.riotgames\.com(/[^/]*/[^/]*/[v\d]*/[^/]+).*"
 compiled = re.compile(pattern)
@@ -31,19 +30,9 @@ class Proxy:
         try:
             return await self.endpoints[limit_key].request(url, session)
         except KeyError:
-            if self.server_first:
-                order = [
-                    Server(server, self.namespace),
-                    Zone(server, zone, self.namespace),
-                ]
-            else:
-                order = [
-                    Zone(server, zone, self.namespace),
-                    Server(server, self.namespace),
-                ]
-            self.endpoints[limit_key] = Endpoint(
-                server, zone, self.redis, order
-            )
+            endpoint = Endpoint(server, zone, self.redis, self.namespace)
+            await endpoint.init()
+            self.endpoints[limit_key] = endpoint
             return await self.endpoints[limit_key].request(url, session)
 
     async def get_endpoint(self, url):
@@ -53,17 +42,7 @@ class Proxy:
         try:
             return self.endpoints[limit_key]
         except KeyError:
-            if self.server_first:
-                order = [
-                    Server(server, self.namespace),
-                    Zone(server, zone, self.namespace),
-                ]
-            else:
-                order = [
-                    Zone(server, zone, self.namespace),
-                    Server(server, self.namespace),
-                ]
-            self.endpoints[limit_key] = Endpoint(
-                server, zone, self.redis, order
-            )
-            return self.endpoints[limit_key]
+            endpoint = Endpoint(server, zone, self.redis, self.namespace)
+            await endpoint.init()
+            self.endpoints[limit_key] = endpoint
+            return endpoint

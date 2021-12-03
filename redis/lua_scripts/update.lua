@@ -1,58 +1,52 @@
-local function subrange(t, first, last)
-    local sub = {}
-    for i = first, last do
-        sub[#sub + 1] = tonumber(t[i])
+local function splits(s, delimiter)
+    local result = {};
+    for match in (s..delimiter):gmatch("(.-)"..delimiter) do
+        table.insert(result, match);
     end
-    return sub
+    return result;
 end
-local send_time, return_time, retry_after = unpack(ARGV)
-local params = subrange(ARGV, 4, #ARGV) -- Count:Max:Span per bucket
-for range = 1, #KEYS do
-    -- redis.log(redis.LOG_WARNING, '[UPDATE] Bucket ' .. KEYS[range])
-    local count, span = unpack(params)
-    if #params > 0 then
-        params = subrange(params, 3, #params)
-    end
-    -- Update all limits
-    local bucket_data = redis.call('hmget', KEYS[range], 'end', 'start', 'count')
-    if not bucket_data[1] then -- Create bucket if not existent
-        -- redis.log(redis.LOG_WARNING, '[UPDATE] Bucket doesnt exist. ')
-        redis.call('hset', KEYS[range], 'count', count, 'start', send_time, 'end', tonumber(send_time) + span)
 
-        -- Inflight handling
-        local previous = redis.call('set', KEYS[range]..':inflight', 0, 'GET')
-        if not previous or previous == nil
-        then
-            previous = 0
+local function update_limit(key, limits, counts, request_time)
+    redis.call('set', key, limits)
+    local limit_counts = splits(counts, ',')
+    for i, limit_raw in pairs(splits(limits, ',')) do
+        redis.log(redis.LOG_WARNING, 'Update: '..limit_raw..' Key: '..key)
+        local limit = splits(limit_raw, ':')
+        -- These are each limits max and interval, e.g. 500:10
+        local max = limit[1]
+        local interval = limit[2]
+        local split = splits(limit_counts[i], ':')
+        if redis.call('exists',  key..':'..limit_raw) == 0 then
+            if redis.call('exists', key..':'..limit_raw..':inflight') == 1 then
+                -- No active bucket but inflights -> reduce inflights for next bucket calculation
+                redis.call('decr', key..':'..limit_raw..':inflight')
+            else
+                redis.call('setnx', key..':'..limit_raw..':inflight', '0')
+                redis.call('setnx', key..':'..limit_raw..':rollover', '0')
+                redis.call('hsetnx', key..':'..limit_raw, 'count', split[1])
+                redis.call('hsetnx', key..':'..limit_raw, 'start', request_time)
+                redis.call('expire', key..':'..limit_raw..':'..'inflight', 60 * 60 * 6) -- Limit inflight: set auto-cleanup
+                redis.call('expire', key..':'..limit_raw..':'..'rollover', 60 * 60) -- Limit rollover: set auto-cleanup
+                redis.call('pexpireat', key..':'..limit_raw, tonumber(request_time) + 1000 * interval) -- Limit: Set TTL
+            end
+        else
+            if redis.call('hget', key..':'..limit_raw, 'start') <= request_time then
+                local count = redis.call('hget', key..':'..limit_raw, 'count')
+                if count < split[1] then redis.call('hset', key..':'..limit_raw, 'count', split[1]) end -- Update count if header higher
+                redis.call('decr', key..':'..limit_raw..':inflight') -- Reduce inflights accordingly
+            end
         end
-        redis.call('set', KEYS[range]..':rollover', previous)
-        -- / Inflight handling
-    else -- Handle existing bucket
-        -- Inflight handling
-        if redis.call('decr', KEYS[range]..':inflight') < 0
-        then
-            redis.call('set', KEYS[range]..':inflight', 0)
-        end
-        -- / Inflight handling
-        local end_point, start_point, saved_count = unpack(bucket_data)
-        if tonumber(send_time) < tonumber(start_point) then  -- Pass if the request returned before the new bucket was initiated
-            -- redis.log(redis.LOG_WARNING, '[UPDATE] Returned before the bucket started.')
-        elseif count < tonumber(saved_count) and tonumber(send_time) > tonumber(end_point) then
-            -- If returned count < saved count
-            -- AND returned timestamp > local end
-            -- then assume bucket is over
-            -- redis.log(redis.LOG_WARNING, '[UPDATE] Making bucket persistent. '..KEYS[range])
-            redis.call('persist', KEYS[range])  -- Set to persist so that it can be reset
-            redis.call('hset', KEYS[range], 'count', count, 'start', send_time, 'end', tonumber(send_time) + span)
-        else -- Legit request, update count
-            local new_count = math.max(count, saved_count)
-            redis.call('hset', KEYS[range], 'count', new_count)
-        end
-    end
-    if redis.call('ttl', KEYS[range]) < 0 then
-        -- If has no expire, set expire
-        local expire_time = tonumber(return_time) + 1000 * span
-        -- redis.log(redis.LOG_WARNING, 'Setting expire for ' .. KEYS[range] .. ' to ' .. expire_time)
-        redis.call('pexpireat', KEYS[range], expire_time)
     end
 end
+
+local key_zone = KEYS[1]
+local key_server = KEYS[2]
+local request_time = ARGV[1]
+
+local limits_zone = ARGV[2]
+local counts_zone = ARGV[3]
+local limits_server = ARGV[4]
+local counts_server = ARGV[5]
+
+update_limit(key_zone, limits_zone, counts_zone, request_time)
+update_limit(key_server, limits_server, counts_server, request_time)
