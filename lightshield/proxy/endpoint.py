@@ -49,7 +49,7 @@ class Endpoint:
                 ],
             )
             > 0
-        ):
+        ) :
             raise LimitBlocked(retry_after=response)
         async with session.get(url) as response:
             response_json = await response.json()
