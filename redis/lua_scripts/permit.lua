@@ -11,7 +11,7 @@ local function assert_permit(key)
     local values = redis.call('get', key) -- Region known limits
     local max_wait = 0
     for i, limit_raw in pairs(splits(values, ',')) do
-        redis.log(redis.LOG_WARNING, 'Permit: '..limit_raw..' Key: '..key)
+        --redis.log(redis.LOG_WARNING, 'Permit: '..limit_raw..' Key: '..key)
         local limit = splits(limit_raw, ':')
         -- These are each limits max and interval, e.g. 500:10
         local max = limit[1]
@@ -35,7 +35,7 @@ end
 local function register_request(key, request_time)
     local values = redis.call('get', key) -- Region known limits
     for i, limit_raw in pairs(splits(values, ',')) do
-        redis.log(redis.LOG_WARNING, 'Request: '..limit_raw..' Key: '..key)
+        --redis.log(redis.LOG_WARNING, 'Request: '..limit_raw..' Key: '..key)
         local limit = splits(limit_raw, ':')
         -- These are each limits max and interval, e.g. 500:10
         local max = limit[1]

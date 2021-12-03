@@ -10,7 +10,7 @@ local function update_limit(key, limits, counts, request_time)
     redis.call('set', key, limits)
     local limit_counts = splits(counts, ',')
     for i, limit_raw in pairs(splits(limits, ',')) do
-        redis.log(redis.LOG_WARNING, 'Update: '..limit_raw..' Key: '..key)
+        --redis.log(redis.LOG_WARNING, 'Update: '..limit_raw..' Key: '..key)
         local limit = splits(limit_raw, ':')
         -- These are each limits max and interval, e.g. 500:10
         local max = limit[1]
