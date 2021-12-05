@@ -16,33 +16,32 @@ local function update_limit(key, limits, counts, request_time)
         local max = limit[1]
         local interval = tonumber(limit[2])
         local split = splits(limit_counts[i], ':')
+        local limit_server_count = tonumber(split[1])
         local second = tostring(math.floor(tonumber(request_time) / 1000))
         if redis.call('exists',  key..':'..limit_raw) == 0 then
-            if redis.call('exists', key..':'..limit_raw..':inflight') == 1 then
-                -- No active bucket but inflights -> reduce inflights for next bucket calculation
-                redis.call('decr', key..':'..limit_raw..':inflight')
-            else
-                redis.call('setnx', key..':'..limit_raw..':inflight', '0')
-                redis.call('setnx', key..':'..limit_raw..':rollover', '0')
-                redis.call('hsetnx', key..':'..limit_raw, 'count', split[1])
-                redis.call('hsetnx', key..':'..limit_raw, 'start', request_time)
-                redis.call('expire', key..':'..limit_raw..':'..'inflight', 60 * 60 * 6) -- Limit inflight: set auto-cleanup
-                redis.call('expire', key..':'..limit_raw..':'..'rollover', 60 * 60) -- Limit rollover: set auto-cleanup
-                redis.call('pexpireat', key..':'..limit_raw, tonumber(request_time) + 1000 * interval) -- Limit: Set TTL
+            -- No active bucket
+            if redis.call('setnx', key..':'..limit_raw..':inflight', 0) == 0 then -- If key did exist
+                -- Active inflights
+                if tonumber(redis.call('get', key..':'..limit_raw..':inflight')) > 0 then
+                    -- Only decrease inflights when > 0
+                    redis.call('decr', key..':'..limit_raw..':inflight')
+                end
             end
-        --[=====[
-        -- This should in theory reduce inflights if a request returns after the bucket expired but no new one started
-        -- Removing as it seems to cause problems
         else
+            -- Bucket exists
             if redis.call('hget', key..':'..limit_raw, 'start') <= request_time then
-                local count = redis.call('hget', key..':'..limit_raw, 'count')
-                if count < split[1] then redis.call('hset', key..':'..limit_raw, 'count', split[1]) end -- Update count if header higher
-                redis.call('decr', key..':'..limit_raw..':inflight') -- Reduce inflights accordingly
+                -- Request was made in currently active bucket
+                local limit_stored_count = tonumber(redis.call('hget', key..':'..limit_raw, 'count'))
+                if limit_stored_count < limit_server_count then redis.call('hset', key..':'..limit_raw, 'count', limit_server_count) end -- Update count if header higher
+                if tonumber(redis.call('get', key..':'..limit_raw..':inflight')) > 0 then
+                    -- Only decrease inflights when > 0
+                    redis.log(redis.LOG_WARNING, key..':'..limit_raw..' Inflight: '..redis.call('decr', key..':'..limit_raw..':inflight')) -- Reduce inflights accordingly
+                end
+                if redis.call('hsetnx', key..':'..limit_raw, 'end', 'returned') == 1 then
+                    -- Update bucket end if it wasn't set before
+                    redis.call('pexpireat', key..':'..limit_raw, tonumber(request_time) + 1000 * interval)
+                end
             end
-        --]=====]
-        end
-        if redis.call('hsetnx', key..':'..limit_raw, 'end', 'returned') == 1 then
-            redis.call('pexpireat', key..':'..limit_raw, tonumber(request_time) + 1000 * interval)
         end
         -- Tracking WIP: Not Tested
         redis.call('hincrby', key..':'..limit_raw..':status:'..second, ARGV[6], 1)

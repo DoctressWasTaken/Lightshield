@@ -174,17 +174,12 @@ async def run():
     await p.init(host='localhost', port=5432)
 ```
 
-Make singular calls directly through the Proxy.
+Make calls directly to one endpoint.
+Provide the server the calls are run against and an identifier that helps you recognize which endpoint the requests are
+run against
 ```python
 async with aiohttp.ClientSession(headers={'X-Riot-Token': ''}) as session:
-    await p.request('https://euw1.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/SILVER/I', session=session)
-```
-
-Make calls directly to one endpoint without having the proxy select the proper limits 
-through a regex comparison to increase processing speed.
-```python
-async with aiohttp.ClientSession(headers={'X-Riot-Token': ''}) as session:
-    zone = await p.get_endpoint('https://euw1.api.riotgames.com/lol/league-exp/v4/entries/')
+    zone = await p.get_endpoint(server='europe', zone='league-exp')
     for page in range(1, 10):
         zone.request('https://euw1.api.riotgames.com/lol/league-exp/v4/entries/RANKED_SOLO_5x5/SILVER/I?page=%s' % page, session)
 ```

@@ -23,21 +23,8 @@ class Proxy:
         self.redis = await aioredis.create_redis_pool((host, port), encoding="utf-8")
         self.namespace = namespace
 
-    async def request(self, url, session):
-        """Request an url."""
-        server, zone = compiled.findall(url)[0]
-        limit_key = "%s:%s" % (server, zone)
-        try:
-            return await self.endpoints[limit_key].request(url, session)
-        except KeyError:
-            endpoint = Endpoint(server, zone, self.redis, self.namespace)
-            await endpoint.init()
-            self.endpoints[limit_key] = endpoint
-            return await self.endpoints[limit_key].request(url, session)
-
-    async def get_endpoint(self, url):
+    async def get_endpoint(self, server, zone):
         """Return the endpoint used by a provided url."""
-        server, zone = compiled.findall(url)[0]
         limit_key = "%s:%s" % (server, zone)
         try:
             return self.endpoints[limit_key]

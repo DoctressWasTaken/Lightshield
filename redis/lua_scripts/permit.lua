@@ -21,6 +21,7 @@ local function assert_permit(key)
         if (bucket_count and bucket_count ~= nil) then
             local bucket_rollover = tonumber(redis.call('get', key..':'..limit_raw..':'..'rollover')) -- Limit rollover
             if not (bucket_rollover or bucket_rollover == nil) then bucket_rollover = 0 end
+            -- redis.log(redis.LOG_WARNING, 'Count: '..bucket_count + bucket_rollover)
             local ttl = redis.call('pttl', key..':'..limit_raw) -- Limit
             if max <= bucket_count + bucket_rollover then
                 if max_wait < ttl then
@@ -35,7 +36,7 @@ end
 local function register_request(key, request_time)
     local values = redis.call('get', key) -- Region known limits
     for i, limit_raw in pairs(splits(values, ',')) do
-        --redis.log(redis.LOG_WARNING, 'Request: '..limit_raw..' Key: '..key)
+        -- redis.log(redis.LOG_WARNING, 'Request: '..limit_raw..' Key: '..key)
         local limit = splits(limit_raw, ':')
         -- These are each limits max and interval, e.g. 500:10
         local max = limit[1]
@@ -43,18 +44,18 @@ local function register_request(key, request_time)
         local second = tostring(math.floor(tonumber(request_time) / 1000))
 
         if redis.call('exists', key..':'..limit_raw) == 0 then -- Limit
+            -- Bucket does not exists
             local old_inflight = redis.call('get', key..':'..limit_raw..':inflight') -- Limit inflight
             redis.call('set', key..':'..limit_raw..':inflight', '0')
             if not old_inflight or old_inflight == nil then old_inflight = '0' end
             redis.call('set', key..':'..limit_raw..':rollover', old_inflight) -- Limit rollover
             redis.call('hsetnx', key..':'..limit_raw, 'count', '0') -- Limit: Init count at 0
             redis.call('hsetnx', key..':'..limit_raw, 'start', request_time) -- Limit: Set start time
-            redis.call('expire', key..':'..limit_raw..':inflight', 60 * 60 * 6) -- Limit inflight: set auto-cleanup
+            redis.call('expire', key..':'..limit_raw..':inflight', 60 * 60) -- Limit inflight: set auto-cleanup
             redis.call('expire', key..':'..limit_raw..':rollover', 60 * 60) -- Limit rollover: set auto-cleanup
             redis.call('pexpireat', key..':'..limit_raw, tonumber(request_time) + 1000 * interval) -- Limit: Set TTL
 
-            redis.call('setnx', key..':'..limit_raw..':bucket_init:'..second, 1)
-            redis.call('expire', key..':'..limit_raw..':bucket_init:'..second, 60 * 60)
+            redis.call('setex', key..':'..limit_raw..':bucket_init:'..second, 60 * 60, 1)
 
         end
         redis.call('hincrby', key..':'..limit_raw, 'count', '1') -- Limit: Increase counter
