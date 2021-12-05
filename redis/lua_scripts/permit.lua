@@ -10,26 +10,32 @@ end
 local function assert_permit(key)
     local values = redis.call('get', key) -- Region known limits
     local max_wait = 0
+    local min_space = 99999999
     for i, limit_raw in pairs(splits(values, ',')) do
-        --redis.log(redis.LOG_WARNING, 'Permit: '..limit_raw..' Key: '..key)
+        redis.log(redis.LOG_WARNING, 'Permit: '..limit_raw..' Key: '..key)
         local limit = splits(limit_raw, ':')
         -- These are each limits max and interval, e.g. 500:10
-        local max = limit[1]
+        local max = tonumber(limit[1])
         local interval = limit[2]
         -- Test if current bucket exists
         local bucket_count = tonumber(redis.call('hget', key..':'..limit_raw, 'count')) -- Limit
-        if not (bucket_count or bucket_count == nil) then
-            local bucket_inflight = tonumber(redis.call('get', key..':'..limit_raw..':'..'inflight')) -- Limit inflight
+        if (bucket_count and bucket_count ~= nil) then
             local bucket_rollover = tonumber(redis.call('get', key..':'..limit_raw..':'..'rollover')) -- Limit rollover
+            if not (bucket_rollover or bucket_rollover == nil) then bucket_rollover = 0 end
             local ttl = redis.call('pttl', key..':'..limit_raw) -- Limit
             if max <= bucket_count + bucket_rollover then
                 if max_wait < ttl then
-                    max_wait = ttl
+                    max_wait = math.max(ttl, 100)
                 end
+            end
+            -- Tests
+            if max - (bucket_count + bucket_rollover) < min_space then
+                min_space = max - (bucket_count + bucket_rollover)
             end
         end
     end
-    return max_wait
+    redis.log(redis.LOG_WARNING, min_space)
+    return max_wait;
 end
 
 local function register_request(key, request_time)
@@ -69,10 +75,8 @@ end
 local key_zone = KEYS[1]
 local key_server = KEYS[2]
 local request_time = ARGV[1]
-
 local zone_wait = assert_permit(key_zone)
 local server_wait = assert_permit(key_server)
-
 local max = zone_wait
 if server_wait > max then max = server_wait end
 if max > 0 then

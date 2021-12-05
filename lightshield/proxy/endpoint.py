@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 
@@ -25,6 +26,8 @@ class Endpoint:
 
         self.permit = None
         self.align = None
+        self.lock = None
+        self.unlock = None
 
     async def init(self):
         await self.redis.setnx(
@@ -33,12 +36,26 @@ class Endpoint:
         await self.redis.setnx("%s:%s" % (self.namespace, self.server), "1:7")
         self.permit = await self.redis.get("lightshield_permit")
         self.align = await self.redis.get("lightshield_update")
+        self.lock = await self.redis.get("lightshield_lock")
+        self.unlock = await self.redis.get("lightshield_unlock")
 
     async def request(self, url, session):
 
         request_stamp = int(datetime.now().timestamp() * 1000)
-        if (
-            response := await self.redis.evalsha(
+        while True:
+            logging.debug('Attempting lock')
+            lock = await self.redis.evalsha(
+                self.lock,
+                [
+                    "%s:%s:%s:lock" % (self.namespace, self.server, self.zone),
+                    "%s:%s:lock" % (self.namespace, self.server),
+                ]
+            )
+            if lock != 0:
+                logging.debug('Lock failed: %s', lock)
+                await asyncio.sleep(0.001)
+                continue
+            response = await self.redis.evalsha(
                 self.permit,
                 [
                     "%s:%s:%s" % (self.namespace, self.server, self.zone),
@@ -48,13 +65,22 @@ class Endpoint:
                     request_stamp,
                 ],
             )
-            > 0
-        ) :
-            raise LimitBlocked(retry_after=response)
+            await self.redis.evalsha(
+                self.unlock,
+                [
+                    "%s:%s:%s:lock" % (self.namespace, self.server, self.zone),
+                    "%s:%s:lock" % (self.namespace, self.server),
+                ]
+            )
+            if int(response) > 0:
+                raise LimitBlocked(retry_after=response)
+            break
+
         async with session.get(url) as response:
             response_json = await response.json()
             status = response.status
             headers = response.headers
+            response_stamp = int(datetime.now().timestamp() * 1000)
         if "X-App-Rate-Limit" in headers and "X-Method-Rate-Limit" in headers:
             await self.redis.evalsha(
                 self.align,
@@ -63,11 +89,12 @@ class Endpoint:
                     "%s:%s" % (self.namespace, self.server),
                 ],
                 [
-                    request_stamp,
+                    response_stamp,
                     headers.get("X-Method-Rate-Limit"),
                     headers.get("X-Method-Rate-Limit-Count"),
                     headers.get("X-App-Rate-Limit"),
                     headers.get("X-App-Rate-Limit-Count"),
+                    str(status),
                 ],
             )
             if status == 200:

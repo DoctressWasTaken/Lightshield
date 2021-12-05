@@ -6,7 +6,16 @@ sleep 1
 echo "Redis is up"
 hash_permit=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/permit.lua)")
 echo $hash_permit
+redis-cli set 'lightshield_permit' $hash_permit
+
 hash_update=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/update.lua)")
 echo $hash_update
-redis-cli set 'lightshield_permit' $hash_permit
 redis-cli set 'lightshield_update' $hash_update
+
+hash_lock=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/lock.lua)")
+echo $hash_lock
+redis-cli set 'lightshield_lock' $hash_lock
+
+hash_unlock=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/unlock.lua)")
+echo $hash_unlock
+redis-cli set 'lightshield_unlock' $hash_unlock
