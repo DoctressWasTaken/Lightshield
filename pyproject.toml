@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "Lightshield"
-version = "0.3.14b"
+version = "0.3.16b"
 description = "Library part of the Lightshield tool."
 license = 'Apache-2.0'
 repository = 'https://github.com/LightshieldDotDev/Lightshield'

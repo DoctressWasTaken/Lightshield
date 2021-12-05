@@ -41,7 +41,7 @@ local function update_limit(key, limits, counts, request_time)
             end
         --]=====]
         end
-        if redis.call('hsetnx', key..':'..limit_raw, 'end', 'returned') == 0 then
+        if redis.call('hsetnx', key..':'..limit_raw, 'end', 'returned') == 1 then
             redis.call('pexpireat', key..':'..limit_raw, tonumber(request_time) + 1000 * interval)
         end
         -- Tracking WIP: Not Tested

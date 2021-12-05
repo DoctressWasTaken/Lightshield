@@ -10,9 +10,8 @@ end
 local function assert_permit(key)
     local values = redis.call('get', key) -- Region known limits
     local max_wait = 0
-    local min_space = 99999999
     for i, limit_raw in pairs(splits(values, ',')) do
-        redis.log(redis.LOG_WARNING, 'Permit: '..limit_raw..' Key: '..key)
+        -- redis.log(redis.LOG_WARNING, 'Permit: '..limit_raw..' Key: '..key)
         local limit = splits(limit_raw, ':')
         -- These are each limits max and interval, e.g. 500:10
         local max = tonumber(limit[1])
@@ -25,16 +24,11 @@ local function assert_permit(key)
             local ttl = redis.call('pttl', key..':'..limit_raw) -- Limit
             if max <= bucket_count + bucket_rollover then
                 if max_wait < ttl then
-                    max_wait = math.max(ttl, 100)
+                    max_wait = ttl
                 end
-            end
-            -- Tests
-            if max - (bucket_count + bucket_rollover) < min_space then
-                min_space = max - (bucket_count + bucket_rollover)
             end
         end
     end
-    redis.log(redis.LOG_WARNING, min_space)
     return max_wait;
 end
 

@@ -29,9 +29,9 @@ class Endpoint:
 
     async def init(self):
         await self.redis.setnx(
-            "%s:%s:%s" % (self.namespace, self.server, self.zone), "1:7"
+            "%s:%s:%s" % (self.namespace, self.server, self.zone), "1:1"
         )
-        await self.redis.setnx("%s:%s" % (self.namespace, self.server), "1:7")
+        await self.redis.setnx("%s:%s" % (self.namespace, self.server), "1:1")
         self.permit = await self.redis.get("lightshield_permit")
         self.align = await self.redis.get("lightshield_update")
 
