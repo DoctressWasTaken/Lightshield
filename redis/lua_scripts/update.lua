@@ -17,7 +17,7 @@ local function update_limit(key, limits, counts, request_time)
         local interval = tonumber(limit[2])
         local split = splits(limit_counts[i], ':')
         local limit_server_count = tonumber(split[1])
-        local second = tostring(math.floor(tonumber(request_time) / 1000))
+        local ten_second = tostring(math.floor(tonumber(request_time) / 10000))
         if redis.call('exists',  key..':'..limit_raw) == 0 then
             -- No active bucket
             if redis.call('setnx', key..':'..limit_raw..':inflight', 0) == 0 then -- If key did exist
@@ -44,9 +44,8 @@ local function update_limit(key, limits, counts, request_time)
             end
         end
         -- Tracking WIP: Not Tested
-        local bucket_start = redis.call('hget', key..':'..limit_raw, 'start')
-        redis.call('hincrby', key..':'..limit_raw..':status:'..bucket_start, ARGV[6], 1)
-        redis.call('expire', key..':'..limit_raw..':status'..bucket_start, 60 * 10)
+        redis.call('hincrby', key..':'..limit_raw..':status:'..ten_second, ARGV[6], 1)
+        redis.call('expire', key..':'..limit_raw..':status'..ten_second, 60 * 10)
     end
 end
 

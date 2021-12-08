@@ -13,7 +13,7 @@ local function update_limit(key, request_time)
         -- These are each limits max and interval, e.g. 500:10
         local max = limit[1]
         local interval = tonumber(limit[2])
-        local second = tostring(math.floor(tonumber(request_time) / 1000))
+        local ten_second = tostring(math.floor(tonumber(request_time) / 10000))
         if redis.call('exists',  key..':'..limit_raw) == 0 then
             -- No active bucket
             if redis.call('setnx', key..':'..limit_raw..':inflight', 0) == 0 then -- If key did exist
@@ -38,9 +38,8 @@ local function update_limit(key, request_time)
             end
         end
         -- Tracking WIP: Not Tested
-        local bucket_start = redis.call('hget', key..':'..limit_raw, 'start')
-        redis.call('hincrby', key..':'..limit_raw..':status:'..bucket_start, ARGV[2], 1)
-        redis.call('expire', key..':'..limit_raw..':status'..bucket_start, 60 * 10)
+        redis.call('hincrby', key..':'..limit_raw..':status:'..ten_second, ARGV[2], 1)
+        redis.call('expire', key..':'..limit_raw..':status'..ten_second, 60 * 10)
     end
 end
 
