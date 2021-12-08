@@ -26,7 +26,8 @@ class Endpoint:
         self.knows_zone = False
 
         self.permit = None
-        self.align = None
+        self.update = None
+        self.update_slim = None
 
     async def init(self):
         await self.redis.setnx(
@@ -34,7 +35,8 @@ class Endpoint:
         )
         await self.redis.setnx("%s:%s" % (self.namespace, self.server), "1:1")
         self.permit = await self.redis.get("lightshield_permit")
-        self.align = await self.redis.get("lightshield_update")
+        self.update = await self.redis.get("lightshield_update")
+        self.update_slim = await self.redis.get("lightshield_update_slim")
 
     async def request(self, url, session):
 
@@ -60,10 +62,10 @@ class Endpoint:
             status = response.status
             headers = response.headers
             response_stamp = int(datetime.now().timestamp() * 1000)
-        if "X-App-Rate-Limit" in headers and "X-Method-Rate-Limit" in headers:
-            try:
+        try:
+            if "X-App-Rate-Limit" in headers and "X-Method-Rate-Limit" in headers:
                 await self.redis.evalsha(
-                    self.align,
+                    self.update,
                     [
                         "%s:%s:%s" % (self.namespace, self.server, self.zone),
                         "%s:%s" % (self.namespace, self.server),
@@ -77,14 +79,26 @@ class Endpoint:
                         str(status),
                     ],
                 )
-            except ReplyError:
-                self.logging.debug("Reply error in align script.")
-                raise
-            if status == 200:
-                return response_json
-            if status == 404:
-                raise NotFoundException()
-            if status == 429:
-                self.logging.debug(headers)
-                raise RatelimitException(retry_after=headers.get("Retry-After", 1))
-            raise Non200Exception()
+            else:
+                await self.redis.evalsha(
+                    self.update_slim,
+                    [
+                        "%s:%s:%s" % (self.namespace, self.server, self.zone),
+                        "%s:%s" % (self.namespace, self.server),
+                    ],
+                    [
+                        response_stamp,
+                        str(status),
+                    ],
+                )
+        except ReplyError:
+            self.logging.debug("Reply error in align script.")
+            raise
+        if status == 200:
+            return response_json
+        if status == 404:
+            raise NotFoundException()
+        if status == 429:
+            self.logging.debug(headers)
+            raise RatelimitException(retry_after=headers.get("Retry-After", 1))
+        raise Non200Exception()

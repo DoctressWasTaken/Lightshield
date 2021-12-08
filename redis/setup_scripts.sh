@@ -19,3 +19,10 @@ redis-cli set 'lightshield_lock' $hash_lock
 hash_unlock=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/unlock.lua)")
 echo $hash_unlock
 redis-cli set 'lightshield_unlock' $hash_unlock
+
+hash_update_slim=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/update_slim.lua)")
+echo $hash_update_slim
+redis-cli set 'lightshield_update_slim' $hash_update_slim
+
+redis-cli config set appendonly no
+redis-cli config set save ""

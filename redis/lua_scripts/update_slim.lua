@@ -6,17 +6,13 @@ local function splits(s, delimiter)
     return result;
 end
 
-local function update_limit(key, limits, counts, request_time)
-    redis.call('set', key, limits)
-    local limit_counts = splits(counts, ',')
-    for i, limit_raw in pairs(splits(limits, ',')) do
+local function update_limit(key, request_time)
+    for i, limit_raw in pairs(splits(redis.call('get', key), ',')) do
         -- redis.log(redis.LOG_WARNING, 'Update: '..limit_raw..' Key: '..key)
         local limit = splits(limit_raw, ':')
         -- These are each limits max and interval, e.g. 500:10
         local max = limit[1]
         local interval = tonumber(limit[2])
-        local split = splits(limit_counts[i], ':')
-        local limit_server_count = tonumber(split[1])
         local second = tostring(math.floor(tonumber(request_time) / 1000))
         if redis.call('exists',  key..':'..limit_raw) == 0 then
             -- No active bucket
@@ -31,8 +27,6 @@ local function update_limit(key, limits, counts, request_time)
             -- Bucket exists
             if redis.call('hget', key..':'..limit_raw, 'start') <= request_time then
                 -- Request was made in currently active bucket
-                local limit_stored_count = tonumber(redis.call('hget', key..':'..limit_raw, 'count'))
-                if limit_stored_count < limit_server_count then redis.call('hset', key..':'..limit_raw, 'count', limit_server_count) end -- Update count if header higher
                 if tonumber(redis.call('get', key..':'..limit_raw..':inflight')) > 0 then
                     -- Only decrease inflights when > 0
                     redis.call('decr', key..':'..limit_raw..':inflight') -- Reduce inflights accordingly
@@ -45,7 +39,7 @@ local function update_limit(key, limits, counts, request_time)
         end
         -- Tracking WIP: Not Tested
         local bucket_start = redis.call('hget', key..':'..limit_raw, 'start')
-        redis.call('hincrby', key..':'..limit_raw..':status:'..bucket_start, ARGV[6], 1)
+        redis.call('hincrby', key..':'..limit_raw..':status:'..bucket_start, ARGV[2], 1)
         redis.call('expire', key..':'..limit_raw..':status'..bucket_start, 60 * 10)
     end
 end
@@ -54,9 +48,5 @@ local key_zone = KEYS[1]
 local key_server = KEYS[2]
 local request_time = ARGV[1]
 
-local limits_zone = ARGV[2]
-local counts_zone = ARGV[3]
-local limits_server = ARGV[4]
-local counts_server = ARGV[5]
-update_limit(key_zone, limits_zone, counts_zone, request_time)
-update_limit(key_server, limits_server, counts_server, request_time)
+update_limit(key_zone, request_time)
+update_limit(key_server, request_time)
