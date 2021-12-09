@@ -59,7 +59,7 @@ local function register_request(key, request_time)
         -- Tracking
         local bucket_start = redis.call('hget', key..':'..limit_raw, 'start')
         if tonumber(redis.call('incr', key..':'..limit_raw..':tracking:'..bucket_start)) == 1 then
-            redis.call('expire', key..':'..limit_raw..':tracking:'..bucket_start, 60 * interval)
+            redis.call('expire', key..':'..limit_raw..':tracking:'..bucket_start, 60 * 10 + interval)
         end
 
     end
