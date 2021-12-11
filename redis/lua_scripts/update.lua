@@ -45,7 +45,7 @@ local function update_limit(key, limits, counts, request_time)
         end
         -- Tracking WIP: Not Tested
         redis.call('hincrby', key..':'..limit_raw..':status:'..ten_second, ARGV[6], 1)
-        redis.call('expire', key..':'..limit_raw..':status'..ten_second, 60 * 10)
+        redis.call('expire', key..':'..limit_raw..':status:'..ten_second, 60 * 10)
     end
 end
 
