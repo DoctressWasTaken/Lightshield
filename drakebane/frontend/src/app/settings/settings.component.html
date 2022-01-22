@@ -1,0 +1,43 @@
+<div class="container">
+  <a *ngIf="changes" class="waves-effect waves-light btn" style="position: absolute; right: 20px; bottom: 20px;"
+     (click)="save_changes()">Update
+    Settings<i class="material-icons right">save</i></a>
+  <div class="row">
+    <div class="col s6">
+
+      <h5>Regions to pull</h5>
+      <div class="switch" *ngFor="let item of regions | keyvalue">
+        <label>
+          <input type="checkbox" [(ngModel)]="item.value.status" (click)="update_region(item.key)">
+          <span class="lever"></span>
+          <b>
+            {{item.key}}
+          </b>
+        </label>
+        <p>
+          <label *ngFor="let platform of item.value.platforms | keyvalue">
+            <input type="checkbox" [attr.disabled]="!item.value.status ? true : null"
+                   [(ngModel)]="platform.value" (click)="update_platform(item.key, platform.key)"/><span
+            style="margin-right: 20px">{{platform.key}}</span>
+          </label>
+        </p>
+      </div>
+    </div>
+    <div class="col s6">
+
+      <h5>API Key</h5>
+      <div class="input-field col s8">
+        <input id="password" [attr.type]="!keyDisplayed? 'password' : 'text'" class="validate" (change)="update_api_key()" [(ngModel)]="apiKey">
+        <label for="password">API Key</label>
+      </div>
+      <div class="switch col s6">
+        <label>
+          <input type="checkbox" [(ngModel)]="keyDisplayed">
+          <span class="lever"></span>
+          <b> Show </b>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
