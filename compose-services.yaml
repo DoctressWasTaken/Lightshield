@@ -31,6 +31,8 @@ services:
       dockerfile: Dockerfile
       context: redis
     restart: always
+    volumes:
+      - redis-data:/data
 
   postgres:
     hostname: postgres
@@ -42,6 +44,8 @@ services:
       - 127.0.0.1:8303:5432
     environment:
       - "POSTGRES_HOST_AUTH_METHOD=trust"
+  volumes:
+    - postgres-data:/var/lib/postgresql/data
 
 
 x-disabled:
@@ -175,7 +179,8 @@ x-disabled:
 
 volumes:
   drakebane_settings:
-
+  postgres-data:
+  redis-data:
   ranking_progress:
     name: ${SERVER}_ranking_progress
 
