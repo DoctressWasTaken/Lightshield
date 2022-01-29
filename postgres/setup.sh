@@ -26,6 +26,9 @@ for val in $Regions; do
   sed -i "s/REGION/$val/" $new_name
 
   # Matches
+  new_name="03_match_$val.sql"
+  cp  startup_script_templates/03_match.sql "./$new_name"
+  sed -i "s/REGION/$val/" $new_name
 
 
 done
