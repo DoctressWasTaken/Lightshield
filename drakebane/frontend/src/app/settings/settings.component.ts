@@ -1,4 +1,6 @@
 import {Component, Input, OnInit} from '@angular/core';
+import {BackendService} from "../backend.service";
+import {ConfigObject} from "./config-object";
 
 @Component({
   selector: 'app-settings',
@@ -9,24 +11,27 @@ export class SettingsComponent implements OnInit {
 
   changes = false;
   keyDisplayed = false;
-  @Input() apiKey: string;
+  @Input() apiKey: any;
+  services: any;
   regions = {
-    Europe: {
-      platforms: {EUW: true, EUNE: false, TR: false, RU: false},
-      status: true,
-    },
-    Americas: {
-      platforms: {NA: true, BR: false, LAN: false, LAS: false, OCE: false},
-      status: true,
-    },
-    Asia: {
-      platforms: {KR: true, JP: false},
-      status: true,
+    Pseudo: {
+      platforms: {
+        Placeholder: false,
+        Placeholder2: false,
+      },
+      status: false
     }
   };
 
-  constructor() {
+
+  constructor(private backend: BackendService) {
+    this.services = {};
     this.apiKey = '';
+    this.backend.getConfig().subscribe((response: ConfigObject) => {
+      this.apiKey = response.apiKey;
+      this.regions = response.regions;
+      this.services = response.services;
+    });
   }
 
   update_region(region: any): void {
@@ -41,10 +46,26 @@ export class SettingsComponent implements OnInit {
     this.regions[region].platforms[platform] = !this.regions[region].platforms[platform];
     this.changes = true;
   }
-  update_api_key(): void{
+
+  update_api_key(): void {
     console.log(this.apiKey);
+    this.changes = true;
+
   }
+
+  update_service(service: any): void {
+    // @ts-ignore
+    this.services[service] = !this.services[service];
+    console.log(this.services);
+    this.changes = true;
+  }
+
   save_changes(): void {
+    console.log('Saving.');
+    this.backend.setConfig({regions: this.regions, apiKey: this.apiKey, services: this.services}).subscribe(() => {
+      console.log('Updated');
+      this.changes = false;
+    });
   }
 
   ngOnInit(): void {

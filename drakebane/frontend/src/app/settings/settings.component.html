@@ -3,21 +3,21 @@
      (click)="save_changes()">Update
     Settings<i class="material-icons right">save</i></a>
   <div class="row">
-    <div class="col s6">
+    <div class="col s6" *ngIf="regions">
 
       <h5>Regions to pull</h5>
-      <div class="switch" *ngFor="let item of regions | keyvalue">
+      <div class="switch" *ngFor="let region of regions | keyvalue">
         <label>
-          <input type="checkbox" [(ngModel)]="item.value.status" (click)="update_region(item.key)">
+          <input type="checkbox" [(ngModel)]="region.value.status" (click)="update_region(region.key)">
           <span class="lever"></span>
           <b>
-            {{item.key}}
+            {{region.key}}
           </b>
         </label>
         <p>
-          <label *ngFor="let platform of item.value.platforms | keyvalue">
-            <input type="checkbox" [attr.disabled]="!item.value.status ? true : null"
-                   [(ngModel)]="platform.value" (click)="update_platform(item.key, platform.key)"/><span
+          <label *ngFor="let platform of region.value.platforms | keyvalue">
+            <input type="checkbox" [attr.disabled]="!region.value.status ? true : null"
+                   [(ngModel)]="platform.value" (click)="update_platform(region.key, platform.key)"/><span
             style="margin-right: 20px">{{platform.key}}</span>
           </label>
         </p>
@@ -38,6 +38,22 @@
         </label>
       </div>
     </div>
+  </div>
+  <div class="row">
+        <div class="col s6">
+
+      <h5>Services</h5>
+      <div class="switch" *ngFor="let service of services | keyvalue">
+        <label>
+          <input type="checkbox" [(ngModel)]="service.value" (click)="update_service(service.key)">
+          <span class="lever"></span>
+          <b>
+            {{service.key}}
+          </b>
+        </label>
+      </div>
+    </div>
+    <div class="col s6">
   </div>
 </div>
 

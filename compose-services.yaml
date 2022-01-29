@@ -1,7 +1,53 @@
 version: '3.7'
 services:
-  ### Services
 
+  ## Drakebane
+  drakebane_frontend:
+    hostname: drakebane_frontend
+    build:
+      dockerfile: Dockerfile
+      context: drakebane/frontend
+    restart: always
+    ports:
+      - 127.0.0.1:8301:80
+
+  drakebane_backend:
+    hostname: drakebane_backend
+    build:
+      dockerfile: Dockerfile
+      context: drakebane/backend
+    restart: always
+    volumes:
+      - drakebane_settings:/project/configs/
+    ports:
+      - 127.0.0.1:8302:8302
+    depends_on:
+      - redis
+
+  ### Storage
+  redis:
+    hostname: redis
+    build:
+      dockerfile: Dockerfile
+      context: redis
+    ports:
+      - 6379:6379
+    restart: always
+
+  postgres:
+    hostname: postgres
+    build:
+      dockerfile: Dockerfile
+      context: postgres
+    restart: always
+    ports:
+      - 127.0.0.1:5432:5432
+    environment:
+      - "POSTGRES_HOST_AUTH_METHOD=trust"
+
+
+x-disabled:
+  ### Services
   league_ranking:
     hostname: league_ranking
     build:
@@ -130,6 +176,8 @@ services:
 
 
 volumes:
+  drakebane_settings:
+
   ranking_progress:
     name: ${SERVER}_ranking_progress
 

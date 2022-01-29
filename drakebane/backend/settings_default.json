@@ -1,0 +1,35 @@
+{
+  "regions": {
+    "Europe": {
+      "platforms": {
+        "EUW": false,
+        "EUNE": false,
+        "TR": false,
+        "RU": false
+      },
+      "status": false
+    },
+    "Americas": {
+      "platforms": {
+        "NA": false,
+        "BR": false,
+        "LAN": false,
+        "LAS": false,
+        "OCE": false
+      },
+      "status": false
+    },
+    "Asia": {
+      "platforms": {
+        "KR": false,
+        "JP": false
+      },
+      "status": false
+    }
+  },
+  "apiKey": "",
+  "services": {
+    "league_ranking": false,
+    "summoner_id": false
+  }
+}

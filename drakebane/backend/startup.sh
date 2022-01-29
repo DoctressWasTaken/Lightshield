@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 
-poetry run python -u temp.py
+wait-for-it.sh redis:6379
+poetry run python -u main.py
