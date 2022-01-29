@@ -30,8 +30,6 @@ services:
     build:
       dockerfile: Dockerfile
       context: redis
-    ports:
-      - 6379:6379
     restart: always
 
   postgres:
@@ -41,7 +39,7 @@ services:
       context: postgres
     restart: always
     ports:
-      - 127.0.0.1:5432:5432
+      - 127.0.0.1:8303:5432
     environment:
       - "POSTGRES_HOST_AUTH_METHOD=trust"
 
