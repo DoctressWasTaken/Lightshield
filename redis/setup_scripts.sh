@@ -24,5 +24,9 @@ hash_update_slim=$(redis-cli SCRIPT LOAD "$(cat /project/lua_scripts/update_slim
 echo $hash_update_slim
 redis-cli set 'lightshield_update_slim' $hash_update_slim
 
+# Basic values
+redis-cli set 'apiKey' ''
+redis-cli set 'regions' '{}'
+
 redis-cli config set appendonly no
 redis-cli config set save ""

@@ -21,4 +21,4 @@ logs/
 /drakebane/frontend/node_modules/
 /drakebane/frontend/.idea/
 /drakebane/backend/settings.json
-/services/league_ranking/standalone/configs/
+/services/league_ranking/configs/

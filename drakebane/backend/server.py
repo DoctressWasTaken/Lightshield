@@ -43,12 +43,14 @@ class Server:
     async def update_settings(self):
         con = await aioredis.create_redis("redis://redis:6379")
         await con.set("regions", json.dumps(self.settings["regions"]))
-        await con.set("apiKey", json.dumps(self.settings["apiKey"]))
+        await con.set("apiKey", self.settings["apiKey"])
 
         formatted = {}
         for key, value in self.settings["services"].items():
-            formatted[key] = 1 if value else 0
-        await con.hmset_dict("services", formatted)
+            if value:
+                await con.set('service_%s' % key, 'true')
+            else:
+                await con.set('service_%s' % key, 'false')
 
     def run(self):
         web.run_app(self.app, port=8302)

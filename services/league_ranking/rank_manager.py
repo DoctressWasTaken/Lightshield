@@ -1,8 +1,6 @@
 """Manage which rank is to be crawled next."""
-import json
-import logging
-import os
 from datetime import datetime, timedelta
+
 from lightshield import settings
 
 tiers = [
@@ -23,10 +21,9 @@ divisions = ["IV", "III", "II", "I"]
 class RankManager:
     """Ordering and Management of ranking updates."""
 
-    def __init__(self):
+    def __init__(self, logging):
         """Initiate logging."""
-        self.logging = logging.getLogger("RankManager")
-
+        self.logging = logging
         self.ranks = None
 
     async def init(self):
@@ -50,12 +47,6 @@ class RankManager:
             if not oldest_timestamp or entry[2] < oldest_timestamp:
                 oldest_key = entry[0:2]
                 oldest_timestamp = entry[2]
-        # if (total_seconds := (datetime.now() - datetime.fromtimestamp(
-        #        oldest_timestamp)).total_seconds() - self.update_interval * 3600) > 0:
-        #    self.logging.info("Waiting for %s seconds before starting next element.",
-        #                      total_seconds)
-        #    await asyncio.sleep(total_seconds)
-        self.logging.info("Commencing on %s.", oldest_key)
         return oldest_key
 
     async def update(self, key):

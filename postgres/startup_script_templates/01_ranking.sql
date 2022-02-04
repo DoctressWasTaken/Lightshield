@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS PLATFORM.ranking
     account_id   VARCHAR(56),
     puuid        VARCHAR(78),
 
-    rank         SMALLINT,
+    rank         rank,
+    division     division,
+    leaguepoints SMALLINT,
+
     defunct      BOOLEAN   DEFAULT FALSE, -- summoner-v4 could not be found (swapped account)
 
     -- Ranked wins + losses

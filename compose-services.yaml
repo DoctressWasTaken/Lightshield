@@ -48,24 +48,20 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
 
-x-disabled:
   ### Services
   league_ranking:
     hostname: league_ranking
     build:
       dockerfile: Dockerfile
-      context: services/league_ranking/standalone
+      context: services/league_ranking
       args:
         TAG: ${TAG}
     image: lightshield/league_ranking:${TAG}
-    environment:
-      - SERVER=${SERVER}
-      - DEBUG=${DEBUG}
-    env_file:
-      - secrets.env
     restart: always
-    volumes:
-      - ranking_progress:/project/configs/
+
+x-disabled:
+
+
 
   summoner_id_manager:
     hostname: summoner_id
