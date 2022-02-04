@@ -29,13 +29,15 @@ class Service:
         self.current_pages = []
         self.data = []
         self.url = (
-                f"https://{self.id}.api.riotgames.com/lol/"
-                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+            f"https://{self.id}.api.riotgames.com/lol/"
+            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
 
     async def init(self):
         await self.rankmanager.init()
-        self.endpoint = await self.handler.proxy.get_endpoint(server=self.name, zone='league-v4-exp')
+        self.endpoint = await self.handler.proxy.get_endpoint(
+            server=self.name, zone="league-v4-exp"
+        )
         self.logging.info("Ready.")
         self.daemon = asyncio.create_task(self.runner())
 
@@ -74,7 +76,7 @@ class Service:
     async def get_data(self, tier, division):
         """Request data from the API."""
         async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+            headers={"X-Riot-Token": self.handler.api_key}
         ) as session:
             while self.current_pages:
                 if self.handler.is_shutdown:
@@ -82,14 +84,19 @@ class Service:
                 if not self.running:
                     await asyncio.sleep(5)
                     continue
-                while (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
+                while (
+                    delay := (self.retry_after - datetime.now()).total_seconds()
+                ) > 0:
                     await asyncio.sleep(min(0.1, delay))
 
-                results = await asyncio.gather(*[
-                    asyncio.create_task(self.fetch(session, page,
-                                                   self.url % (
-                                                       tier, division, page)))
-                    for page in self.current_pages])
+                results = await asyncio.gather(
+                    *[
+                        asyncio.create_task(
+                            self.fetch(session, page, self.url % (tier, division, page))
+                        )
+                        for page in self.current_pages
+                    ]
+                )
                 self.current_pages = [page for page in results if page]
                 while not self.empty_page and len(self.current_pages) < 10:
                     self.next_page += 1
@@ -117,12 +124,10 @@ class Service:
                 return
             self.data += data
         except LimitBlocked as err:
-            self.retry_after = datetime.now() + timedelta(
-                seconds=err.retry_after
-            )
+            self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
             return page
         except (RatelimitException, Non200Exception, NotFoundException) as err:
-            self.logging.error('Others')
+            self.logging.error("Others")
             return page
         except Exception as err:
             self.logging.error(err)
@@ -141,19 +146,24 @@ class Service:
                     AND division = $2
                     """
                     % self.name.lower(),
-                    tier, division
+                    tier,
+                    division,
                 )
                 preset = {}
                 if latest:
                     for line in latest:
-                        preset[line['summoner_id']] = [line['rank'], line['division'], line['leaguepoints']]
+                        preset[line["summoner_id"]] = [
+                            line["rank"],
+                            line["division"],
+                            line["leaguepoints"],
+                        ]
                 to_update = []
                 for new in self.data:
-                    rank = [new['tier'], new['rank'], new['leaguePoints']]
-                    if new['summonerId'] not in preset:
-                        to_update.append([new['summonerId']] + rank)
-                    elif preset[new['summonerId']] != rank:
-                        to_update.append([new['summonerId']] + rank)
+                    rank = [new["tier"], new["rank"], new["leaguePoints"]]
+                    if new["summonerId"] not in preset:
+                        to_update.append([new["summonerId"]] + rank)
+                    elif preset[new["summonerId"]] != rank:
+                        to_update.append([new["summonerId"]] + rank)
                 await connection.executemany(
                     """INSERT INTO %s.ranking (summoner_id, rank, division, leaguepoints)
                         VALUES ($1, $2, $3, $4)

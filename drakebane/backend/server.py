@@ -48,9 +48,9 @@ class Server:
         formatted = {}
         for key, value in self.settings["services"].items():
             if value:
-                await con.set('service_%s' % key, 'true')
+                await con.set("service_%s" % key, "true")
             else:
-                await con.set('service_%s' % key, 'false')
+                await con.set("service_%s" % key, "false")
 
     def run(self):
         web.run_app(self.app, port=8302)

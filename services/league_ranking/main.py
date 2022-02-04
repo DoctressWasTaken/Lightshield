@@ -31,7 +31,7 @@ services = {
     "LAS": "la2",
     "OCE": "oc1",
     "KR": "kr",
-    "JP": "jp1"
+    "JP": "jp1",
 }
 
 
@@ -45,20 +45,19 @@ class Handler:
         self.proxy = Proxy()
 
     async def init(self):
-        self.redis = await aioredis.create_redis_pool("redis://redis:6379", encoding='utf-8')
-        self.postgres = await asyncpg.create_pool(
-            host='postgres',
-            port=5432,
-            user="postgres",
-            database="lightshield"
+        self.redis = await aioredis.create_redis_pool(
+            "redis://redis:6379", encoding="utf-8"
         )
-        await self.proxy.init('redis', 6379)
+        self.postgres = await asyncpg.create_pool(
+            host="postgres", port=5432, user="postgres", database="lightshield"
+        )
+        await self.proxy.init("redis", 6379)
 
         for name, id in services.items():
             s = Service(name, id, self)
             await s.init()
             self.platforms[name] = s
-        self.logging.info('Ready.')
+        self.logging.info("Ready.")
 
     def shutdown(self):
         """Initiate shutdown."""
@@ -67,26 +66,26 @@ class Handler:
     async def check_active(self):
         """Confirm that the service is supposed to run."""
         try:
-            status = await self.redis.get('service_league_ranking')
-            return status == 'true'
+            status = await self.redis.get("service_league_ranking")
+            return status == "true"
         except Exception as err:
-            print('Check Exception', err)
+            print("Check Exception", err)
             return False
 
     async def get_apiKey(self):
         """Pull API Key from Redis."""
-        self.api_key = await self.redis.get('apiKey')
+        self.api_key = await self.redis.get("apiKey")
 
     async def check_platforms(self):
         """Platform check."""
         region_status = {}
         try:
-            data = json.loads(await self.redis.get('regions'))
+            data = json.loads(await self.redis.get("regions"))
             for region, region_data in data.items():
                 overwrite = None
                 if not region_data["status"]:
                     overwrite = True
-                for platform, status in region_data['platforms'].items():
+                for platform, status in region_data["platforms"].items():
                     region_status[platform] = False if overwrite else status
         finally:
             return region_status
@@ -97,7 +96,7 @@ class Handler:
         while not self.is_shutdown:
             try:
                 await self.get_apiKey()
-                if not self.api_key.startswith('RGAPI'):
+                if not self.api_key.startswith("RGAPI"):
                     for platform in self.platforms.values():
                         await platform.stop()
                     continue
@@ -112,12 +111,12 @@ class Handler:
                         continue
                     await self.platforms[platform].stop()
             except Exception as err:
-                print('Run Exception', err)
+                print("Run Exception", err)
             finally:
                 await asyncio.sleep(5)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     handler = Handler()
     signal.signal(signal.SIGTERM, handler.shutdown)
     asyncio.run(handler.run())
