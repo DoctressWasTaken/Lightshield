@@ -1,7 +1,7 @@
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta
-import json
 
 import aiohttp
 
@@ -145,13 +145,17 @@ class Platform:
                 [params["platform"], params["match_id"], json.dumps(data)]
             )
             # self.logging.debug(url)
+            if 'gameStartTimestamp' in data['info']:
+                game_duration = data["info"]["gameStartTimestamp"] - data["info"]["gameStartTimestamp"]
+            else:
+                game_duration = data["info"]["gameDuration"]
+            if game_duration >= 30000:
+                game_duration //= game_duration
+
             update = [
                 data["info"]["queueId"],
                 datetime.fromtimestamp(data["info"]["gameCreation"] // 1000),
-                [
-                    time // 1000 if time > 30000 else time
-                    for time in [data["info"]["gameDuration"]]
-                ][0],
+                game_duration,
                 [
                     team["win"]
                     for team in data["info"]["teams"]
@@ -193,7 +197,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
