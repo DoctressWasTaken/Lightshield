@@ -145,8 +145,11 @@ class Platform:
                 [params["platform"], params["match_id"], json.dumps(data)]
             )
             # self.logging.debug(url)
-            if 'gameStartTimestamp' in data['info']:
-                game_duration = data["info"]["gameStartTimestamp"] - data["info"]["gameStartTimestamp"]
+            if "gameStartTimestamp" in data["info"]:
+                game_duration = (
+                    data["info"]["gameStartTimestamp"]
+                    - data["info"]["gameStartTimestamp"]
+                )
             else:
                 game_duration = data["info"]["gameDuration"]
             if game_duration >= 30000:
@@ -197,7 +200,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
