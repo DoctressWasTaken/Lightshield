@@ -104,7 +104,7 @@ class Platform:
                         self.platforms,
                         200,
                     )
-                    self.logging.info(
+                    self.logging.debug(
                         "Refilling tasks [%s -> %s].",
                         len(self.tasks),
                         len(self.tasks) + len(entries),
@@ -242,7 +242,6 @@ class Platform:
             if not target["last_match"]:
                 await self.update_full(target)
                 continue
-            self.logging.info("Starting partial update")
             await self.update_single(target)
 
     async def flush_tasks(self, matches, summoner):

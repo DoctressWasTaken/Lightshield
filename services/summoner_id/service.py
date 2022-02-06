@@ -173,7 +173,11 @@ class Platform:
         """Insert results from requests into the db."""
         async with self.handler.postgres.acquire() as connection:
             if results or not_found:
-                self.logging.info("Flushing %s successful and %s unsuccessful finds.", len(results), len(not_found))
+                self.logging.info(
+                    "Flushing %s successful and %s unsuccessful finds.",
+                    len(results),
+                    len(not_found),
+                )
             if results:
                 prep = await connection.prepare(
                     """UPDATE %s.ranking
