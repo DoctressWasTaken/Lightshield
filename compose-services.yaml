@@ -54,8 +54,6 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/league_ranking
-      args:
-        TAG: ${TAG}
     image: lightshield/league_ranking:${TAG}
     restart: always
 
@@ -78,8 +76,6 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_details
-    environment:
-      - "DEBUG=True"
     restart: always
 
 x-disabled:

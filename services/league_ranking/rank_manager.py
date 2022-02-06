@@ -51,7 +51,6 @@ class RankManager:
 
     async def update(self, key):
         """Update the stats on a rank that is done pulling."""
-        self.logging.info("Done with %s.", key)
         now = datetime.timestamp(datetime.now())
         for index, entry in enumerate(self.ranks):
             if entry[0] == key[0] and entry[1] == key[1]:
