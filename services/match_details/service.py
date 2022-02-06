@@ -104,7 +104,7 @@ class Platform:
                                         WHERE details IS NULL
                                         AND find_fails <= 10
                                         AND (reserved_details IS NULL OR reserved_details < current_timestamp)
-                                        ORDER BY find_fails, match_id
+                                        ORDER BY find_fails, match_id DESC
                                         LIMIT $1
                                         ) selection
                             WHERE match.match_id = selection.match_id
