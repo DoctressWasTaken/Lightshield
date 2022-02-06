@@ -98,7 +98,7 @@ class Platform:
                     % (self.name.lower(), self.name.lower()),
                     500,
                 )
-                self.logging.info(
+                self.logging.debug(
                     "Refilling tasks [%s -> %s].",
                     len(self.tasks),
                     len(self.tasks) + len(entries),
@@ -172,8 +172,9 @@ class Platform:
     async def flush_tasks(self, results, not_found):
         """Insert results from requests into the db."""
         async with self.handler.postgres.acquire() as connection:
+            if results or not_found:
+                self.logging.info("Flushing %s successful and %s unsuccessful finds.", len(results), len(not_found))
             if results:
-                self.logging.info("Flushing %s successful finds.", len(results))
                 prep = await connection.prepare(
                     """UPDATE %s.ranking
                         SET puuid = $1,
@@ -184,7 +185,6 @@ class Platform:
                 )
                 await prep.executemany(results)
             if not_found:
-                self.logging.info("Flushing %s unsuccessful finds.", len(not_found))
                 await connection.execute(
                     """UPDATE %s.ranking
                         SET defunct=TRUE

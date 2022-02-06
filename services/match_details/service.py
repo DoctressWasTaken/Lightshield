@@ -114,7 +114,7 @@ class Platform:
                         % tuple([self.name for _ in range(2)]),
                         500,
                     )
-                    self.logging.info(
+                    self.logging.debug(
                         "Refilling tasks [%s -> %s].",
                         len(self.tasks),
                         len(self.tasks) + len(entries),
@@ -212,12 +212,13 @@ class Platform:
         """Insert results from requests into the db."""
         try:
             async with self.handler.postgres.acquire() as connection:
-                self.logging.info(
-                    "Flushing %s match ids (%s not found) and %s match details.",
-                    len(match_updates) + len(match_not_found),
-                    len(match_not_found),
-                    len(match_details),
-                )
+                if match_updates or match_details or match_not_found:
+                    self.logging.info(
+                        "Flushing %s match ids (%s not found) and %s match details.",
+                        len(match_updates) + len(match_not_found),
+                        len(match_not_found),
+                        len(match_details),
+                    )
                 async with connection.transaction():
                     if match_updates:
                         # Insert match updates

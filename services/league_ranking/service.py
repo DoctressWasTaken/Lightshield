@@ -175,6 +175,8 @@ class Service:
                     % self.name.lower(),
                     to_update,
                 )
-                self.logging.info("Updated %s users in %s %s.", len(to_update), rank, division)
+                self.logging.info(
+                    "Updated %s users in %s %s.", len(to_update), tier, division
+                )
             except Exception as err:
                 self.logging.error(err)
