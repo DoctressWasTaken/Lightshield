@@ -68,7 +68,7 @@ class Service:
             await self.get_data(tier, division)
             self.logging.debug("DONE %s %s.", tier, division)
             await self.update_data(tier, division)
-            self.logging.info("INSERTED %s %s.", tier, division)
+            self.logging.debug("INSERTED %s %s.", tier, division)
 
             await self.rankmanager.update(key=(tier, division))
 
@@ -175,6 +175,6 @@ class Service:
                     % self.name.lower(),
                     to_update,
                 )
-                self.logging.info("Updated %s users.", len(to_update))
+                self.logging.info("Updated %s users in %s %s.", len(to_update), rank, division)
             except Exception as err:
                 self.logging.error(err)
