@@ -64,9 +64,9 @@ class Service:
             self.current_pages = [_ for _ in range(1, 11)]
             self.empty_page = False
             self.data = []
-            self.logging.info("START %s %s.", tier, division)
+            self.logging.debug("START %s %s.", tier, division)
             await self.get_data(tier, division)
-            self.logging.info("DONE %s %s.", tier, division)
+            self.logging.debug("DONE %s %s.", tier, division)
             await self.update_data(tier, division)
             self.logging.info("INSERTED %s %s.", tier, division)
 
