@@ -20,7 +20,7 @@ local function assert_permit(key)
         local bucket_count = tonumber(redis.call('hget', key..':'..limit_raw, 'count')) -- Limit
         if (bucket_count and bucket_count ~= nil) then
             local bucket_rollover = tonumber(redis.call('get', key..':'..limit_raw..':'..'rollover')) -- Limit rollover
-            if not (bucket_rollover or bucket_rollover == nil) then bucket_rollover = 0 end
+            if (not bucket_rollover or bucket_rollover == nil) then bucket_rollover = 0 end
             -- redis.log(redis.LOG_WARNING, 'Count: '..bucket_count + bucket_rollover)
             if max <= bucket_count + bucket_rollover then
                 max_wait = math.max(100, redis.call('pttl', key..':'..limit_raw))

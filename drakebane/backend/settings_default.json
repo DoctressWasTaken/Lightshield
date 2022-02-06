@@ -2,27 +2,27 @@
   "regions": {
     "Europe": {
       "platforms": {
-        "EUW": false,
-        "EUNE": false,
-        "TR": false,
+        "EUW1": false,
+        "EUN1": false,
+        "TR1": false,
         "RU": false
       },
       "status": false
     },
     "Americas": {
       "platforms": {
-        "NA": false,
-        "BR": false,
-        "LAN": false,
-        "LAS": false,
-        "OCE": false
+        "NA1": false,
+        "BR1": false,
+        "LA1": false,
+        "LA2": false,
+        "OC1": false
       },
       "status": false
     },
     "Asia": {
       "platforms": {
         "KR": false,
-        "JP": false
+        "JP1": false
       },
       "status": false
     }
@@ -30,6 +30,9 @@
   "apiKey": "",
   "services": {
     "league_ranking": false,
-    "summoner_id": false
+    "summoner_id": false,
+    "match_timeline": false,
+    "match_history": false,
+    "match_details": false
   }
 }

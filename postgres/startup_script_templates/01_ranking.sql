@@ -5,26 +5,27 @@
 CREATE TABLE IF NOT EXISTS PLATFORM.ranking
 (
 
-    summoner_id  VARCHAR(63) PRIMARY KEY,
-    account_id   VARCHAR(56),
-    puuid        VARCHAR(78),
+    summoner_id    VARCHAR(63) PRIMARY KEY,
+    puuid          VARCHAR(78),
 
-    rank         rank,
-    division     division,
-    leaguepoints SMALLINT,
+    rank           rank,
+    division       division,
+    leaguepoints   SMALLINT,
 
-    defunct      BOOLEAN   DEFAULT FALSE, -- summoner-v4 could not be found (swapped account)
+    defunct        BOOLEAN   DEFAULT FALSE, -- summoner-v4 could not be found (swapped account)
 
     -- Ranked wins + losses
-    games_sq     SMALLINT,
-    games_fq     SMALLINT,
+    games_sq       SMALLINT,
+    games_fq       SMALLINT,
 
-    priority     VARCHAR(1),
+    priority       VARCHAR(1),
 
+    reserved_until TIMESTAMP DEFAULT NULL,
     -- Update based on timestamp
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    last_updated   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Improved lookup speed for summoner_id service
 -- and match_history service (full refresh tasks)
-CREATE INDEX ON PLATFORM.ranking ((account_id IS NULL), (last_updated IS NULL));
+CREATE INDEX ON PLATFORM.ranking (puuid);
+CREATE INDEX ON PLATFORM.ranking ((puuid IS NULL));

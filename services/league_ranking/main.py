@@ -6,6 +6,9 @@ import signal
 
 import aioredis
 import asyncpg
+import uvloop
+
+uvloop.install()
 
 from lightshield.proxy import Proxy
 from service import Service
@@ -20,19 +23,19 @@ else:
     )
 logging.debug("Debug enabled.")
 
-services = {
-    "EUW": "euw1",
-    "EUNE": "eun1",
-    "TR": "tr1",
-    "RU": "ru",
-    "NA": "na1",
-    "BR": "br1",
-    "LAN": "la1",
-    "LAS": "la2",
-    "OCE": "oc1",
-    "KR": "kr",
-    "JP": "jp1",
-}
+services = [
+    "EUW1",
+    "EUN1",
+    "TR1",
+    "RU",
+    "NA1",
+    "BR1",
+    "LA1",
+    "LA2",
+    "OC1",
+    "KR",
+    "JP1",
+]
 
 
 class Handler:
@@ -53,10 +56,10 @@ class Handler:
         )
         await self.proxy.init("redis", 6379)
 
-        for name, id in services.items():
-            s = Service(name, id, self)
+        for platform in services:
+            s = Service(platform, self)
             await s.init()
-            self.platforms[name] = s
+            self.platforms[platform] = s
         self.logging.info("Ready.")
 
     def shutdown(self):

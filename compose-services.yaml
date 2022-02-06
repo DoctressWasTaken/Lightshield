@@ -32,7 +32,7 @@ services:
       context: redis
     restart: always
     volumes:
-      - redis-data:/data
+      - redis_data:/data
 
   postgres:
     hostname: postgres
@@ -45,7 +45,7 @@ services:
     environment:
       - "POSTGRES_HOST_AUTH_METHOD=trust"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
 
 
   ### Services
@@ -59,64 +59,30 @@ services:
     image: lightshield/league_ranking:${TAG}
     restart: always
 
-x-disabled:
-
-
-
-  summoner_id_manager:
-    hostname: summoner_id
-    build:
-      dockerfile: Dockerfile
-      context: services/summoner_id/manager
-      args:
-        TAG: ${TAG}
-    image: lightshield/summoner_id_manager:${TAG}
-    environment:
-      - SERVER=${SERVER}
-    env_file:
-      - secrets.env
 
   summoner_id:
     hostname: summoner_id
     build:
       dockerfile: Dockerfile
-      context: services/summoner_id/worker
-      args:
-        TAG: ${TAG}
-    image: lightshield/summoner_id:${TAG}
-    environment:
-      - SERVER=${SERVER}
-    env_file:
-      - secrets.env
+      context: services/summoner_id
     restart: always
-
-  match_history_manager:
-    hostname: match_history
-    environment:
-      - SERVER=${SERVER}
-    build:
-      dockerfile: Dockerfile
-      context: services/match_history/manager
-      args:
-        TAG: ${TAG}
-    image: lightshield/match_history_manager:${TAG}
-    env_file:
-      - secrets.env
 
   match_history:
     hostname: match_history
     build:
       dockerfile: Dockerfile
-      context: services/match_history/worker
-      args:
-        TAG: ${TAG}
-    image: lightshield/match_history:${TAG}
+      context: services/match_history
+
+  match_details:
+    hostname: match_details
+    build:
+      dockerfile: Dockerfile
+      context: services/match_details
     environment:
-      - SERVER=${SERVER}
-      - QUEUES=420
+      - "DEBUG=True"
     restart: always
-    env_file:
-      - secrets.env
+
+x-disabled:
 
   match_details_manager:
     hostname: match_details_manager
@@ -131,19 +97,6 @@ x-disabled:
     env_file:
       - secrets.env
 
-  match_details:
-    hostname: match_details
-    build:
-      dockerfile: Dockerfile
-      context: services/match_details/worker
-      args:
-        TAG: ${TAG}
-    image: lightshield/match_details:${TAG}
-    environment:
-      - SERVER=${SERVER}
-    restart: always
-    env_file:
-      - secrets.env
 
   match_timeline_manager:
     hostname: match_timeline_manager
@@ -175,12 +128,9 @@ x-disabled:
 
 volumes:
   drakebane_settings:
-  postgres-data:
-  redis-data:
-  ranking_progress:
-    name: ${SERVER}_ranking_progress
+  postgres_data:
+  redis_data:
 
 networks:
   default:
-    external:
-      name: lightshield
+    name: lightshield

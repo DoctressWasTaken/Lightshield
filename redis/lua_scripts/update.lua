@@ -33,7 +33,9 @@ local function update_limit(key, limits, counts, request_time)
                 -- Request was made in currently active bucket
                 local limit_stored_count = tonumber(redis.call('hget', key..':'..limit_raw, 'count'))
                 if limit_stored_count < limit_server_count then redis.call('hset', key..':'..limit_raw, 'count', limit_server_count) end -- Update count if header higher
-                if tonumber(redis.call('get', key..':'..limit_raw..':inflight')) > 0 then
+                local inflight = tonumber(redis.call('get', key..':'..limit_raw..':inflight'))
+                if inflight == nil then inflight = 0 end
+                if inflight > 0 then
                     -- Only decrease inflights when > 0
                     redis.call('decr', key..':'..limit_raw..':inflight') -- Reduce inflights accordingly
                 end

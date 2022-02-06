@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-Platforms="EUW EUNE TR RU NA BR LAN LAS OCE KR JP"
+Platforms="EUW1 EUN1 TR1 RU NA1 BR1 LA1 LA2 OC1 KR JP1"
 # Files to set up for per server
 for val in $Platforms; do
 

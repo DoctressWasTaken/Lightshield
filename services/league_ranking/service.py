@@ -19,9 +19,8 @@ class Service:
     next_page = 1
     daemon = None
 
-    def __init__(self, name, id, handler):
+    def __init__(self, name, handler):
         self.name = name
-        self.id = id
         self.logging = logging.getLogger("%s" % name)
         self.handler = handler
         self.rankmanager = RankManager(self.logging)
@@ -29,7 +28,7 @@ class Service:
         self.current_pages = []
         self.data = []
         self.url = (
-            f"https://{self.id}.api.riotgames.com/lol/"
+            f"https://{self.name}.api.riotgames.com/lol/"
             + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
 
@@ -65,11 +64,11 @@ class Service:
             self.current_pages = [_ for _ in range(1, 11)]
             self.empty_page = False
             self.data = []
-            self.logging.info("Commencing on %s %s.", tier, division)
+            self.logging.info("START %s %s.", tier, division)
             await self.get_data(tier, division)
-            self.logging.info("Calls done %s %s.", tier, division)
+            self.logging.info("DONE %s %s.", tier, division)
             await self.update_data(tier, division)
-            self.logging.info("Data update done %s %s.", tier, division)
+            self.logging.info("INSERTED %s %s.", tier, division)
 
             await self.rankmanager.update(key=(tier, division))
 
