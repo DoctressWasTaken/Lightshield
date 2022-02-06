@@ -62,7 +62,7 @@ class Handler:
             self.platforms[platform] = s
         self.logging.info("Ready.")
 
-    def shutdown(self):
+    def shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
         self.is_shutdown = True
 
