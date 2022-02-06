@@ -23,12 +23,12 @@ else:
     )
 logging.debug("Debug enabled")
 
-regions = ['europe', 'americas', 'asia']
+regions = ["europe", "americas", "asia"]
 
 server = {
-    'europe': ["EUW1", "EUN1", "TR1", "RU"],
-    'americas': ["NA1", "BR1", "LA1", "LA2", "OC1"],
-    'asia': ["KR", "JP1"]
+    "europe": ["EUW1", "EUN1", "TR1", "RU"],
+    "americas": ["NA1", "BR1", "LA1", "LA2", "OC1"],
+    "asia": ["KR", "JP1"],
 }
 
 

@@ -30,7 +30,9 @@ class Platform:
         self.updater = None  # Updater promise
         self.retry_after = datetime.now()
         self.proxy = handler.proxy
-        self.endpoint_url = f"https://{self.name}.api.riotgames.com/lol/match/v5/matches/%s_%s"
+        self.endpoint_url = (
+            f"https://{self.name}.api.riotgames.com/lol/match/v5/matches/%s_%s"
+        )
 
     async def shutdown(self):
         self.logging.info("Shutdown")
@@ -65,16 +67,20 @@ class Platform:
         try:
             await asyncio.gather(*self._worker, self.updater)
         except asyncio.CancelledError:
-            await self.flush_tasks(self.result_matchupdates, self.result_details, self.result_not_found)
+            await self.flush_tasks(
+                self.result_matchupdates, self.result_details, self.result_not_found
+            )
             return
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
         while True:
             if len(self.result_matchupdates) >= 100:
-                data = [self.result_matchupdates.copy(),
-                        self.result_details.copy(),
-                        self.result_not_found.copy()]
+                data = [
+                    self.result_matchupdates.copy(),
+                    self.result_details.copy(),
+                    self.result_not_found.copy(),
+                ]
                 self.result_matchupdates = []
                 self.result_details = []
                 self.result_not_found = []
@@ -104,7 +110,8 @@ class Platform:
                             WHERE match.match_id = selection.match_id
                                AND match.platform = selection.platform
                                 RETURNING match.platform, match.match_id
-                        """ % tuple([self.name for _ in range(2)]),
+                        """
+                        % tuple([self.name for _ in range(2)]),
                         500,
                     )
                     self.logging.info(
@@ -114,9 +121,11 @@ class Platform:
                     )
                     if len(entries) == 0:
                         await asyncio.sleep(30)
-                        data = [self.result_matchupdates.copy(),
-                                self.result_details.copy(),
-                                self.result_not_found.copy()]
+                        data = [
+                            self.result_matchupdates.copy(),
+                            self.result_details.copy(),
+                            self.result_not_found.copy(),
+                        ]
                         self.result_matchupdates = []
                         self.result_details = []
                         self.result_not_found = []
@@ -130,17 +139,26 @@ class Platform:
         """Call and handle response."""
         try:
             #   Success
-            url = self.endpoint_url % (params['platform'], params['match_id'])
+            url = self.endpoint_url % (params["platform"], params["match_id"])
             data = await self.endpoint.request(url, session)
-            self.result_details.append([params['platform'], params['match_id'], json.dumps(data)])
+            self.result_details.append(
+                [params["platform"], params["match_id"], json.dumps(data)]
+            )
             # self.logging.debug(url)
             update = [
-                data['info']['queueId'],
-                datetime.fromtimestamp(data['info']['gameCreation'] // 1000),
-                [time // 1000 if time > 30000 else time for time in [data['info']['gameDuration']]][0],
-                [team['win'] for team in data['info']['teams'] if team['teamId'] == 100][0],
-                params['platform'],
-                params['match_id']
+                data["info"]["queueId"],
+                datetime.fromtimestamp(data["info"]["gameCreation"] // 1000),
+                [
+                    time // 1000 if time > 30000 else time
+                    for time in [data["info"]["gameDuration"]]
+                ][0],
+                [
+                    team["win"]
+                    for team in data["info"]["teams"]
+                    if team["teamId"] == 100
+                ][0],
+                params["platform"],
+                params["match_id"],
             ]
             self.result_matchupdates.append(update)
         except LimitBlocked as err:
@@ -153,7 +171,7 @@ class Platform:
             self.logging.error("Others")
             return params
         except NotFoundException:
-            self.result_not_found.append([params['platform'], params['match_id']])
+            self.result_not_found.append([params["platform"], params["match_id"]])
         except Exception as err:
             self.logging.error("General: %s", err)
             return params
@@ -175,19 +193,31 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
-                targets = [target for target in (await asyncio.gather(*[
-                    asyncio.create_task(self.fetch(target, session))
-                    for target in targets
-                ])) if target]
+                targets = [
+                    target
+                    for target in (
+                        await asyncio.gather(
+                            *[
+                                asyncio.create_task(self.fetch(target, session))
+                                for target in targets
+                            ]
+                        )
+                    )
+                    if target
+                ]
 
     async def flush_tasks(self, match_updates, match_details, match_not_found):
         """Insert results from requests into the db."""
         try:
             async with self.handler.postgres.acquire() as connection:
-                self.logging.info("Flushing %s match ids (%s not found) and %s match details.",
-                                  len(match_updates) + len(match_not_found), len(match_not_found), len(match_details))
+                self.logging.info(
+                    "Flushing %s match ids (%s not found) and %s match details.",
+                    len(match_updates) + len(match_not_found),
+                    len(match_not_found),
+                    len(match_details),
+                )
                 async with connection.transaction():
                     if match_updates:
                         # Insert match updates
@@ -204,9 +234,7 @@ class Platform:
                             """
                             % self.name,
                         )
-                        await query.executemany(
-                            match_updates
-                        )
+                        await query.executemany(match_updates)
                     if match_not_found:
                         query = await connection.prepare(
                             """UPDATE %s.match
@@ -214,7 +242,8 @@ class Platform:
                                     reserved_details = current_date + INTERVAL '10 minute'
                                 WHERE platform = $1
                                 AND match_id = $2
-                            """ % self.name
+                            """
+                            % self.name
                         )
                         await query.executemany(match_not_found)
                     if match_details:
@@ -223,8 +252,9 @@ class Platform:
                                 (platform, match_id, details)
                                 VALUES ($1, $2, $3)
                                 ON CONFLICT DO NOTHING
-                                """ % self.name,
-                            match_details
+                                """
+                            % self.name,
+                            match_details,
                         )
 
         except Exception as err:
