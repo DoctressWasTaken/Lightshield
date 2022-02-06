@@ -141,7 +141,7 @@ class Platform:
             #   Success
             url = self.endpoint_url % (params["platform"], params["match_id"])
             data = await self.endpoint.request(url, session)
-            if data['info']['queueId'] == 0:
+            if data["info"]["queueId"] == 0:
                 raise NotFoundException
             self.result_details.append(
                 [params["platform"], params["match_id"], json.dumps(data)]
