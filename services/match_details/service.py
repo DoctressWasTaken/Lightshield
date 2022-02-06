@@ -147,8 +147,8 @@ class Platform:
             # self.logging.debug(url)
             if "gameStartTimestamp" in data["info"]:
                 game_duration = (
-                    data["info"]["gameStartTimestamp"]
-                    - data["info"]["gameStartTimestamp"]
+                        data["info"]["gameStartTimestamp"]
+                        - data["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = data["info"]["gameDuration"]
@@ -181,6 +181,7 @@ class Platform:
             self.result_not_found.append([params["platform"], params["match_id"]])
         except Exception as err:
             self.logging.error("General: %s", err)
+            self.logging.info(data)
             return params
 
     async def worker(self):
@@ -200,7 +201,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
