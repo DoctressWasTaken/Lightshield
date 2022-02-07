@@ -173,7 +173,7 @@ class Service:
                                    defunct = FALSE 
                     """
                     % self.name.lower(),
-                    to_update,
+                    list(set(to_update)),
                 )
                 self.logging.info(
                     "Updated %s users in %s %s.", len(to_update), tier, division
