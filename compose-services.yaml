@@ -76,6 +76,8 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_details
+    volumes:
+      - ./data:/data/
     restart: always
 
 x-disabled:

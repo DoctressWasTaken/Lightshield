@@ -14,6 +14,11 @@ for val in $Platforms; do
   cp  startup_script_templates/00_schemas.sql "./$new_name"
   sed -i "s/PLATFORM/$val/" $new_name
 
+  # Participant
+  new_name="04_participant_$val.sql"
+  cp  startup_script_templates/04_participant.sql "./$new_name"
+  sed -i "s/PLATFORM/$val/" $new_name
+
 done
 
 Regions="europe americas asia"

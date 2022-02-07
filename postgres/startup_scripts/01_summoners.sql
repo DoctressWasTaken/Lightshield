@@ -9,3 +9,4 @@ CREATE TABLE IF NOT EXISTS summoner
     last_platform          platform,
     last_match             BIGINT
 );
+

@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS REGION.match
     platform          platform,
     queue             SMALLINT,
     timestamp         TIMESTAMP,
+
     duration          SMALLINT DEFAULT NULL,
     win               BOOLEAN  DEFAULT NULL,
     -- Needed to avoid excluding correct match_ids as faulty/deleted becaues they aren't found first try
@@ -25,21 +26,3 @@ CREATE INDEX ON REGION.match ((timestamp::date), queue);
 -- see https://stackoverflow.com/questions/5203755/why-does-postgresql-perform-sequential-scan-on-indexed-column
 CREATE INDEX ON REGION.match ((details IS NULL), find_fails);
 CREATE INDEX ON REGION.match ((timeline IS NULL), find_fails);
-
--- MATCH DETAILS
-CREATE TABLE IF NOT EXISTS REGION.match_details
-(
-    platform platform,
-    match_id BIGINT,
-    details  JSON,
-    PRIMARY KEY (platform, match_id)
-);
-
--- MATCH TIMELINE
-CREATE TABLE IF NOT EXISTS REGION.match_timeline
-(
-    platform platform,
-    match_id BIGINT,
-    timeline JSON,
-    PRIMARY KEY (platform, match_id)
-);
