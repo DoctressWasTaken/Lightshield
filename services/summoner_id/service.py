@@ -160,7 +160,7 @@ class Platform:
                 targets.append(self.tasks.pop())
 
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -203,4 +203,3 @@ class Platform:
                     % self.name,
                     not_found,
                 )
-

@@ -145,8 +145,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -170,10 +170,17 @@ class Platform:
                 )
             day = creation.strftime("%Y_%m_%d")
             patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
-            path = os.path.join(os.sep, "data", "details", patch, day, params["platform"])
+            path = os.path.join(
+                os.sep, "data", "details", patch, day, params["platform"]
+            )
             if not os.path.exists(path):
                 os.makedirs(path)
-            with open(os.path.join(path, "%s_%s.json" % (params['platform'], params['match_id'])), "w+") as file:
+            with open(
+                os.path.join(
+                    path, "%s_%s.json" % (params["platform"], params["match_id"])
+                ),
+                "w+",
+            ) as file:
                 json.dump(response, file)
             del response
             self.logging.debug(url)
@@ -222,7 +229,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -279,7 +286,8 @@ class Platform:
                                 """INSERT INTO %s.participant
                                     VALUES ($1, $2, $3, $4)
                                     ON CONFLICT DO NOTHING
-                                """ % platform,
+                                """
+                                % platform,
                                 platforms[platform],
                             )
 
