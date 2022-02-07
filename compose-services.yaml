@@ -77,37 +77,12 @@ services:
       dockerfile: Dockerfile
       context: services/match_details
     volumes:
-      - ./data:/data/
+      - type: bind
+        source: ./match_data
+        target: /data
     restart: always
 
 x-disabled:
-
-  match_details_manager:
-    hostname: match_details_manager
-    build:
-      dockerfile: Dockerfile
-      context: services/match_details/manager
-      args:
-        TAG: ${TAG}
-    image: lightshield/match_details_manager:${TAG}
-    environment:
-      - SERVER=${SERVER}
-    env_file:
-      - secrets.env
-
-
-  match_timeline_manager:
-    hostname: match_timeline_manager
-    build:
-      dockerfile: Dockerfile
-      context: services/match_timeline/manager
-      args:
-        TAG: ${TAG}
-    image: lightshield/match_timeline_manager:${TAG}
-    environment:
-      - SERVER=${SERVER}
-    env_file:
-      - secrets.env
 
   match_timeline:
     hostname: match_timeline

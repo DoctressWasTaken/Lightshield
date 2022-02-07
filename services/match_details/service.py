@@ -59,6 +59,7 @@ class Platform:
             server=self.name, zone="match-details-v5"
         )
         self._runner = asyncio.create_task(self.runner())
+        self.logging.info("Ready.")
 
     async def runner(self):
         """Main object loop."""
@@ -73,7 +74,7 @@ class Platform:
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
         while True:
-            if len(self.result_matchupdates) >= 100:
+            if len(self.results) >= 100:
                 data = [
                     self.results.copy(),
                     self.result_not_found.copy(),
@@ -144,13 +145,13 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                    response["info"]["gameStartTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
             if game_duration >= 30000:
-                game_duration //= game_duration
+                game_duration //= 1000
             win = [
                 team["win"]
                 for team in response["info"]["teams"]
@@ -160,24 +161,27 @@ class Platform:
             for player in response["info"]["participants"]:
                 players.append(
                     [
-                        params["platform"],
                         params["match_id"],
                         player["puuid"],
+                        player["championId"] if player["championId"] < 30000 else -1,
                         player["teamId"] != 100,
-                        player["championId"] if player["championId"] < 30000 else -1
                         # TODO: Add lane: 'lane': player['teamPosition'], (add as a enum in postgres first)
                     ]
                 )
-            path = os.path.join(os.sep, "data", "details", patch, params["platform"])
-            os.makedirs(path)
-            with open(os.path.join(path, "%s_%s.json" % params), "w+") as file:
+            day = creation.strftime("%Y_%m_%d")
+            patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
+            path = os.path.join(os.sep, "data", "details", patch, day, params["platform"])
+            if not os.path.exists(path):
+                os.makedirs(path)
+            with open(os.path.join(path, "%s_%s.json" % (params['platform'], params['match_id'])), "w+") as file:
                 json.dump(response, file)
-            response = None
+            del response
             self.logging.debug(url)
             package = {
                 "match": [
                     queue,
                     creation,
+                    patch_int,
                     game_duration,
                     win,
                     params["platform"],
@@ -218,7 +222,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -251,28 +255,33 @@ class Platform:
                             """UPDATE %s.match
                             SET queue = $1,
                                 timestamp = $2,
-                                duration = $3,
-                                win = $4,
+                                version = $3,
+                                duration = $4,
+                                win = $5,
                                 details = TRUE,
                                 reserved_details = NULL
-                                WHERE platform = $5
-                                AND match_id = $6
+                                WHERE platform = $6
+                                AND match_id = $7
                             """
                             % self.name,
                         )
                         await query.executemany(matches)
-                        await connection.executemany()
 
-                        participants = []
+                        platforms = {}
+
                         for package in match_updates:
-                            participants += package["participant"]
-                        await connection.executemany(
-                            """INSERT INTO $1.participant
-                                VALUES ($2, $3, $4, $5)
-                                ON CONFLICT DO NOTHING
-                            """,
-                            participants,
-                        )
+                            if package["match"][-2] not in platforms:
+                                platforms[package["match"][-2]] = []
+                            platforms[package["match"][-2]] += package["participant"]
+
+                        for platform in platforms:
+                            await connection.executemany(
+                                """INSERT INTO %s.participant
+                                    VALUES ($1, $2, $3, $4)
+                                    ON CONFLICT DO NOTHING
+                                """ % platform,
+                                platforms[platform],
+                            )
 
                     if match_not_found:
                         query = await connection.prepare(

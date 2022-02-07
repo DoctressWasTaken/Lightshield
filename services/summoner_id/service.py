@@ -70,14 +70,19 @@ class Platform:
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
         while True:
-            if len(self.results) + len(self.not_found) >= 500:
+            if len(self.results) + len(self.not_found) >= 100:
+                self.logging.debug("Flushing")
                 results = self.results.copy()
                 self.results = []
                 not_found = self.not_found.copy()
                 self.not_found = []
                 await self.flush_tasks(results, not_found)
+            if not self.running:
+                await asyncio.sleep(5)
+                continue
 
             if len(self.tasks) > 250:
+                self.logging.debug("Too many tasks remaining, sleeping")
                 await asyncio.sleep(5)
                 continue
             async with self.handler.postgres.acquire() as connection:
@@ -118,7 +123,7 @@ class Platform:
         try:
             data = await self.endpoint.request(url, session)
             self.results.append([data["puuid"], data["id"]])
-            self.logging.debug(url)
+            # self.logging.debug(url)
         except LimitBlocked as err:
             self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
             return target
@@ -140,6 +145,7 @@ class Platform:
         while not self.running:
             await asyncio.sleep(5)
         while True:
+            await asyncio.sleep(0.1)
             while (delay := (self.retry_after - datetime.now()).total_seconds()) > 0:
                 await asyncio.sleep(min(0.1, delay))
             if not self.running:
@@ -154,7 +160,7 @@ class Platform:
                 targets.append(self.tasks.pop())
 
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -197,3 +203,4 @@ class Platform:
                     % self.name,
                     not_found,
                 )
+

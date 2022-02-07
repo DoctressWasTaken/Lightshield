@@ -4,6 +4,8 @@ dist/*
 secrets.env
 secrets.yaml
 
+match_data/
+
 .py3/
 */.py3/*
 db.sqlite3

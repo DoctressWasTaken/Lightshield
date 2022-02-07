@@ -51,12 +51,17 @@ class Handler:
         self.proxy = Proxy()
 
     async def init(self):
-        self.postgres = await asyncpg.create_pool(
-            host="postgres",
-            port=5432,
-            user="postgres",
-            database="lightshield",
-        )
+        try:
+            self.postgres = await asyncpg.create_pool(
+                host="postgres",
+                port=5432,
+                user="postgres",
+                database="lightshield",
+            )
+        except Exception as err:
+            self.logging.error(err)
+            raise err
+
         self.redis = await aioredis.create_redis_pool(
             "redis://redis:6379", encoding="utf-8"
         )
