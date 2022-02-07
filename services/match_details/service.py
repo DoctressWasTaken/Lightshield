@@ -67,9 +67,7 @@ class Platform:
         try:
             await asyncio.gather(*self._worker, self.updater)
         except asyncio.CancelledError:
-            await self.flush_tasks(
-                self.results, self.result_not_found
-            )
+            await self.flush_tasks(self.results, self.result_not_found)
             return
 
     async def task_updater(self):
@@ -146,43 +144,46 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                        response["info"]["gameStartTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameStartTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
             if game_duration >= 30000:
                 game_duration //= game_duration
-            win = [team["win"] for team in response["info"]["teams"] if team["teamId"] == 100][0]
+            win = [
+                team["win"]
+                for team in response["info"]["teams"]
+                if team["teamId"] == 100
+            ][0]
             players = []
-            for player in response['info']['participants']:
+            for player in response["info"]["participants"]:
                 players.append(
-                    [params["platform"],
-                     params["match_id"],
-                     player['puuid'],
-                     player['teamId'] != 100,
-                     player['championId'] if player['championId'] < 30000 else -1
-                     # TODO: Add lane: 'lane': player['teamPosition'], (add as a enum in postgres first)
-                     ]
+                    [
+                        params["platform"],
+                        params["match_id"],
+                        player["puuid"],
+                        player["teamId"] != 100,
+                        player["championId"] if player["championId"] < 30000 else -1
+                        # TODO: Add lane: 'lane': player['teamPosition'], (add as a enum in postgres first)
+                    ]
                 )
             path = os.path.join(os.sep, "data", "details", patch, params["platform"])
             os.makedirs(path)
-            with open(os.path.join(path, "%s_%s.json" % params), 'w+') as file:
+            with open(os.path.join(path, "%s_%s.json" % params), "w+") as file:
                 json.dump(response, file)
             response = None
             self.logging.debug(url)
             package = {
-                'match': [
+                "match": [
                     queue,
                     creation,
                     game_duration,
                     win,
                     params["platform"],
                     params["match_id"],
-
                 ],
-
-                'participant': players
+                "participant": players,
             }
             self.results.append(package)
         except LimitBlocked as err:
@@ -217,7 +218,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -244,7 +245,7 @@ class Platform:
                     )
                 async with connection.transaction():
                     if match_updates:
-                        matches = [package['match'] for package in match_updates]
+                        matches = [package["match"] for package in match_updates]
                         # Insert match updates
                         query = await connection.prepare(
                             """UPDATE %s.match
@@ -264,13 +265,13 @@ class Platform:
 
                         participants = []
                         for package in match_updates:
-                            participants += package['participant']
+                            participants += package["participant"]
                         await connection.executemany(
                             """INSERT INTO $1.participant
                                 VALUES ($2, $3, $4, $5)
                                 ON CONFLICT DO NOTHING
                             """,
-                            participants
+                            participants,
                         )
 
                     if match_not_found:
