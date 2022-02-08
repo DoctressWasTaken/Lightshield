@@ -172,7 +172,8 @@ class Platform:
                 ),
                 "w+",
             ) as file:
-                json.dump(response, file)
+                pass
+                # json.dump(response, file)
             del response
             self.logging.debug(url)
             package = {
