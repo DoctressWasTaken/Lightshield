@@ -34,7 +34,6 @@ class Platform:
         self.endpoint_url = (
             f"https://{self.name}.api.riotgames.com/lol/match/v5/matches/%s_%s"
         )
-        self.inserts = 0
 
     async def init(self):
         """Init background runner."""
@@ -137,8 +136,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -168,10 +167,10 @@ class Platform:
             if not os.path.exists(path):
                 os.makedirs(path)
             with open(
-                    os.path.join(
-                        path, "%s_%s.json" % (params["platform"], params["match_id"])
-                    ),
-                    "w+",
+                os.path.join(
+                    path, "%s_%s.json" % (params["platform"], params["match_id"])
+                ),
+                "w+",
             ) as file:
                 json.dump(response, file)
             del response
@@ -221,7 +220,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -238,8 +237,6 @@ class Platform:
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
-        self.inserts += 1
-        self.logging.info("Currently % inserts are running.", self.inserts)
         async with self.handler.postgres.acquire() as connection:
             match_updates = []
             while True:
@@ -308,4 +305,3 @@ class Platform:
                         % self.name
                     )
                     await query.executemany(match_not_found)
-        self.inserts -= 1
