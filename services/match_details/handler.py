@@ -99,10 +99,15 @@ class Handler:
         finally:
             return region_status
 
-    async def runner(self):
-        """Main application loop"""
+    async def test(self):
         while True:
             self.logging.info(self.h.heap())
+            await asyncio.sleep(60)
+
+    async def runner(self):
+        """Main application loop"""
+        task = asyncio.create_task(self.test())
+        while True:
             await self.get_apiKey()
             if not self.api_key.startswith("RGAPI"):
                 for platform in self.platforms.values():
