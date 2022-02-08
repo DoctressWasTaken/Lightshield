@@ -165,15 +165,16 @@ class Platform:
                 os.sep, "data", "details", patch, day, params["platform"]
             )
             if not os.path.exists(path):
-                os.makedirs(path)
-            with open(
-                os.path.join(
-                    path, "%s_%s.json" % (params["platform"], params["match_id"])
-                ),
-                "w+",
-            ) as file:
+                #os.makedirs(path)
                 pass
-                # json.dump(response, file)
+            #with open(
+            #    os.path.join(
+            #        path, "%s_%s.json" % (params["platform"], params["match_id"])
+            #    ),
+            #    "w+",
+            #) as file:
+            #    pass
+            #    json.dump(response, file)
             del response
             self.logging.debug(url)
             package = {
