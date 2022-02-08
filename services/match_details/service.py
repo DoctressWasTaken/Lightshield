@@ -2,8 +2,8 @@ import asyncio
 import json
 import logging
 import os
+from asyncio import Queue
 from datetime import datetime, timedelta
-
 
 import aiohttp
 
@@ -18,6 +18,8 @@ from lightshield.exceptions import (
 class Platform:
     running = False
     _runner = None
+    results = None
+    result_not_found = None
 
     def __init__(self, region, platforms, handler):
         self.name = region
@@ -25,8 +27,6 @@ class Platform:
         self.handler = handler
         self.logging = logging.getLogger("%s" % region)
         self.tasks = []  # List of summonerIds
-        self.results = []  # Properly returning entries.
-        self.result_not_found = []
         self._worker = []  # Worker promises
         self.updater = None  # Updater promise
         self.retry_after = datetime.now()
@@ -34,6 +34,16 @@ class Platform:
         self.endpoint_url = (
             f"https://{self.name}.api.riotgames.com/lol/match/v5/matches/%s_%s"
         )
+
+    async def init(self):
+        """Init background runner."""
+        self.results = Queue()
+        self.result_not_found = Queue()
+        self.endpoint = await self.handler.proxy.get_endpoint(
+            server=self.name, zone="match-details-v5"
+        )
+        self._runner = asyncio.create_task(self.runner())
+        self.logging.info("Ready.")
 
     async def shutdown(self):
         self.logging.info("Shutdown")
@@ -54,14 +64,6 @@ class Platform:
             self.logging.info("Stopped service calls.")
         self.running = False
 
-    async def init(self):
-        """Init background runner."""
-        self.endpoint = await self.handler.proxy.get_endpoint(
-            server=self.name, zone="match-details-v5"
-        )
-        self._runner = asyncio.create_task(self.runner())
-        self.logging.info("Ready.")
-
     async def runner(self):
         """Main object loop."""
         self.updater = asyncio.create_task(self.task_updater())
@@ -69,20 +71,14 @@ class Platform:
         try:
             await asyncio.gather(*self._worker, self.updater)
         except asyncio.CancelledError:
-            await self.flush_tasks(self.results, self.result_not_found)
+            await self.flush_tasks()
             return
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
         while True:
-            if len(self.results) >= 100:
-                data = [
-                    self.results.copy(),
-                    self.result_not_found.copy(),
-                ]
-                self.results = []
-                self.result_not_found = []
-                await self.flush_tasks(*data)
+            if self.results.qsize() >= 100:
+                await self.flush_tasks()
 
             if not self.running:
                 await asyncio.sleep(5)
@@ -119,13 +115,7 @@ class Platform:
                     )
                     if len(entries) == 0:
                         await asyncio.sleep(30)
-                        data = [
-                            self.results.copy(),
-                            self.result_not_found.copy(),
-                        ]
-                        self.results = []
-                        self.result_not_found = []
-                        await self.flush_tasks(*data)
+                        await self.flush_tasks()
 
                     self.tasks += entries
             except Exception as err:
@@ -146,8 +136,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -177,10 +167,10 @@ class Platform:
             if not os.path.exists(path):
                 os.makedirs(path)
             with open(
-                os.path.join(
-                    path, "%s_%s.json" % (params["platform"], params["match_id"])
-                ),
-                "w+",
+                    os.path.join(
+                        path, "%s_%s.json" % (params["platform"], params["match_id"])
+                    ),
+                    "w+",
             ) as file:
                 json.dump(response, file)
             del response
@@ -197,7 +187,7 @@ class Platform:
                 ],
                 "participant": players,
             }
-            self.results.append(package)
+            await self.results.put(package)
         except LimitBlocked as err:
             self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
             return params
@@ -208,7 +198,7 @@ class Platform:
             self.logging.error("Others")
             return params
         except NotFoundException:
-            self.result_not_found.append([params["platform"], params["match_id"]])
+            await self.result_not_found.put([params["platform"], params["match_id"]])
         except Exception as err:
             self.logging.error("General: %s", err)
             return params
@@ -230,7 +220,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -245,10 +235,23 @@ class Platform:
                     if target
                 ]
 
-    async def flush_tasks(self, match_updates, match_not_found):
+    async def flush_tasks(self):
         """Insert results from requests into the db."""
         try:
             async with self.handler.postgres.acquire() as connection:
+                match_updates = []
+                while True:
+                    try:
+                        match_updates.append(self.results.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+                match_not_found = []
+                while True:
+                    try:
+                        match_not_found.append(self.result_not_found.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+
                 if match_updates or match_not_found:
                     self.logging.info(
                         "Flushing %s match_updates (%s not found).",
