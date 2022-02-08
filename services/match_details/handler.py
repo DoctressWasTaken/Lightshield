@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import signal
-from guppy import hpy
 import aioredis
 import asyncpg
 import uvloop
@@ -43,7 +42,6 @@ class Handler:
         self.redis = None
         self.platforms = {}
         self.proxy = Proxy()
-        self.h = hpy()
 
     async def init(self):
         self.postgres = await asyncpg.create_pool(
@@ -101,12 +99,11 @@ class Handler:
 
     async def test(self):
         while True:
-            self.logging.info(self.h.heap())
-            await asyncio.sleep(60)
+            self.logging.info(asyncio.all_tasks())
 
     async def runner(self):
         """Main application loop"""
-        task = asyncio.create_task(self.test())
+        asyncio.create_task(self.test())
         while True:
             await self.get_apiKey()
             if not self.api_key.startswith("RGAPI"):
