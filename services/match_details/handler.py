@@ -103,7 +103,7 @@ class Handler:
     async def test(self):
         while True:
             snapshot = tracemalloc.take_snapshot()
-            top_stats = snapshot.statistics('lineno')
+            top_stats = snapshot.statistics("lineno")
             self.logging.info("Running tasks: %s", len(asyncio.all_tasks()))
             for stat in top_stats[:20]:
                 self.logging.info(stat)
