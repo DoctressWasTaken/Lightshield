@@ -100,6 +100,7 @@ class Handler:
     async def test(self):
         while True:
             self.logging.info(asyncio.all_tasks())
+            await asyncio.sleep(15)
 
     async def runner(self):
         """Main application loop"""
