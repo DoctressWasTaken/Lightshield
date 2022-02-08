@@ -28,8 +28,8 @@ class Service:
         self.current_pages = []
         self.data = []
         self.url = (
-                f"https://{self.name}.api.riotgames.com/lol/"
-                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+            f"https://{self.name}.api.riotgames.com/lol/"
+            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
 
     async def init(self):
@@ -75,7 +75,7 @@ class Service:
     async def get_data(self, tier, division):
         """Request data from the API."""
         async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+            headers={"X-Riot-Token": self.handler.api_key}
         ) as session:
             while self.current_pages:
                 if self.handler.is_shutdown:
@@ -84,7 +84,7 @@ class Service:
                     await asyncio.sleep(5)
                     continue
                 while (
-                        delay := (self.retry_after - datetime.now()).total_seconds()
+                    delay := (self.retry_after - datetime.now()).total_seconds()
                 ) > 0:
                     await asyncio.sleep(min(0.1, delay))
 
@@ -160,7 +160,10 @@ class Service:
                 already_added = []
                 for new in self.data:
                     rank = [new["tier"], new["rank"], new["leaguePoints"]]
-                    if new["summonerId"] not in preset or preset[new["summonerId"]] != rank:
+                    if (
+                        new["summonerId"] not in preset
+                        or preset[new["summonerId"]] != rank
+                    ):
                         if new["summonerId"] not in already_added:
                             already_added.append(new["summonerId"])
                             to_update.append([new["summonerId"]] + rank)

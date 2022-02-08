@@ -4,6 +4,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 
+
 import aiohttp
 
 from lightshield.exceptions import (
