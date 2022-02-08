@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 from asyncio import Queue
@@ -108,6 +107,7 @@ class Platform:
                         % tuple([self.name for _ in range(2)]),
                         500,
                     )
+                    entries = []
                     self.logging.debug(
                         "Refilling tasks [%s -> %s].",
                         len(self.tasks),
@@ -117,7 +117,7 @@ class Platform:
                         await asyncio.sleep(30)
                         await self.flush_tasks()
 
-                    self.tasks += entries
+                    self.tasks += [[entry["platform"], entry["match_id"]] for entry in entries]
             except Exception as err:
                 self.logging.error("Here: %s", err)
 
@@ -125,7 +125,7 @@ class Platform:
         """Call and handle response."""
         try:
             #   Success
-            url = self.endpoint_url % (params["platform"], params["match_id"])
+            url = self.endpoint_url % (params[0], params[1])
             response = await self.endpoint.request(url, session)
             if response["info"]["queueId"] == 0:
                 raise NotFoundException  # TODO: queue 0 means its a custom, so it should be set to max retries immediatly
@@ -136,8 +136,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -152,7 +152,7 @@ class Platform:
             for player in response["info"]["participants"]:
                 players.append(
                     [
-                        params["match_id"],
+                        params[1],
                         player["puuid"],
                         player["championId"] if player["championId"] < 30000 else -1,
                         player["teamId"] != 100,
@@ -162,14 +162,14 @@ class Platform:
             day = creation.strftime("%Y_%m_%d")
             patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
             path = os.path.join(
-                os.sep, "data", "details", patch, day, params["platform"]
+                os.sep, "data", "details", patch, day, params[0]
             )
             if not os.path.exists(path):
                 # os.makedirs(path)
                 pass
             # with open(
             #    os.path.join(
-            #        path, "%s_%s.json" % (params["platform"], params["match_id"])
+            #        path, "%s_%s.json" % (params[0], params[1])
             #    ),
             #    "w+",
             # ) as file:
@@ -184,8 +184,8 @@ class Platform:
                     patch_int,
                     game_duration,
                     win,
-                    params["platform"],
-                    params["match_id"],
+                    params[0],
+                    params[1],
                 ],
                 "participant": players,
             }
@@ -200,7 +200,7 @@ class Platform:
             self.logging.error("Others")
             return params
         except NotFoundException:
-            await self.result_not_found.put([params["platform"], params["match_id"]])
+            await self.result_not_found.put([params[0], params[1]])
         except Exception as err:
             self.logging.error("General: %s", err)
             return params
@@ -222,7 +222,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -259,7 +259,7 @@ class Platform:
                     len(match_updates) + len(match_not_found),
                     len(match_not_found),
                 )
-            #async with connection.transaction():
+            # async with connection.transaction():
             #    if match_updates:
             #        matches = [package["match"] for package in match_updates]
             #        # Insert match updates
@@ -278,33 +278,34 @@ class Platform:
             #            % self.name,
             #        )
             #        await query.executemany(matches)
+
 #
-            #        platforms = {}
+#        platforms = {}
 #
-            #        for package in match_updates:
-            #            if package["match"][-2] not in platforms:
-            #                platforms[package["match"][-2]] = []
-            #            platforms[package["match"][-2]] += package["participant"]
+#        for package in match_updates:
+#            if package["match"][-2] not in platforms:
+#                platforms[package["match"][-2]] = []
+#            platforms[package["match"][-2]] += package["participant"]
 #
-            #        for platform in platforms:
-            #            await connection.executemany(
-            #                """INSERT INTO %s.participant
-            #                    VALUES ($1, $2, $3, $4)
-            #                    ON CONFLICT DO NOTHING
-            #                """
-            #                % platform,
-            #                platforms[platform],
-            #            )
+#        for platform in platforms:
+#            await connection.executemany(
+#                """INSERT INTO %s.participant
+#                    VALUES ($1, $2, $3, $4)
+#                    ON CONFLICT DO NOTHING
+#                """
+#                % platform,
+#                platforms[platform],
+#            )
 #
-            #    if match_not_found:
-            #        query = await connection.prepare(
-            #            """UPDATE %s.match
-            #                SET find_fails = find_fails + 1,
-            #                    reserved_details = current_date + INTERVAL '10 minute'
-            #                WHERE platform = $1
-            #                AND match_id = $2
-            #            """
-            #            % self.name
-            #        )
-            #        await query.executemany(match_not_found)
+#    if match_not_found:
+#        query = await connection.prepare(
+#            """UPDATE %s.match
+#                SET find_fails = find_fails + 1,
+#                    reserved_details = current_date + INTERVAL '10 minute'
+#                WHERE platform = $1
+#                AND match_id = $2
+#            """
+#            % self.name
+#        )
+#        await query.executemany(match_not_found)
 #
