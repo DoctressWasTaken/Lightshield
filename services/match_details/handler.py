@@ -6,6 +6,9 @@ import signal
 import aioredis
 import asyncpg
 import uvloop
+import tracemalloc
+
+tracemalloc.start()
 
 uvloop.install()
 
@@ -99,7 +102,11 @@ class Handler:
 
     async def test(self):
         while True:
+            snapshot = tracemalloc.take_snapshot()
+            top_stats = snapshot.statistics('lineno')
             self.logging.info("Running tasks: %s", len(asyncio.all_tasks()))
+            for stat in top_stats[:20]:
+                self.logging.info(stat)
             await asyncio.sleep(15)
 
     async def runner(self):
