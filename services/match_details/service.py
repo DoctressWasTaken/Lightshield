@@ -165,14 +165,14 @@ class Platform:
                 os.sep, "data", "details", patch, day, params["platform"]
             )
             if not os.path.exists(path):
-                #os.makedirs(path)
+                # os.makedirs(path)
                 pass
-            #with open(
+            # with open(
             #    os.path.join(
             #        path, "%s_%s.json" % (params["platform"], params["match_id"])
             #    ),
             #    "w+",
-            #) as file:
+            # ) as file:
             #    pass
             #    json.dump(response, file)
             del response
@@ -259,51 +259,52 @@ class Platform:
                     len(match_updates) + len(match_not_found),
                     len(match_not_found),
                 )
-            async with connection.transaction():
-                if match_updates:
-                    matches = [package["match"] for package in match_updates]
-                    # Insert match updates
-                    query = await connection.prepare(
-                        """UPDATE %s.match
-                        SET queue = $1,
-                            timestamp = $2,
-                            version = $3,
-                            duration = $4,
-                            win = $5,
-                            details = TRUE,
-                            reserved_details = NULL
-                            WHERE platform = $6
-                            AND match_id = $7
-                        """
-                        % self.name,
-                    )
-                    await query.executemany(matches)
-
-                    platforms = {}
-
-                    for package in match_updates:
-                        if package["match"][-2] not in platforms:
-                            platforms[package["match"][-2]] = []
-                        platforms[package["match"][-2]] += package["participant"]
-
-                    for platform in platforms:
-                        await connection.executemany(
-                            """INSERT INTO %s.participant
-                                VALUES ($1, $2, $3, $4)
-                                ON CONFLICT DO NOTHING
-                            """
-                            % platform,
-                            platforms[platform],
-                        )
-
-                if match_not_found:
-                    query = await connection.prepare(
-                        """UPDATE %s.match
-                            SET find_fails = find_fails + 1,
-                                reserved_details = current_date + INTERVAL '10 minute'
-                            WHERE platform = $1
-                            AND match_id = $2
-                        """
-                        % self.name
-                    )
-                    await query.executemany(match_not_found)
+            #async with connection.transaction():
+            #    if match_updates:
+            #        matches = [package["match"] for package in match_updates]
+            #        # Insert match updates
+            #        query = await connection.prepare(
+            #            """UPDATE %s.match
+            #            SET queue = $1,
+            #                timestamp = $2,
+            #                version = $3,
+            #                duration = $4,
+            #                win = $5,
+            #                details = TRUE,
+            #                reserved_details = NULL
+            #                WHERE platform = $6
+            #                AND match_id = $7
+            #            """
+            #            % self.name,
+            #        )
+            #        await query.executemany(matches)
+#
+            #        platforms = {}
+#
+            #        for package in match_updates:
+            #            if package["match"][-2] not in platforms:
+            #                platforms[package["match"][-2]] = []
+            #            platforms[package["match"][-2]] += package["participant"]
+#
+            #        for platform in platforms:
+            #            await connection.executemany(
+            #                """INSERT INTO %s.participant
+            #                    VALUES ($1, $2, $3, $4)
+            #                    ON CONFLICT DO NOTHING
+            #                """
+            #                % platform,
+            #                platforms[platform],
+            #            )
+#
+            #    if match_not_found:
+            #        query = await connection.prepare(
+            #            """UPDATE %s.match
+            #                SET find_fails = find_fails + 1,
+            #                    reserved_details = current_date + INTERVAL '10 minute'
+            #                WHERE platform = $1
+            #                AND match_id = $2
+            #            """
+            #            % self.name
+            #        )
+            #        await query.executemany(match_not_found)
+#
