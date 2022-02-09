@@ -37,10 +37,10 @@ class Platform:
             f"https://{self.name}.api.riotgames.com/lol/match/v5/matches/%s_%s"
         )
         self.postgres_params = {
-            'host': "postgres",
-            'port': 5432,
-            'user': "postgres",
-            'database': "lightshield"
+            "host": "postgres",
+            "port": 5432,
+            "user": "postgres",
+            "database": "lightshield",
         }
 
     async def init(self):
@@ -78,14 +78,12 @@ class Platform:
         """Pull new tasks when the list is empty."""
         self.logging.debug("Task Updater initiated.")
         while self.running:
-            if self.results.qsize() >= 100:
+            if self.results.qsize() >= 200:
                 await self.flush_tasks()
             if len(self.tasks) > 200:
                 await asyncio.sleep(5)
                 continue
-            connection = await asyncpg.connect(
-                    **self.postgres_params
-                )
+            connection = await asyncpg.connect(**self.postgres_params)
             try:
                 entries = await connection.fetch(
                     """UPDATE %s.match
@@ -140,8 +138,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -170,8 +168,8 @@ class Platform:
                 os.makedirs(path)
 
             with open(
-                    os.path.join(path, "%s_%s.json" % (params[0], params[1])),
-                    "w+",
+                os.path.join(path, "%s_%s.json" % (params[0], params[1])),
+                "w+",
             ) as file:
                 json.dump(response, file)
             del response
@@ -216,7 +214,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -233,9 +231,7 @@ class Platform:
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
-        connection = await asyncpg.connect(
-            **self.postgres_params
-        )
+        connection = await asyncpg.connect(**self.postgres_params)
         try:
             match_updates = []
             while True:
