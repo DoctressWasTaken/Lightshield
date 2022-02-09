@@ -138,8 +138,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -166,12 +166,13 @@ class Platform:
             path = os.path.join(os.sep, "data", "details", patch, day, params[0])
             if not os.path.exists(path):
                 os.makedirs(path)
-
-            with open(
-                os.path.join(path, "%s_%s.json" % (params[0], params[1])),
-                "w+",
-            ) as file:
-                json.dump(response, file)
+            filename = os.path.join(path, "%s_%s.json" % (params[0], params[1]))
+            if not os.path.isfile(filename):
+                with open(
+                        filename,
+                        "w+",
+                ) as file:
+                    json.dump(response, file)
             del response
             self.logging.debug(url)
             package = {
@@ -214,7 +215,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -244,7 +245,7 @@ class Platform:
             while True:
                 try:
                     match_not_found.append(self.result_not_found.get_nowait())
-                    self.results.task_done()
+                    self.result_not_found.task_done()
                 except asyncio.QueueEmpty:
                     break
 
