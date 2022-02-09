@@ -1,9 +1,10 @@
 import asyncio
+import json
 import logging
 import os
 from asyncio import Queue
 from datetime import datetime, timedelta
-import json
+
 import aiohttp
 
 from lightshield.exceptions import (
@@ -86,43 +87,45 @@ class Platform:
             if len(self.tasks) > 200:
                 await asyncio.sleep(5)
                 continue
+            connection = await self.handler.postgres.acquire()
             try:
-                async with self.handler.postgres.acquire() as connection:
-                    entries = await connection.fetch(
-                        """UPDATE %s.match
-                                SET reserved_details = current_date + INTERVAL '10 minute'
-                                FROM (
-                                    SELECT  match_id,
-                                            platform
-                                        FROM %s.match
-                                        WHERE details IS NULL
-                                        AND find_fails <= 10
-                                        AND (reserved_details IS NULL OR reserved_details < current_timestamp)
-                                        ORDER BY find_fails, match_id DESC
-                                        LIMIT $1
-                                        ) selection
-                            WHERE match.match_id = selection.match_id
-                               AND match.platform = selection.platform
-                                RETURNING match.platform, match.match_id
-                        """
-                        % tuple([self.name for _ in range(2)]),
-                        500,
-                    )
-                    self.logging.debug(
-                        "Refilling tasks [%s -> %s].",
-                        len(self.tasks),
-                        len(self.tasks) + len(entries),
-                    )
-                    if len(entries) == 0:
-                        await asyncio.sleep(30)
-                        # await self.flush_tasks()
-                        pass
+                entries = await connection.fetch(
+                    """UPDATE %s.match
+                            SET reserved_details = current_date + INTERVAL '10 minute'
+                            FROM (
+                                SELECT  match_id,
+                                        platform
+                                    FROM %s.match
+                                    WHERE details IS NULL
+                                    AND find_fails <= 10
+                                    AND (reserved_details IS NULL OR reserved_details < current_timestamp)
+                                    ORDER BY find_fails, match_id DESC
+                                    LIMIT $1
+                                    ) selection
+                        WHERE match.match_id = selection.match_id
+                           AND match.platform = selection.platform
+                            RETURNING match.platform, match.match_id
+                    """
+                    % tuple([self.name for _ in range(2)]),
+                    500,
+                )
+                self.logging.debug(
+                    "Refilling tasks [%s -> %s].",
+                    len(self.tasks),
+                    len(self.tasks) + len(entries),
+                )
+                if len(entries) == 0:
+                    await asyncio.sleep(30)
+                    # await self.flush_tasks()
+                    pass
 
-                    self.tasks += [
-                        [entry["platform"], entry["match_id"]] for entry in entries
-                    ]
+                self.tasks += [
+                    [entry["platform"], entry["match_id"]] for entry in entries
+                ]
             except Exception as err:
                 self.logging.error("Here: %s", err)
+            finally:
+                await self.handler.postgres.release(connection)
 
     async def fetch(self, params, session):
         """Call and handle response."""
@@ -169,9 +172,7 @@ class Platform:
                 os.makedirs(path)
 
             with open(
-                    os.path.join(
-                        path, "%s_%s.json" % (params[0], params[1])
-                    ),
+                    os.path.join(path, "%s_%s.json" % (params[0], params[1])),
                     "w+",
             ) as file:
                 json.dump(response, file)
