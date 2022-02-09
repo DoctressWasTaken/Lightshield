@@ -196,6 +196,7 @@ class Platform:
                     async with aiofiles.open(filename, "w+") as file:
                         await file.write(json.dumps(response))
                 # del response
+                os.sync()
                 package = {
                     "match": [
                         queue,
