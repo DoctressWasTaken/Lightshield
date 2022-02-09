@@ -138,8 +138,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -169,12 +169,11 @@ class Platform:
             filename = os.path.join(path, "%s_%s.json" % (params[0], params[1]))
             if not os.path.isfile(filename):
                 with open(
-                        filename,
-                        "w+",
+                    filename,
+                    "w+",
                 ) as file:
                     json.dump(response, file)
             del response
-            self.logging.debug(url)
             package = {
                 "match": [
                     queue,
@@ -215,7 +214,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
