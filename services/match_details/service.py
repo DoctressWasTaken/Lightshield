@@ -135,7 +135,6 @@ class Platform:
             finally:
                 await connection.close()
 
-
     async def worker(self):
         """Execute requests."""
         while self.running:
@@ -149,12 +148,14 @@ class Platform:
 
                 # Extract relevant data
                 queue = response["info"]["queueId"]
-                creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
+                creation = datetime.fromtimestamp(
+                    response["info"]["gameCreation"] // 1000
+                )
                 patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
                 if "gameStartTimestamp" in response["info"]:
                     game_duration = (
-                            response["info"]["gameEndTimestamp"]
-                            - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                     )
                 else:
                     game_duration = response["info"]["gameDuration"]
@@ -171,7 +172,9 @@ class Platform:
                         [
                             task[1],
                             player["puuid"],
-                            player["championId"] if player["championId"] < 30000 else -1,
+                            player["championId"]
+                            if player["championId"] < 30000
+                            else -1,
                             player["teamId"] != 100,
                             # TODO: Add lane: 'lane': player['teamPosition'], (add as a enum in postgres first)
                         ]
@@ -184,8 +187,8 @@ class Platform:
                 filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
                 if not os.path.isfile(filename):
                     with open(
-                            filename,
-                            "w+",
+                        filename,
+                        "w+",
                     ) as file:
                         json.dump(response, file)
                 del response
@@ -205,15 +208,19 @@ class Platform:
                 self.task_queue.task_done()
             except LimitBlocked as err:
                 self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
+                await self.task_queue.put(task)
             except RatelimitException as err:
                 self.logging.error("Ratelimit")
+                await self.task_queue.put(task)
             except Non200Exception as err:
                 self.logging.error("Others")
+                await self.task_queue.put(task)
             except NotFoundException:
                 await self.result_not_found.put([task[0], task[1]])
                 self.task_queue.task_done()
             except Exception as err:
                 self.logging.error("General: %s", err)
+                await self.task_queue.put(task)
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
