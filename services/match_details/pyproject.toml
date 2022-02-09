@@ -13,6 +13,7 @@ aiohttp = "^3.7.4"
 uvloop = "^0.15.2"
 lightshield = '*'
 guppy3 = '*'
+aiofiles = "*"
 
 [tool.poetry.dev-dependencies]
 

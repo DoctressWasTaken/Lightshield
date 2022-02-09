@@ -1,12 +1,10 @@
 import asyncio
-
 import json
 import logging
-
 import os
 from asyncio import Queue
 from datetime import datetime, timedelta
-
+import aiofiles
 import aiohttp
 import asyncpg
 
@@ -159,8 +157,8 @@ class Platform:
                 patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
                 if "gameStartTimestamp" in response["info"]:
                     game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                            response["info"]["gameEndTimestamp"]
+                            - response["info"]["gameStartTimestamp"]
                     )
                 else:
                     game_duration = response["info"]["gameDuration"]
@@ -191,11 +189,8 @@ class Platform:
                     os.makedirs(path)
                 filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
                 if not os.path.isfile(filename):
-                    with open(
-                        filename,
-                        "w+",
-                    ) as file:
-                        file.write(json.dumps(response))
+                    async with aiofiles.open(filename, "w+") as file:
+                        await file.write(json.dumps(response))
                 # del response
                 package = {
                     "match": [
