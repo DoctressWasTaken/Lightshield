@@ -195,7 +195,7 @@ class Platform:
                         filename,
                         "w+",
                     ) as file:
-                        json.dump(response, file)
+                        file.write(json.dumps(response))
                 # del response
                 package = {
                     "match": [
