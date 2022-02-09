@@ -107,7 +107,6 @@ class Platform:
                         % tuple([self.name for _ in range(2)]),
                         500,
                     )
-                    entries = []
                     self.logging.debug(
                         "Refilling tasks [%s -> %s].",
                         len(self.tasks),
@@ -117,7 +116,9 @@ class Platform:
                         await asyncio.sleep(30)
                         await self.flush_tasks()
 
-                    self.tasks += [[entry["platform"], entry["match_id"]] for entry in entries]
+                    self.tasks += [
+                        [entry["platform"], entry["match_id"]] for entry in entries
+                    ]
             except Exception as err:
                 self.logging.error("Here: %s", err)
 
@@ -136,8 +137,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -161,9 +162,7 @@ class Platform:
                 )
             day = creation.strftime("%Y_%m_%d")
             patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
-            path = os.path.join(
-                os.sep, "data", "details", patch, day, params[0]
-            )
+            path = os.path.join(os.sep, "data", "details", patch, day, params[0])
             if not os.path.exists(path):
                 # os.makedirs(path)
                 pass
@@ -222,7 +221,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -278,6 +277,7 @@ class Platform:
             #            % self.name,
             #        )
             #        await query.executemany(matches)
+
 
 #
 #        platforms = {}
