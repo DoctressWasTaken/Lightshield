@@ -21,14 +21,13 @@ class Platform:
     _runner = None
     results = None
     result_not_found = None
-    worker_count = 5
+    worker_count = 20
 
     def __init__(self, region, platforms, handler):
         self.name = region
         self.platforms = platforms
         self.handler = handler
         self.logging = logging.getLogger("%s" % region)
-        self.tasks = []  # List of summonerIds
         self._worker = []  # Worker promises
         self.updater = None  # Updater promise
         self.retry_after = datetime.now()
@@ -45,6 +44,7 @@ class Platform:
 
     async def init(self):
         """Init background runner."""
+        self.task_queue = Queue()
         self.results = Queue()
         self.result_not_found = Queue()
         self.endpoint = await self.handler.proxy.get_endpoint(
@@ -63,16 +63,26 @@ class Platform:
         if not self.running:
             self.running = True
             self.logging.info("Started service calls.")
+            self.session = await aiohttp.ClientSession(
+                headers={"X-Riot-Token": self.handler.api_key}
+            )
             self.updater = asyncio.create_task(self.task_updater())
-            self._worker = [asyncio.create_task(self.worker()) for _ in range(10)]
+            self._worker = [asyncio.create_task(self.worker()) for _ in range(self.worker_count)]
 
     async def stop(self):
         """Halt the service calls."""
         if self.running:
             self.running = False
             self.logging.info("Stopped service calls.")
-            await asyncio.gather(*self._worker, self.updater)
+            await self.updater
+            for worker in self._worker:
+                worker.cancel()
+            try:
+                await asyncio.gather(*self._worker)
+            except asyncio.CancelledError:
+                pass
             await self.flush_tasks()
+            await self.session.close()
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
@@ -80,7 +90,7 @@ class Platform:
         while self.running:
             if self.results.qsize() >= 200:
                 await self.flush_tasks()
-            if len(self.tasks) > 200:
+            if self.task_queue.qsize() > 200:
                 await asyncio.sleep(5)
                 continue
             connection = await asyncpg.connect(**self.postgres_params)
@@ -107,28 +117,28 @@ class Platform:
                 )
                 self.logging.debug(
                     "Refilling tasks [%s -> %s].",
-                    len(self.tasks),
-                    len(self.tasks) + len(entries),
+                    self.task_queue.qsize(),
+                    self.task_queue.qsize() + len(entries),
                 )
                 if len(entries) == 0:
                     await asyncio.sleep(30)
                     await self.flush_tasks()
                     pass
 
-                self.tasks += [
-                    [entry["platform"], entry["match_id"]] for entry in entries
-                ]
+                for entry in entries:
+                    await self.task_queue.put([entry["platform"], entry["match_id"]])
+
             except Exception as err:
                 self.logging.error("Here: %s", err)
             finally:
                 await connection.close()
 
-    async def fetch(self, params, session):
+    async def fetch(self, params):
         """Call and handle response."""
         try:
             #   Success
             url = self.endpoint_url % (params[0], params[1])
-            response = await self.endpoint.request(url, session)
+            response = await self.endpoint.request(url, self.session)
             if response["info"]["queueId"] == 0:
                 raise NotFoundException  # TODO: queue 0 means its a custom, so it should be set to max retries immediatly
 
@@ -138,8 +148,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -169,8 +179,8 @@ class Platform:
             filename = os.path.join(path, "%s_%s.json" % (params[0], params[1]))
             if not os.path.isfile(filename):
                 with open(
-                    filename,
-                    "w+",
+                        filename,
+                        "w+",
                 ) as file:
                     json.dump(response, file)
             del response
@@ -204,30 +214,11 @@ class Platform:
 
     async def worker(self):
         """Execute requests."""
-        targets = []
         while self.running:
-            if not self.tasks:
-                await asyncio.sleep(5)
-                continue
-            while len(targets) < 5:
-                if not self.tasks:
-                    break
-                targets.append(self.tasks.pop())
-            async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
-            ) as session:
-                targets = [
-                    target
-                    for target in (
-                        await asyncio.gather(
-                            *[
-                                asyncio.create_task(self.fetch(target, session))
-                                for target in targets
-                            ]
-                        )
-                    )
-                    if target
-                ]
+            task = await self.task_queue.get()
+            await self.fetch(task)
+            if not task:
+                self.task_queue.task_done()
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
