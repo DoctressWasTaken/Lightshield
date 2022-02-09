@@ -105,6 +105,7 @@ class Handler:
         """Main application loop"""
         asyncio.create_task(self.test())
         while True:
+            stop_tasks = []
             await self.get_apiKey()
             if not self.api_key.startswith("RGAPI"):
                 for platform in self.platforms.values():
@@ -120,7 +121,7 @@ class Handler:
                     await self.platforms[platform].start()
                     continue
                 await self.platforms[platform].stop()
-            await asyncio.sleep(5)
+            await asyncio.gather(*stop_tasks, asyncio.sleep(5))
 
     async def run(self):
         """Run."""

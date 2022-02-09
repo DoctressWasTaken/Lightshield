@@ -4,8 +4,9 @@ import logging
 import os
 from asyncio import Queue
 from datetime import datetime, timedelta
-import asyncpg
+
 import aiohttp
+import asyncpg
 
 from lightshield.exceptions import (
     LimitBlocked,
@@ -20,6 +21,7 @@ class Platform:
     _runner = None
     results = None
     result_not_found = None
+    worker_count = 5
 
     def __init__(self, region, platforms, handler):
         self.name = region
@@ -44,52 +46,46 @@ class Platform:
         )
         self._runner = asyncio.create_task(self.runner())
         self.logging.info("Ready.")
+
+    async def shutdown(self):
+        self.logging.info("Shutdown")
+        self.running = False
+        await asyncio.gather(*self._worker, self.updater)
+        await self.flush_tasks()
+
+    async def start(self):
+        """Start the service calls."""
+        if not self.running:
+            self.logging.info("Started service calls.")
+        await self.runner()
+        self.running = True
+
+    async def stop(self):
+        """Halt the service calls."""
+        self.running = False
+        if self.running:
+            self.logging.info("Stopped service calls.")
+            await asyncio.gather(*self._worker, self.updater)
+            await self.flush_tasks()
+            await self.postgres.close()
+
+    async def runner(self):
+        """Main object loop."""
         self.postgres = await asyncpg.create_pool(
             host="postgres",
             port=5432,
             user="postgres",
             database="lightshield",
         )
-
-    async def shutdown(self):
-        self.logging.info("Shutdown")
-        for worker in self._worker:
-            worker.cancel()
-        self.updater.cancel()
-        await self._runner
-
-    async def start(self):
-        """Start the service calls."""
-        if not self.running:
-            self.logging.info("Started service calls.")
-        self.running = True
-
-    async def stop(self):
-        """Halt the service calls."""
-        if self.running:
-            self.logging.info("Stopped service calls.")
-        self.running = False
-
-    async def runner(self):
-        """Main object loop."""
         self.updater = asyncio.create_task(self.task_updater())
         self._worker = [asyncio.create_task(self.worker()) for _ in range(10)]
-        try:
-            await asyncio.gather(*self._worker, self.updater)
-        except asyncio.CancelledError:
-            await self.flush_tasks()
-            return
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
-        while True:
+        self.logging.debug('Task Updater initiated.')
+        while self.running:
             if self.results.qsize() >= 100:
-                # await self.flush_tasks()
-                pass
-
-            if not self.running:
-                await asyncio.sleep(5)
-                continue
+                await self.flush_tasks()
             if len(self.tasks) > 200:
                 await asyncio.sleep(5)
                 continue
@@ -122,7 +118,7 @@ class Platform:
                 )
                 if len(entries) == 0:
                     await asyncio.sleep(30)
-                    # await self.flush_tasks()
+                    await self.flush_tasks()
                     pass
 
                 self.tasks += [
@@ -148,8 +144,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -178,8 +174,8 @@ class Platform:
                 os.makedirs(path)
 
             with open(
-                os.path.join(path, "%s_%s.json" % (params[0], params[1])),
-                "w+",
+                    os.path.join(path, "%s_%s.json" % (params[0], params[1])),
+                    "w+",
             ) as file:
                 json.dump(response, file)
             del response
@@ -215,12 +211,7 @@ class Platform:
     async def worker(self):
         """Execute requests."""
         targets = []
-        while not self.running:
-            await asyncio.sleep(5)
-        while True:
-            if not self.running:
-                await asyncio.sleep(5)
-                continue
+        while self.running:
             if not self.tasks:
                 await asyncio.sleep(5)
                 continue
@@ -229,7 +220,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
