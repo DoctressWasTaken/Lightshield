@@ -209,18 +209,22 @@ class Platform:
             except LimitBlocked as err:
                 self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
                 await self.task_queue.put(task)
+                self.task_queue.task_done()
             except RatelimitException as err:
                 self.logging.error("Ratelimit")
                 await self.task_queue.put(task)
+                self.task_queue.task_done()
             except Non200Exception as err:
                 self.logging.error("Others")
                 await self.task_queue.put(task)
+                self.task_queue.task_done()
             except NotFoundException:
                 await self.result_not_found.put([task[0], task[1]])
                 self.task_queue.task_done()
             except Exception as err:
                 self.logging.error("General: %s", err)
                 await self.task_queue.put(task)
+                self.task_queue.task_done()
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
