@@ -187,8 +187,8 @@ class Platform:
                 day = creation.strftime("%Y_%m_%d")
                 patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
                 path = os.path.join(os.sep, "data", "details", patch, day, task[0])
-                # if not os.path.exists(path):
-                #     os.makedirs(path)
+                if not os.path.exists(path):
+                    os.makedirs(path)
                 # filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
                 # if not os.path.isfile(filename):
                 #     with open(
