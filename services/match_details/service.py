@@ -36,6 +36,12 @@ class Platform:
         self.endpoint_url = (
             f"https://{self.name}.api.riotgames.com/lol/match/v5/matches/%s_%s"
         )
+        self.postgres_params = {
+            'host': "postgres",
+            'port': 5432,
+            'user': "postgres",
+            'database': "lightshield"
+        }
 
     async def init(self):
         """Init background runner."""
@@ -57,12 +63,6 @@ class Platform:
         if not self.running:
             self.running = True
             self.logging.info("Started service calls.")
-            self.postgres = await asyncpg.create_pool(
-                host="postgres",
-                port=5432,
-                user="postgres",
-                database="lightshield",
-            )
             self.updater = asyncio.create_task(self.task_updater())
             self._worker = [asyncio.create_task(self.worker()) for _ in range(10)]
 
@@ -73,7 +73,6 @@ class Platform:
             self.logging.info("Stopped service calls.")
             await asyncio.gather(*self._worker, self.updater)
             await self.flush_tasks()
-            await self.postgres.close()
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
@@ -84,7 +83,9 @@ class Platform:
             if len(self.tasks) > 200:
                 await asyncio.sleep(5)
                 continue
-            connection = await self.postgres.acquire()
+            connection = await asyncpg.connect(
+                    **self.postgres_params
+                )
             try:
                 entries = await connection.fetch(
                     """UPDATE %s.match
@@ -104,7 +105,7 @@ class Platform:
                             RETURNING match.platform, match.match_id
                     """
                     % tuple([self.name for _ in range(2)]),
-                    500,
+                    1000,
                 )
                 self.logging.debug(
                     "Refilling tasks [%s -> %s].",
@@ -122,7 +123,7 @@ class Platform:
             except Exception as err:
                 self.logging.error("Here: %s", err)
             finally:
-                await self.postgres.release(connection)
+                await connection.close()
 
     async def fetch(self, params, session):
         """Call and handle response."""
@@ -139,8 +140,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -169,8 +170,8 @@ class Platform:
                 os.makedirs(path)
 
             with open(
-                os.path.join(path, "%s_%s.json" % (params[0], params[1])),
-                "w+",
+                    os.path.join(path, "%s_%s.json" % (params[0], params[1])),
+                    "w+",
             ) as file:
                 json.dump(response, file)
             del response
@@ -215,7 +216,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -232,7 +233,9 @@ class Platform:
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
-        connection = await self.postgres.acquire()
+        connection = await asyncpg.connect(
+            **self.postgres_params
+        )
         try:
             match_updates = []
             while True:
@@ -304,4 +307,4 @@ class Platform:
                 )
                 await query.executemany(match_not_found)
         finally:
-            await self.postgres.release(connection)
+            await connection.close()
