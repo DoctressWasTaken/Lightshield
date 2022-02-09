@@ -63,11 +63,13 @@ class Platform:
         if not self.running:
             self.running = True
             self.logging.info("Started service calls.")
-            self.session = await aiohttp.ClientSession(
+            self.session = aiohttp.ClientSession(
                 headers={"X-Riot-Token": self.handler.api_key}
             )
             self.updater = asyncio.create_task(self.task_updater())
-            self._worker = [asyncio.create_task(self.worker()) for _ in range(self.worker_count)]
+            self._worker = [
+                asyncio.create_task(self.worker()) for _ in range(self.worker_count)
+            ]
 
     async def stop(self):
         """Halt the service calls."""
