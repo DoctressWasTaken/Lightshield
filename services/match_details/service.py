@@ -44,7 +44,6 @@ class Platform:
         self.endpoint = await self.handler.proxy.get_endpoint(
             server=self.name, zone="match-details-v5"
         )
-        self._runner = asyncio.create_task(self.runner())
         self.logging.info("Ready.")
 
     async def shutdown(self):
@@ -55,10 +54,10 @@ class Platform:
 
     async def start(self):
         """Start the service calls."""
+        self.running = True
         if not self.running:
             self.logging.info("Started service calls.")
-        await self.runner()
-        self.running = True
+            await self.runner()
 
     async def stop(self):
         """Halt the service calls."""
@@ -82,7 +81,7 @@ class Platform:
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
-        self.logging.debug('Task Updater initiated.')
+        self.logging.debug("Task Updater initiated.")
         while self.running:
             if self.results.qsize() >= 100:
                 await self.flush_tasks()
@@ -144,8 +143,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -174,8 +173,8 @@ class Platform:
                 os.makedirs(path)
 
             with open(
-                    os.path.join(path, "%s_%s.json" % (params[0], params[1])),
-                    "w+",
+                os.path.join(path, "%s_%s.json" % (params[0], params[1])),
+                "w+",
             ) as file:
                 json.dump(response, file)
             del response
@@ -220,7 +219,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
