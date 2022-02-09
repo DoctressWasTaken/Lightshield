@@ -1,6 +1,6 @@
 import asyncio
 
-# import json
+import json
 import logging
 
 import os
@@ -189,13 +189,13 @@ class Platform:
                 path = os.path.join(os.sep, "data", "details", patch, day, task[0])
                 if not os.path.exists(path):
                     os.makedirs(path)
-                # filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
-                # if not os.path.isfile(filename):
-                #     with open(
-                #         filename,
-                #         "w+",
-                #     ) as file:
-                #         json.dump(response, file)
+                filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
+                if not os.path.isfile(filename):
+                    with open(
+                        filename,
+                        "w+",
+                    ) as file:
+                        json.dump(response, file)
                 # del response
                 package = {
                     "match": [
