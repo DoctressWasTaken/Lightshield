@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import aiofiles
 import aiohttp
 import asyncpg
+from aiofiles import os as aos
 
 from lightshield.exceptions import (
     LimitBlocked,
@@ -185,10 +186,10 @@ class Platform:
                 day = creation.strftime("%Y_%m_%d")
                 patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
                 path = os.path.join(os.sep, "data", "details", patch, day, task[0])
-                if not await aiofiles.os.path.exists(path):
-                    await aiofiles.os.makedirs(path)
+                if not await aos.path.exists(path):
+                    await aos.makedirs(path)
                 filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
-                if not await aiofiles.os.path.isfile(filename):
+                if not await aos.path.isfile(filename):
                     async with aiofiles.open(filename, "w+") as file:
                         await file.write(json.dumps(response))
                 # del response
