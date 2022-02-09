@@ -246,7 +246,8 @@ class Platform:
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
-        async with self.postgres.acquire() as connection:
+        connection = await self.postgres.acquire()
+        try:
             match_updates = []
             while True:
                 try:
@@ -314,3 +315,5 @@ class Platform:
                     % self.name
                 )
                 await query.executemany(match_not_found)
+        finally:
+            await self.postgres.release(connection)
