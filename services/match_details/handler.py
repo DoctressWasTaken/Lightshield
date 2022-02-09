@@ -3,10 +3,11 @@ import json
 import logging
 import os
 import signal
-import aioredis
-import asyncpg
-import uvloop
 import tracemalloc
+
+import aioredis
+import uvloop
+from guppy import hpy
 
 tracemalloc.start()
 
@@ -45,14 +46,9 @@ class Handler:
         self.redis = None
         self.platforms = {}
         self.proxy = Proxy()
+        self.h = hpy()
 
     async def init(self):
-        self.postgres = await asyncpg.create_pool(
-            host="postgres",
-            port=5432,
-            user="postgres",
-            database="lightshield",
-        )
         self.redis = await aioredis.create_redis_pool(
             "redis://redis:6379", encoding="utf-8"
         )
@@ -102,11 +98,7 @@ class Handler:
 
     async def test(self):
         while True:
-            snapshot = tracemalloc.take_snapshot()
-            top_stats = snapshot.statistics("lineno")
-            self.logging.info("Running tasks: %s", len(asyncio.all_tasks()))
-            # for stat in top_stats[:20]:
-            #    self.logging.info(stat)
+            self.logging.info(self.h.heap())
             await asyncio.sleep(15)
 
     async def runner(self):
