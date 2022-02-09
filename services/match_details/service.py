@@ -135,92 +135,85 @@ class Platform:
             finally:
                 await connection.close()
 
-    async def fetch(self, params):
-        """Call and handle response."""
-        try:
-            #   Success
-            url = self.endpoint_url % (params[0], params[1])
-            response = await self.endpoint.request(url, self.session)
-            if response["info"]["queueId"] == 0:
-                raise NotFoundException  # TODO: queue 0 means its a custom, so it should be set to max retries immediatly
-
-            # Extract relevant data
-            queue = response["info"]["queueId"]
-            creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
-            patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
-            if "gameStartTimestamp" in response["info"]:
-                game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
-                )
-            else:
-                game_duration = response["info"]["gameDuration"]
-            if game_duration >= 30000:
-                game_duration //= 1000
-            win = [
-                team["win"]
-                for team in response["info"]["teams"]
-                if team["teamId"] == 100
-            ][0]
-            players = []
-            for player in response["info"]["participants"]:
-                players.append(
-                    [
-                        params[1],
-                        player["puuid"],
-                        player["championId"] if player["championId"] < 30000 else -1,
-                        player["teamId"] != 100,
-                        # TODO: Add lane: 'lane': player['teamPosition'], (add as a enum in postgres first)
-                    ]
-                )
-            day = creation.strftime("%Y_%m_%d")
-            patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
-            path = os.path.join(os.sep, "data", "details", patch, day, params[0])
-            if not os.path.exists(path):
-                os.makedirs(path)
-            filename = os.path.join(path, "%s_%s.json" % (params[0], params[1]))
-            if not os.path.isfile(filename):
-                with open(
-                        filename,
-                        "w+",
-                ) as file:
-                    json.dump(response, file)
-            del response
-            package = {
-                "match": [
-                    queue,
-                    creation,
-                    patch_int,
-                    game_duration,
-                    win,
-                    params[0],
-                    params[1],
-                ],
-                "participant": players,
-            }
-            await self.results.put(package)
-        except LimitBlocked as err:
-            self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
-            return params
-        except RatelimitException as err:
-            self.logging.error("Ratelimit")
-            return params
-        except Non200Exception as err:
-            self.logging.error("Others")
-            return params
-        except NotFoundException:
-            await self.result_not_found.put([params[0], params[1]])
-        except Exception as err:
-            self.logging.error("General: %s", err)
-            return params
 
     async def worker(self):
         """Execute requests."""
         while self.running:
             task = await self.task_queue.get()
-            await self.fetch(task)
-            if not task:
+            try:
+                #   Success
+                url = self.endpoint_url % (task[0], task[1])
+                response = await self.endpoint.request(url, self.session)
+                if response["info"]["queueId"] == 0:
+                    raise NotFoundException  # TODO: queue 0 means its a custom, so it should be set to max retries immediatly
+
+                # Extract relevant data
+                queue = response["info"]["queueId"]
+                creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
+                patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
+                if "gameStartTimestamp" in response["info"]:
+                    game_duration = (
+                            response["info"]["gameEndTimestamp"]
+                            - response["info"]["gameStartTimestamp"]
+                    )
+                else:
+                    game_duration = response["info"]["gameDuration"]
+                if game_duration >= 30000:
+                    game_duration //= 1000
+                win = [
+                    team["win"]
+                    for team in response["info"]["teams"]
+                    if team["teamId"] == 100
+                ][0]
+                players = []
+                for player in response["info"]["participants"]:
+                    players.append(
+                        [
+                            task[1],
+                            player["puuid"],
+                            player["championId"] if player["championId"] < 30000 else -1,
+                            player["teamId"] != 100,
+                            # TODO: Add lane: 'lane': player['teamPosition'], (add as a enum in postgres first)
+                        ]
+                    )
+                day = creation.strftime("%Y_%m_%d")
+                patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
+                path = os.path.join(os.sep, "data", "details", patch, day, task[0])
+                if not os.path.exists(path):
+                    os.makedirs(path)
+                filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
+                if not os.path.isfile(filename):
+                    with open(
+                            filename,
+                            "w+",
+                    ) as file:
+                        json.dump(response, file)
+                del response
+                package = {
+                    "match": [
+                        queue,
+                        creation,
+                        patch_int,
+                        game_duration,
+                        win,
+                        task[0],
+                        task[1],
+                    ],
+                    "participant": players,
+                }
+                await self.results.put(package)
                 self.task_queue.task_done()
+            except LimitBlocked as err:
+                self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
+            except RatelimitException as err:
+                self.logging.error("Ratelimit")
+            except Non200Exception as err:
+                self.logging.error("Others")
+            except NotFoundException:
+                await self.result_not_found.put([task[0], task[1]])
+                self.task_queue.task_done()
+            except Exception as err:
+                self.logging.error("General: %s", err)
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
