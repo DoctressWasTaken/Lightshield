@@ -34,12 +34,6 @@ class Platform:
         self.endpoint_url = (
             f"https://{self.name}.api.riotgames.com/lol/match/v5/matches/%s_%s"
         )
-        self.postgres = await asyncpg.create_pool(
-            host="postgres",
-            port=5432,
-            user="postgres",
-            database="lightshield",
-        )
 
     async def init(self):
         """Init background runner."""
@@ -50,6 +44,12 @@ class Platform:
         )
         self._runner = asyncio.create_task(self.runner())
         self.logging.info("Ready.")
+        self.postgres = await asyncpg.create_pool(
+            host="postgres",
+            port=5432,
+            user="postgres",
+            database="lightshield",
+        )
 
     async def shutdown(self):
         self.logging.info("Shutdown")
