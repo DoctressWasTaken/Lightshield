@@ -3,7 +3,7 @@ import asyncio
 # import json
 import logging
 
-# import os
+import os
 from asyncio import Queue
 from datetime import datetime, timedelta
 
@@ -24,6 +24,9 @@ class Platform:
     results = None
     result_not_found = None
     worker_count = 20
+    task_queue = None
+    endpoint = None
+    session = None
 
     def __init__(self, region, platforms, handler):
         self.name = region
@@ -49,9 +52,6 @@ class Platform:
         self.task_queue = Queue()
         self.results = Queue()
         self.result_not_found = Queue()
-        self.endpoint = await self.handler.proxy.get_endpoint(
-            server=self.name, zone="match-details-v5"
-        )
         self.logging.info("Ready.")
 
     async def shutdown(self):
@@ -65,6 +65,9 @@ class Platform:
         if not self.running:
             self.running = True
             self.logging.info("Started service calls.")
+            self.endpoint = await self.handler.proxy.get_endpoint(
+                server=self.name, zone="match-details-v5"
+            )
             self.session = aiohttp.ClientSession(
                 headers={"X-Riot-Token": self.handler.api_key}
             )
@@ -183,7 +186,7 @@ class Platform:
                     )
                 day = creation.strftime("%Y_%m_%d")
                 patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
-                # path = os.path.join(os.sep, "data", "details", patch, day, task[0])
+                path = os.path.join(os.sep, "data", "details", patch, day, task[0])
                 # if not os.path.exists(path):
                 #     os.makedirs(path)
                 # filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
