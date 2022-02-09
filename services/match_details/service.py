@@ -252,12 +252,14 @@ class Platform:
             while True:
                 try:
                     match_updates.append(self.results.get_nowait())
+                    self.results.task_done()
                 except asyncio.QueueEmpty:
                     break
             match_not_found = []
             while True:
                 try:
                     match_not_found.append(self.result_not_found.get_nowait())
+                    self.results.task_done()
                 except asyncio.QueueEmpty:
                     break
 
