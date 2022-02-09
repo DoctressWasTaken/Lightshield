@@ -125,7 +125,7 @@ class Handler:
             platform_status = await self.check_platforms()
             for platform, active in platform_status.items():
                 if active:
-                    #await self.platforms[platform].start()
+                    await self.platforms[platform].start()
                     continue
                 await self.platforms[platform].stop()
             await asyncio.sleep(5)

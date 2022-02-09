@@ -3,7 +3,7 @@ import logging
 import os
 from asyncio import Queue
 from datetime import datetime, timedelta
-
+import json
 import aiohttp
 
 from lightshield.exceptions import (
@@ -77,7 +77,8 @@ class Platform:
         """Pull new tasks when the list is empty."""
         while True:
             if self.results.qsize() >= 100:
-                await self.flush_tasks()
+                # await self.flush_tasks()
+                pass
 
             if not self.running:
                 await asyncio.sleep(5)
@@ -114,7 +115,8 @@ class Platform:
                     )
                     if len(entries) == 0:
                         await asyncio.sleep(30)
-                        await self.flush_tasks()
+                        # await self.flush_tasks()
+                        pass
 
                     self.tasks += [
                         [entry["platform"], entry["match_id"]] for entry in entries
@@ -137,8 +139,8 @@ class Platform:
             patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
             if "gameStartTimestamp" in response["info"]:
                 game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                 )
             else:
                 game_duration = response["info"]["gameDuration"]
@@ -164,16 +166,15 @@ class Platform:
             patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
             path = os.path.join(os.sep, "data", "details", patch, day, params[0])
             if not os.path.exists(path):
-                # os.makedirs(path)
-                pass
-            # with open(
-            #    os.path.join(
-            #        path, "%s_%s.json" % (params[0], params[1])
-            #    ),
-            #    "w+",
-            # ) as file:
-            #    pass
-            #    json.dump(response, file)
+                os.makedirs(path)
+
+            with open(
+                    os.path.join(
+                        path, "%s_%s.json" % (params[0], params[1])
+                    ),
+                    "w+",
+            ) as file:
+                json.dump(response, file)
             del response
             self.logging.debug(url)
             package = {
@@ -221,7 +222,7 @@ class Platform:
                     break
                 targets.append(self.tasks.pop())
             async with aiohttp.ClientSession(
-                headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
             ) as session:
                 targets = [
                     target
@@ -258,54 +259,51 @@ class Platform:
                     len(match_updates) + len(match_not_found),
                     len(match_not_found),
                 )
-            # async with connection.transaction():
-            #    if match_updates:
-            #        matches = [package["match"] for package in match_updates]
-            #        # Insert match updates
-            #        query = await connection.prepare(
-            #            """UPDATE %s.match
-            #            SET queue = $1,
-            #                timestamp = $2,
-            #                version = $3,
-            #                duration = $4,
-            #                win = $5,
-            #                details = TRUE,
-            #                reserved_details = NULL
-            #                WHERE platform = $6
-            #                AND match_id = $7
-            #            """
-            #            % self.name,
-            #        )
-            #        await query.executemany(matches)
+            async with connection.transaction():
+                if match_updates:
+                    matches = [package["match"] for package in match_updates]
+                    # Insert match updates
+                    query = await connection.prepare(
+                        """UPDATE %s.match
+                        SET queue = $1,
+                            timestamp = $2,
+                            version = $3,
+                            duration = $4,
+                            win = $5,
+                            details = TRUE,
+                            reserved_details = NULL
+                            WHERE platform = $6
+                            AND match_id = $7
+                        """
+                        % self.name,
+                    )
+                    await query.executemany(matches)
 
+            platforms = {}
 
-#
-#        platforms = {}
-#
-#        for package in match_updates:
-#            if package["match"][-2] not in platforms:
-#                platforms[package["match"][-2]] = []
-#            platforms[package["match"][-2]] += package["participant"]
-#
-#        for platform in platforms:
-#            await connection.executemany(
-#                """INSERT INTO %s.participant
-#                    VALUES ($1, $2, $3, $4)
-#                    ON CONFLICT DO NOTHING
-#                """
-#                % platform,
-#                platforms[platform],
-#            )
-#
-#    if match_not_found:
-#        query = await connection.prepare(
-#            """UPDATE %s.match
-#                SET find_fails = find_fails + 1,
-#                    reserved_details = current_date + INTERVAL '10 minute'
-#                WHERE platform = $1
-#                AND match_id = $2
-#            """
-#            % self.name
-#        )
-#        await query.executemany(match_not_found)
-#
+            for package in match_updates:
+                if package["match"][-2] not in platforms:
+                    platforms[package["match"][-2]] = []
+                platforms[package["match"][-2]] += package["participant"]
+
+            for platform in platforms:
+                await connection.executemany(
+                    """INSERT INTO %s.participant
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT DO NOTHING
+                    """
+                    % platform,
+                    platforms[platform],
+                )
+
+            if match_not_found:
+                query = await connection.prepare(
+                    """UPDATE %s.match
+                        SET find_fails = find_fails + 1,
+                            reserved_details = current_date + INTERVAL '10 minute'
+                        WHERE platform = $1
+                        AND match_id = $2
+                    """
+                    % self.name
+                )
+                await query.executemany(match_not_found)
