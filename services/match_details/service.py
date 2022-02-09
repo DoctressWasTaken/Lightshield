@@ -54,8 +54,8 @@ class Platform:
 
     async def start(self):
         """Start the service calls."""
-        self.running = True
         if not self.running:
+            self.running = True
             self.logging.info("Started service calls.")
             self.postgres = await asyncpg.create_pool(
                 host="postgres",
@@ -68,8 +68,8 @@ class Platform:
 
     async def stop(self):
         """Halt the service calls."""
-        self.running = False
         if self.running:
+            self.running = False
             self.logging.info("Stopped service calls.")
             await asyncio.gather(*self._worker, self.updater)
             await self.flush_tasks()
