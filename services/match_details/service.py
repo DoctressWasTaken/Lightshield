@@ -1,7 +1,7 @@
 import asyncio
-import json
+# import json
 import logging
-import os
+# import os
 from asyncio import Queue
 from datetime import datetime, timedelta
 
@@ -182,16 +182,16 @@ class Platform:
                 day = creation.strftime("%Y_%m_%d")
                 patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
                 path = os.path.join(os.sep, "data", "details", patch, day, task[0])
-                if not os.path.exists(path):
-                    os.makedirs(path)
-                filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
-                if not os.path.isfile(filename):
-                    with open(
-                        filename,
-                        "w+",
-                    ) as file:
-                        json.dump(response, file)
-                del response
+                # if not os.path.exists(path):
+                #     os.makedirs(path)
+                # filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
+                # if not os.path.isfile(filename):
+                #     with open(
+                #         filename,
+                #         "w+",
+                #     ) as file:
+                #         json.dump(response, file)
+                # del response
                 package = {
                     "match": [
                         queue,
