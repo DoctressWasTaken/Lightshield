@@ -98,7 +98,7 @@ class Handler:
 
     async def test(self):
         while True:
-            self.logging.info(self.h.heap())
+            # self.logging.info(self.h.heap())
             await asyncio.sleep(15)
 
     async def runner(self):

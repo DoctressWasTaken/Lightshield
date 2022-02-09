@@ -57,7 +57,14 @@ class Platform:
         self.running = True
         if not self.running:
             self.logging.info("Started service calls.")
-            await self.runner()
+            self.postgres = await asyncpg.create_pool(
+                host="postgres",
+                port=5432,
+                user="postgres",
+                database="lightshield",
+            )
+            self.updater = asyncio.create_task(self.task_updater())
+            self._worker = [asyncio.create_task(self.worker()) for _ in range(10)]
 
     async def stop(self):
         """Halt the service calls."""
@@ -67,17 +74,6 @@ class Platform:
             await asyncio.gather(*self._worker, self.updater)
             await self.flush_tasks()
             await self.postgres.close()
-
-    async def runner(self):
-        """Main object loop."""
-        self.postgres = await asyncpg.create_pool(
-            host="postgres",
-            port=5432,
-            user="postgres",
-            database="lightshield",
-        )
-        self.updater = asyncio.create_task(self.task_updater())
-        self._worker = [asyncio.create_task(self.worker()) for _ in range(10)]
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
