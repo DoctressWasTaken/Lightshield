@@ -56,15 +56,15 @@ class Platform:
         self.session = aiohttp.ClientSession(
             headers={"X-Riot-Token": self.handler.api_key}
         )
-        await self.task_updater()
-        await asyncio.gather(
-            *[asyncio.create_task(self.worker()) for _ in range(self.worker_count)]
-        )
-        await self.flush_tasks()
+        if await self.task_updater():
+            await asyncio.gather(
+                *[asyncio.create_task(self.worker()) for _ in range(self.worker_count)]
+            )
+            await self.flush_tasks()
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
-        self.logging.debug("Task Updater initiated.")
+        self.logging.debug("Filling tasks.")
         async with self.handler.postgres.acquire() as connection:
             entries = await connection.fetch(
                 """UPDATE %s.match
@@ -87,12 +87,13 @@ class Platform:
                 1000,
             )
             if len(entries) == 0:
+                self.logging.info("No tasks found. Sleeping before exiting.")
                 await asyncio.sleep(30)
-                await self.flush_tasks()
-                pass
+                return False
 
             for entry in entries:
                 await self.task_queue.put([entry["platform"], entry["match_id"]])
+            return True
 
     async def worker(self):
         """Execute requests."""
@@ -113,8 +114,8 @@ class Platform:
                 patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
                 if "gameStartTimestamp" in response["info"]:
                     game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                            response["info"]["gameEndTimestamp"]
+                            - response["info"]["gameStartTimestamp"]
                     )
                 else:
                     game_duration = response["info"]["gameDuration"]
@@ -165,6 +166,7 @@ class Platform:
                     "participant": players,
                 }
                 await self.results.put(package)
+                self.logging.debug(url)
                 self.task_queue.task_done()
             except LimitBlocked as err:
                 self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)

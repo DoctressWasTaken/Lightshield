@@ -76,10 +76,10 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_details
-    # volumes:
-    #   - type: bind
-    #     source: ./match_data
-    #     target: /data
+    volumes:
+      - type: bind
+        source: ./match_data
+        target: /data
     restart: always
     environment:
       - "DEBUG=True"
