@@ -84,7 +84,7 @@ class Platform:
                         RETURNING match.platform, match.match_id
                 """
                 % tuple([self.name for _ in range(2)]),
-                2000,
+                1000,
             )
             if len(entries) == 0:
                 await asyncio.sleep(30)
@@ -96,12 +96,9 @@ class Platform:
 
     async def worker(self):
         """Execute requests."""
-        while not self.task_queue.empty():
+        while True:
             try:
                 task = self.task_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                return
-            try:
                 #   Success
                 url = self.endpoint_url % (task[0], task[1])
                 response = await self.endpoint.request(url, self.session)
@@ -184,6 +181,9 @@ class Platform:
             except NotFoundException:
                 await self.result_not_found.put([task[0], task[1]])
                 self.task_queue.task_done()
+            except asyncio.QueueEmpty:
+                self.logging.info("Exciting worker")
+                return
             except Exception as err:
                 self.logging.error("General: %s", err)
                 await self.task_queue.put(task)
