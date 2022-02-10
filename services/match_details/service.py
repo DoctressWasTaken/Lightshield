@@ -106,7 +106,7 @@ class Platform:
                 try:
                     response = await self.endpoint.request(url, self.session)
                 except Exception as err:
-                    self.logging.debug(err)
+                    self.logging.debug(err.__class__)
                     raise err
                 if response["info"]["queueId"] == 0:
                     raise NotFoundException  # TODO: queue 0 means its a custom, so it should be set to max retries immediatly
