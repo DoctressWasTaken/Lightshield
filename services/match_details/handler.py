@@ -109,7 +109,7 @@ class Handler:
         await self.init()
         while not await self.get_apiKey():
             await asyncio.sleep(5)
-        while not self.check_active():
+        while not await self.check_active():
             await asyncio.sleep(5)
         await self.get_apiKey()
         platform_status = await self.check_platforms()
