@@ -106,6 +106,7 @@ class Handler:
 
     async def run(self):
         """Run."""
+        await self.init()
         while not await self.get_apiKey():
             await asyncio.sleep(5)
         while not self.check_active():

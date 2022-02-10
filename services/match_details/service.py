@@ -57,7 +57,9 @@ class Platform:
             headers={"X-Riot-Token": self.handler.api_key}
         )
         await self.task_updater()
-        await asyncio.gather(*[asyncio.create_task(self.worker()) for _ in range(self.worker_count)])
+        await asyncio.gather(
+            *[asyncio.create_task(self.worker()) for _ in range(self.worker_count)]
+        )
         await self.flush_tasks()
 
     async def task_updater(self):
@@ -114,8 +116,8 @@ class Platform:
                 patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
                 if "gameStartTimestamp" in response["info"]:
                     game_duration = (
-                            response["info"]["gameEndTimestamp"]
-                            - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                     )
                 else:
                     game_duration = response["info"]["gameDuration"]
