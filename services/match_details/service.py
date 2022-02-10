@@ -103,7 +103,6 @@ class Platform:
                 task = self.task_queue.get_nowait()
                 #   Success
                 url = self.endpoint_url % (task[0], task[1])
-                self.logging.debug(url)
                 try:
                     response = await self.endpoint.request(url, self.session)
                 except Exception as err:
@@ -120,8 +119,8 @@ class Platform:
                 patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
                 if "gameStartTimestamp" in response["info"]:
                     game_duration = (
-                            response["info"]["gameEndTimestamp"]
-                            - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                     )
                 else:
                     game_duration = response["info"]["gameDuration"]
@@ -172,6 +171,7 @@ class Platform:
                     "participant": players,
                 }
                 await self.results.put(package)
+                self.logging.debug(url)
                 self.task_queue.task_done()
             except LimitBlocked as err:
                 self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
