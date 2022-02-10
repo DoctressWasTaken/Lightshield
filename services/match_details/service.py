@@ -104,7 +104,11 @@ class Platform:
                 #   Success
                 url = self.endpoint_url % (task[0], task[1])
                 self.logging.debug(url)
-                response = await self.endpoint.request(url, self.session)
+                try:
+                    response = await self.endpoint.request(url, self.session)
+                except Exception as err:
+                    self.logging.debug(err)
+                    raise err
                 if response["info"]["queueId"] == 0:
                     raise NotFoundException  # TODO: queue 0 means its a custom, so it should be set to max retries immediatly
 
@@ -116,8 +120,8 @@ class Platform:
                 patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
                 if "gameStartTimestamp" in response["info"]:
                     game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                            response["info"]["gameEndTimestamp"]
+                            - response["info"]["gameStartTimestamp"]
                     )
                 else:
                     game_duration = response["info"]["gameDuration"]
