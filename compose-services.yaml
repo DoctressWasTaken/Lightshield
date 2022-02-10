@@ -81,8 +81,7 @@ services:
         source: ./match_data
         target: /data
     restart: always
-    environment:
-      - "DEBUG=True"
+
 
 x-disabled:
 
