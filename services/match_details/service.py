@@ -1,13 +1,14 @@
 import asyncio
+
 import json
 import logging
+
 import os
 from asyncio import Queue
 from datetime import datetime, timedelta
 
-import aiofiles
 import aiohttp
-from aiofiles import os as aos
+import asyncpg
 
 from lightshield.exceptions import (
     LimitBlocked,
@@ -39,6 +40,12 @@ class Platform:
         self.endpoint_url = (
             f"https://{self.name}.api.riotgames.com/lol/match/v5/matches/%s_%s"
         )
+        self.postgres_params = {
+            "host": "postgres",
+            "port": 5432,
+            "user": "postgres",
+            "database": "lightshield",
+        }
 
     async def init(self):
         """Init background runner."""
@@ -47,67 +54,99 @@ class Platform:
         self.result_not_found = Queue()
         self.logging.info("Ready.")
 
+    async def shutdown(self):
+        self.logging.info("Shutdown")
+        self.running = False
+        await asyncio.gather(*self._worker, self.updater)
+        await self.flush_tasks()
+
     async def start(self):
         """Start the service calls."""
-        self.logging.info("Started service calls.")
-        self.endpoint = await self.handler.proxy.get_endpoint(
-            server=self.name, zone="match-details-v5"
-        )
-        self.session = aiohttp.ClientSession(
-            headers={"X-Riot-Token": self.handler.api_key}
-        )
-        if await self.task_updater():
-            await asyncio.gather(
-                *[asyncio.create_task(self.worker()) for _ in range(self.worker_count)]
+        if not self.running:
+            self.running = True
+            self.logging.info("Started service calls.")
+            self.endpoint = await self.handler.proxy.get_endpoint(
+                server=self.name, zone="match-details-v5"
             )
+            self.session = aiohttp.ClientSession(
+                headers={"X-Riot-Token": self.handler.api_key}
+            )
+            self.updater = asyncio.create_task(self.task_updater())
+            self._worker = [
+                asyncio.create_task(self.worker()) for _ in range(self.worker_count)
+            ]
+    async def stop(self):
+        """Halt the service calls."""
+        if self.running:
+            self.running = False
+            self.logging.info("Stopped service calls.")
+            await self.updater
+            for worker in self._worker:
+                worker.cancel()
+            try:
+                await asyncio.gather(*self._worker)
+            except asyncio.CancelledError:
+                pass
             await self.flush_tasks()
+            await self.session.close()
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
-        self.logging.debug("Filling tasks.")
-        async with self.handler.postgres.acquire() as connection:
-            entries = await connection.fetch(
-                """UPDATE %s.match
-                        SET reserved_details = current_date + INTERVAL '10 minute'
-                        FROM (
-                            SELECT  match_id,
-                                    platform
-                                FROM %s.match
-                                WHERE details IS NULL
-                                AND find_fails <= 10
-                                AND (reserved_details IS NULL OR reserved_details < current_timestamp)
-                                ORDER BY find_fails, match_id DESC
-                                LIMIT $1
-                                ) selection
-                    WHERE match.match_id = selection.match_id
-                       AND match.platform = selection.platform
-                        RETURNING match.platform, match.match_id
-                """
-                % tuple([self.name for _ in range(2)]),
-                1000,
-            )
-            if len(entries) == 0:
-                self.logging.info("No tasks found. Sleeping before exiting.")
-                await asyncio.sleep(30)
-                return False
+        self.logging.debug("Task Updater initiated.")
+        while self.running:
+            if self.results.qsize() >= 200:
+                await self.flush_tasks()
+            if self.task_queue.qsize() > 200:
+                await asyncio.sleep(5)
+                continue
+            connection = await asyncpg.connect(**self.postgres_params)
+            try:
+                entries = await connection.fetch(
+                    """UPDATE %s.match
+                            SET reserved_details = current_date + INTERVAL '10 minute'
+                            FROM (
+                                SELECT  match_id,
+                                        platform
+                                    FROM %s.match
+                                    WHERE details IS NULL
+                                    AND find_fails <= 10
+                                    AND (reserved_details IS NULL OR reserved_details < current_timestamp)
+                                    ORDER BY find_fails, match_id DESC
+                                    LIMIT $1
+                                    ) selection
+                        WHERE match.match_id = selection.match_id
+                           AND match.platform = selection.platform
+                            RETURNING match.platform, match.match_id
+                    """
+                    % tuple([self.name for _ in range(2)]),
+                    1000,
+                )
+                self.logging.debug(
+                    "Refilling tasks [%s -> %s].",
+                    self.task_queue.qsize(),
+                    self.task_queue.qsize() + len(entries),
+                )
+                if len(entries) == 0:
+                    await asyncio.sleep(30)
+                    await self.flush_tasks()
+                    pass
 
-            self.logging.info("Adding %s tasks", len(entries))
-            for entry in entries:
-                await self.task_queue.put([entry["platform"], entry["match_id"]])
-            return True
+                for entry in entries:
+                    await self.task_queue.put([entry["platform"], entry["match_id"]])
+
+            except Exception as err:
+                self.logging.error("Here: %s", err)
+            finally:
+                await connection.close()
 
     async def worker(self):
         """Execute requests."""
-        while True:
+        while self.running:
+            task = await self.task_queue.get()
             try:
-                task = self.task_queue.get_nowait()
                 #   Success
                 url = self.endpoint_url % (task[0], task[1])
-                try:
-                    response = await self.endpoint.request(url, self.session)
-                except Exception as err:
-                    self.logging.debug(err.__class__)
-                    raise err
+                response = await self.endpoint.request(url, self.session)
                 if response["info"]["queueId"] == 0:
                     raise NotFoundException  # TODO: queue 0 means its a custom, so it should be set to max retries immediatly
 
@@ -147,17 +186,16 @@ class Platform:
                 day = creation.strftime("%Y_%m_%d")
                 patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
                 path = os.path.join(os.sep, "data", "details", patch, day, task[0])
-                try:
-                    if not await aos.path.exists(path):
-                        await aos.makedirs(path)
-                except:
-                    pass
+                if not os.path.exists(path):
+                    os.makedirs(path)
                 filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
-                if not await aos.path.isfile(filename):
-                    async with aiofiles.open(filename, "w+") as file:
-                        await file.write(json.dumps(response))
+                if not os.path.isfile(filename):
+                    with open(
+                        filename,
+                        "w+",
+                    ) as file:
+                        file.write(json.dumps(response))
                 # del response
-                os.sync()
                 package = {
                     "match": [
                         queue,
@@ -171,7 +209,6 @@ class Platform:
                     "participant": players,
                 }
                 await self.results.put(package)
-                self.logging.debug(url)
                 self.task_queue.task_done()
             except LimitBlocked as err:
                 self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
@@ -188,9 +225,6 @@ class Platform:
             except NotFoundException:
                 await self.result_not_found.put([task[0], task[1]])
                 self.task_queue.task_done()
-            except asyncio.QueueEmpty:
-                self.logging.info("Exciting worker")
-                return
             except Exception as err:
                 self.logging.error("General: %s", err)
                 await self.task_queue.put(task)
@@ -198,7 +232,8 @@ class Platform:
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
-        async with self.handler.postgres.acquire() as connection:
+        connection = await asyncpg.connect(**self.postgres_params)
+        try:
             match_updates = []
             while True:
                 try:
@@ -268,3 +303,5 @@ class Platform:
                     % self.name
                 )
                 await query.executemany(match_not_found)
+        finally:
+            await connection.close()
