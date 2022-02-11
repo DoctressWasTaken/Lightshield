@@ -16,14 +16,12 @@ from lightshield.exceptions import (
 
 
 class Platform:
-    running = False
-    _runner = None
-    results = None
-    result_not_found = None
+    service_running = False
+    match_updates = None
+    match_updates_faulty = None
     worker_count = 20
     task_queue = None
-    endpoint = None
-    session = None
+    proxy_endpoint = None
 
     def __init__(self, region, platforms, handler):
         self.name = region
@@ -41,22 +39,22 @@ class Platform:
     async def init(self):
         """Init background runner."""
         self.task_queue = Queue()
-        self.results = Queue()
-        self.result_not_found = Queue()
+        self.match_updates = Queue()
+        self.match_updates_faulty = Queue()
         self.logging.info("Ready.")
 
     async def shutdown(self):
         self.logging.info("Shutdown")
-        self.running = False
+        self.service_running = False
         await asyncio.gather(*self._worker, self.updater)
         await self.flush_tasks()
 
     async def start(self):
         """Start the service calls."""
-        if not self.running:
-            self.running = True
+        if not self.service_running:
+            self.service_running = True
             self.logging.info("Started service calls.")
-            self.endpoint = await self.handler.proxy.get_endpoint(
+            self.proxy_endpoint = await self.handler.proxy.get_endpoint(
                 server=self.name, zone="match-details-v5"
             )
             self.updater = asyncio.create_task(self.task_updater())
@@ -66,8 +64,8 @@ class Platform:
 
     async def stop(self):
         """Halt the service calls."""
-        if self.running:
-            self.running = False
+        if self.service_running:
+            self.service_running = False
             self.logging.info("Stopped service calls.")
             await self.updater
             for worker in self._worker:
@@ -77,13 +75,12 @@ class Platform:
             except asyncio.CancelledError:
                 pass
             await self.flush_tasks()
-            await self.session.close()
 
     async def task_updater(self):
         """Pull new tasks when the list is empty."""
         self.logging.debug("Task Updater initiated.")
-        while self.running:
-            if self.results.qsize() >= 200:
+        while self.service_running:
+            if self.match_updates.qsize() >= 200:
                 await self.flush_tasks()
             if self.task_queue.qsize() > 200:
                 await asyncio.sleep(5)
@@ -127,12 +124,12 @@ class Platform:
         async with aiohttp.ClientSession(
             headers={"X-Riot-Token": self.handler.api_key}
         ) as session:
-            while self.running:
+            while self.service_running:
                 task = await self.task_queue.get()
                 try:
                     #   Success
                     url = self.endpoint_url % (task[0], task[1])
-                    response = await self.endpoint.request(url, session)
+                    response = await self.proxy_endpoint.request(url, session)
                     if response["info"]["queueId"] == 0:
                         raise NotFoundException  # TODO: queue 0 means its a custom, so it should be set to max retries immediatly
 
@@ -197,7 +194,7 @@ class Platform:
                         ],
                         "participant": players,
                     }
-                    await self.results.put(package)
+                    await self.match_updates.put(package)
                     self.task_queue.task_done()
                 except LimitBlocked as err:
                     self.retry_after = datetime.now() + timedelta(
@@ -214,7 +211,7 @@ class Platform:
                     await self.task_queue.put(task)
                     self.task_queue.task_done()
                 except NotFoundException:
-                    await self.result_not_found.put([task[0], task[1]])
+                    await self.match_updates_faulty.put([task[0], task[1]])
                     self.task_queue.task_done()
                 except Exception as err:
                     self.logging.exception("General Exception")
@@ -227,15 +224,15 @@ class Platform:
             match_updates = []
             while True:
                 try:
-                    match_updates.append(self.results.get_nowait())
-                    self.results.task_done()
+                    match_updates.append(self.match_updates.get_nowait())
+                    self.match_updates.task_done()
                 except asyncio.QueueEmpty:
                     break
             match_not_found = []
             while True:
                 try:
-                    match_not_found.append(self.result_not_found.get_nowait())
-                    self.result_not_found.task_done()
+                    match_not_found.append(self.match_updates_faulty.get_nowait())
+                    self.match_updates_faulty.task_done()
                 except asyncio.QueueEmpty:
                     break
 
