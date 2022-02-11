@@ -58,10 +58,11 @@ local function register_request(key, request_time)
         redis.call('incr', key..':'..limit_raw..':inflight') -- Limit inflight: Increase counter
         -- Tracking
         local bucket_start = redis.call('hget', key..':'..limit_raw, 'start')
-        if tonumber(redis.call('incr', key..':'..limit_raw..':tracking:'..bucket_start)) == 1 then
-            redis.call('expire', key..':'..limit_raw..':tracking:'..bucket_start, 60 * 10 + interval)
+        if bucket_start then
+            if tonumber(redis.call('incr', key..':'..limit_raw..':tracking:'..bucket_start)) == 1 then
+                redis.call('expire', key..':'..limit_raw..':tracking:'..bucket_start, 60 * 10 + interval)
+            end
         end
-
     end
 end
 
