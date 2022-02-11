@@ -215,6 +215,7 @@ class Platform:
                     self.task_queue.task_done()
                 except Exception as err:
                     self.logging.error("General: %s", err)
+                    self.logging.error(response)
                     await self.task_queue.put(task)
                     self.task_queue.task_done()
 
