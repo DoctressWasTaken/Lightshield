@@ -6,7 +6,6 @@ from asyncio import Queue
 from datetime import datetime, timedelta
 
 import aiohttp
-import asyncpg
 
 from lightshield.exceptions import (
     LimitBlocked,
@@ -38,12 +37,6 @@ class Platform:
         self.endpoint_url = (
             f"https://{self.name}.api.riotgames.com/lol/match/v5/matches/%s_%s"
         )
-        self.postgres_params = {
-            "host": "postgres",
-            "port": 5432,
-            "user": "postgres",
-            "database": "lightshield",
-        }
 
     async def init(self):
         """Init background runner."""
@@ -98,8 +91,7 @@ class Platform:
             if self.task_queue.qsize() > 200:
                 await asyncio.sleep(5)
                 continue
-            connection = await asyncpg.connect(**self.postgres_params)
-            try:
+            async with self.handler.postgres.acquire() as connection:
                 entries = await connection.fetch(
                     """UPDATE %s.match
                             SET reserved_details = current_date + INTERVAL '10 minute'
@@ -133,11 +125,6 @@ class Platform:
                 for entry in entries:
                     await self.task_queue.put([entry["platform"], entry["match_id"]])
 
-            except Exception as err:
-                self.logging.error("Here: %s", err)
-            finally:
-                await connection.close()
-
     async def worker(self):
         """Execute requests."""
         while self.running:
@@ -157,8 +144,8 @@ class Platform:
                 patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
                 if "gameStartTimestamp" in response["info"]:
                     game_duration = (
-                        response["info"]["gameEndTimestamp"]
-                        - response["info"]["gameStartTimestamp"]
+                            response["info"]["gameEndTimestamp"]
+                            - response["info"]["gameStartTimestamp"]
                     )
                 else:
                     game_duration = response["info"]["gameDuration"]
@@ -190,8 +177,8 @@ class Platform:
                 filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
                 if not os.path.isfile(filename):
                     with open(
-                        filename,
-                        "w+",
+                            filename,
+                            "w+",
                     ) as file:
                         file.write(json.dumps(response))
                 # del response
@@ -231,8 +218,7 @@ class Platform:
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
-        connection = await asyncpg.connect(**self.postgres_params)
-        try:
+        async with self.handler.postgres.acquire() as connection:
             match_updates = []
             while True:
                 try:
@@ -302,5 +288,3 @@ class Platform:
                     % self.name
                 )
                 await query.executemany(match_not_found)
-        finally:
-            await connection.close()
