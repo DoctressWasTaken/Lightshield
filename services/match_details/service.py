@@ -157,8 +157,8 @@ class Platform:
                 patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
                 if "gameStartTimestamp" in response["info"]:
                     game_duration = (
-                            response["info"]["gameEndTimestamp"]
-                            - response["info"]["gameStartTimestamp"]
+                        response["info"]["gameEndTimestamp"]
+                        - response["info"]["gameStartTimestamp"]
                     )
                 else:
                     game_duration = response["info"]["gameDuration"]
@@ -190,8 +190,8 @@ class Platform:
                 filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
                 if not os.path.isfile(filename):
                     with open(
-                            filename,
-                            "w+",
+                        filename,
+                        "w+",
                     ) as file:
                         file.write(json.dumps(response))
                 # del response
