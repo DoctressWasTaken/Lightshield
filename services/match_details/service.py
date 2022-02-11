@@ -125,7 +125,7 @@ class Platform:
     async def worker(self):
         """Execute requests."""
         async with aiohttp.ClientSession(
-            headers={"X-Riot-Token": self.handler.api_key}
+                headers={"X-Riot-Token": self.handler.api_key}
         ) as session:
             while self.running:
                 task = await self.task_queue.get()
@@ -142,10 +142,11 @@ class Platform:
                         response["info"]["gameCreation"] // 1000
                     )
                     patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
-                    if "gameStartTimestamp" in response["info"]:
+                    if "gameStartTimestamp" in response["info"] \
+                            and "gameEndTimestamp" in response["info"]:
                         game_duration = (
-                            response["info"]["gameEndTimestamp"]
-                            - response["info"]["gameStartTimestamp"]
+                                response["info"]["gameEndTimestamp"]
+                                - response["info"]["gameStartTimestamp"]
                         )
                     else:
                         game_duration = response["info"]["gameDuration"]
@@ -177,8 +178,8 @@ class Platform:
                     filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
                     if not os.path.isfile(filename):
                         with open(
-                            filename,
-                            "w+",
+                                filename,
+                                "w+",
                         ) as file:
                             file.write(json.dumps(response))
                     # del response
