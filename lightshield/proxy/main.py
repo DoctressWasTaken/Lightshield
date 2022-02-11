@@ -20,7 +20,7 @@ class Proxy:
         self.logging = logging.getLogger("Proxy")
 
     async def init(self, host="localhost", port=6379, namespace="ratelimiter"):
-        self.redis = await aioredis.create_redis_pool((host, port), encoding="utf-8")
+        self.redis = aioredis.from_url("redis://%s:%s" % (host, port), encoding="utf-8", decode_responses=True)
         self.namespace = namespace
 
     async def get_endpoint(self, server, zone):

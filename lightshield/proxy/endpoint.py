@@ -1,8 +1,6 @@
 import logging
 from datetime import datetime
 
-from aioredis import ReplyError
-
 from lightshield.exceptions import (
     LimitBlocked,
     RatelimitException,
@@ -44,15 +42,12 @@ class Endpoint:
         try:
             response = await self.redis.evalsha(
                 self.permit,
-                [
-                    "%s:%s:%s" % (self.namespace, self.server, self.zone),
-                    "%s:%s" % (self.namespace, self.server),
-                ],
-                [
-                    request_stamp,
-                ],
+                2,
+                "%s:%s:%s" % (self.namespace, self.server, self.zone),
+                "%s:%s" % (self.namespace, self.server),
+                request_stamp,
             )
-        except ReplyError:
+        except Exception:
             self.logging.debug("Reply error in permit script.")
             raise
         if int(response) > 0:
@@ -66,32 +61,26 @@ class Endpoint:
             if "X-App-Rate-Limit" in headers and "X-Method-Rate-Limit" in headers:
                 await self.redis.evalsha(
                     self.update,
-                    [
-                        "%s:%s:%s" % (self.namespace, self.server, self.zone),
-                        "%s:%s" % (self.namespace, self.server),
-                    ],
-                    [
-                        response_stamp,
-                        headers.get("X-Method-Rate-Limit"),
-                        headers.get("X-Method-Rate-Limit-Count"),
-                        headers.get("X-App-Rate-Limit"),
-                        headers.get("X-App-Rate-Limit-Count"),
-                        str(status),
-                    ],
+                    2,
+                    "%s:%s:%s" % (self.namespace, self.server, self.zone),
+                    "%s:%s" % (self.namespace, self.server),
+                    response_stamp,
+                    headers.get("X-Method-Rate-Limit"),
+                    headers.get("X-Method-Rate-Limit-Count"),
+                    headers.get("X-App-Rate-Limit"),
+                    headers.get("X-App-Rate-Limit-Count"),
+                    str(status),
                 )
             else:
                 await self.redis.evalsha(
                     self.update_slim,
-                    [
-                        "%s:%s:%s" % (self.namespace, self.server, self.zone),
-                        "%s:%s" % (self.namespace, self.server),
-                    ],
-                    [
-                        response_stamp,
-                        str(status),
-                    ],
+                    2,
+                    "%s:%s:%s" % (self.namespace, self.server, self.zone),
+                    "%s:%s" % (self.namespace, self.server),
+                    response_stamp,
+                    str(status),
                 )
-        except ReplyError:
+        except Exception:
             self.logging.debug("Reply error in align script.")
             raise
         if status == 200:

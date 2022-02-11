@@ -18,6 +18,8 @@ class Service:
     empty_page = False
     next_page = 1
     daemon = None
+    pages = None
+    active_rank = None
 
     def __init__(self, name, handler):
         self.name = name
@@ -25,14 +27,14 @@ class Service:
         self.handler = handler
         self.rankmanager = RankManager(self.logging)
         self.retry_after = datetime.now()
-        self.current_pages = []
         self.data = []
         self.url = (
-            f"https://{self.name}.api.riotgames.com/lol/"
-            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+                f"https://{self.name}.api.riotgames.com/lol/"
+                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
 
     async def init(self):
+        self.pages = asyncio.Queue()
         await self.rankmanager.init()
         self.endpoint = await self.handler.proxy.get_endpoint(
             server=self.name, zone="league-v4-exp"
@@ -52,86 +54,63 @@ class Service:
             self.logging.info("Stopped service calls.")
         self.running = False
 
+    async def worker(self):
+        """Makes calls."""
+        while not self.handler.is_shutdown:
+            if not self.running:
+                await asyncio.sleep(5)
+                continue
+            page = await self.pages.get()
+            if self.empty_page and page <= self.empty_page:
+                return
+            url = self.url % (*self.active_rank, page)
+            try:
+                async with aiohttp.ClientSession(
+                        headers={"X-Riot-Token": self.handler.api_key}
+                ) as session:
+                    data = await self.endpoint.request(url, session)
+                    self.logging.debug(url)
+                    if not data:
+                        self.empty_page = max(self.empty_page or 0, page)
+                        return
+                    self.data += data
+                    self.next_page += 1
+                    await self.pages.put(self.next_page)
+            except LimitBlocked as err:
+                self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
+            except RatelimitException:
+                pass
+            except (Non200Exception, NotFoundException) as err:
+                self.logging.exception("Fetch error")
+            except Exception as err:
+                self.logging.exception('General Exception in Fetch')
+            finally:
+                await self.pages.put(page)
+
     async def runner(self):
         """Runner."""
         while not self.handler.is_shutdown:
             if not self.running:
                 await asyncio.sleep(5)
                 continue
-            tier, division = await self.rankmanager.get_next()
-
+            self.active_rank = await self.rankmanager.get_next()
             self.next_page = 10
-            self.current_pages = [_ for _ in range(1, 11)]
             self.empty_page = False
+            for i in range(1, 11):
+                await self.pages.put(i)
             self.data = []
-            self.logging.debug("START %s %s.", tier, division)
-            await self.get_data(tier, division)
-            self.logging.debug("DONE %s %s.", tier, division)
-            await self.update_data(tier, division)
-            self.logging.debug("INSERTED %s %s.", tier, division)
-
-            await self.rankmanager.update(key=(tier, division))
-
-    async def get_data(self, tier, division):
-        """Request data from the API."""
-        async with aiohttp.ClientSession(
-            headers={"X-Riot-Token": self.handler.api_key}
-        ) as session:
-            while self.current_pages:
-                if self.handler.is_shutdown:
-                    return
-                if not self.running:
-                    await asyncio.sleep(5)
-                    continue
-                while (
-                    delay := (self.retry_after - datetime.now()).total_seconds()
-                ) > 0:
-                    await asyncio.sleep(min(0.1, delay))
-
-                results = await asyncio.gather(
-                    *[
-                        asyncio.create_task(
-                            self.fetch(session, page, self.url % (tier, division, page))
-                        )
-                        for page in self.current_pages
-                    ]
-                )
-                self.current_pages = [page for page in results if page]
-                while not self.empty_page and len(self.current_pages) < 10:
-                    self.next_page += 1
-                    self.current_pages.append(self.next_page)
-
-    async def fetch(self, session, page, url):
-        """Execute call to external target using the proxy server.
-
-        Receives aiohttp session as well as url to be called. Executes the request and returns
-        either the content of the response as json or raises an exeption depending on response.
-        :param session: The aiohttp ClientSession used to execute the call.
-        :param url: String url ready to be requested.
-
-        :returns: Request response as dict.
-
-        :raises RatelimitException: on 429 or 430 HTTP Code.
-        :raises NotFoundException: on 404 HTTP Code.
-        :raises Non200Exception: on any other non 200 HTTP Code.
-        """
-        try:
-            data = await self.endpoint.request(url, session)
-            self.logging.debug(url)
-            if not data:
-                self.empty_page = True
+            try:
+                self.logging.debug("START %s %s.", *self.active_rank)
+                await asyncio.gather(*[asyncio.create_task(self.worker()) for _ in range(10)])
+                self.logging.debug("DONE %s %s.", *self.active_rank)
+            except asyncio.CancelledError:
                 return
-            self.data += data
-        except LimitBlocked as err:
-            self.retry_after = datetime.now() + timedelta(seconds=err.retry_after)
-            return page
-        except (RatelimitException, Non200Exception, NotFoundException) as err:
-            self.logging.error("Others")
-            return page
-        except Exception as err:
-            self.logging.error(err)
+            await self.update_data()
+            self.logging.debug("INSERTED %s %s.", *self.active_rank)
 
-    async def update_data(self, tier, division):
+            await self.rankmanager.update(key=self.active_rank)
+
+    async def update_data(self):
         "Update all changed users in the DB."
         async with self.handler.postgres.acquire() as connection:
             try:
@@ -145,8 +124,7 @@ class Service:
                     AND division = $2
                     """
                     % self.name.lower(),
-                    tier,
-                    division,
+                    *self.active_rank,
                 )
                 preset = {}
                 if latest:
@@ -161,8 +139,8 @@ class Service:
                 for new in self.data:
                     rank = [new["tier"], new["rank"], new["leaguePoints"]]
                     if (
-                        new["summonerId"] not in preset
-                        or preset[new["summonerId"]] != rank
+                            new["summonerId"] not in preset
+                            or preset[new["summonerId"]] != rank
                     ):
                         if new["summonerId"] not in already_added:
                             already_added.append(new["summonerId"])
@@ -180,7 +158,7 @@ class Service:
                     to_update,
                 )
                 self.logging.info(
-                    "Updated %s users in %s %s.", len(to_update), tier, division
+                    "Updated %s users in %s %s.", len(to_update), *self.active_rank
                 )
             except Exception as err:
                 self.logging.error(err)

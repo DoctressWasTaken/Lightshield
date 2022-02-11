@@ -6,12 +6,11 @@ import signal
 
 import aioredis
 import asyncpg
-import uvloop
-
-uvloop.install()
 
 from lightshield.proxy import Proxy
 from service import Service
+
+# uvloop.install()
 
 if "DEBUG" in os.environ:
     logging.basicConfig(
@@ -41,6 +40,7 @@ services = [
 class Handler:
     is_shutdown = False
     platforms = {}
+    redis = postgres = None
 
     def __init__(self):
         self.logging = logging.getLogger("Handler")
@@ -48,8 +48,8 @@ class Handler:
         self.proxy = Proxy()
 
     async def init(self):
-        self.redis = await aioredis.create_redis_pool(
-            "redis://redis:6379", encoding="utf-8"
+        self.redis = aioredis.from_url(
+            "redis://redis:6379", encoding="utf-8", decode_responses=True
         )
         self.postgres = await asyncpg.create_pool(
             host="postgres", port=5432, user="postgres", database="lightshield"
@@ -62,7 +62,7 @@ class Handler:
             self.platforms[platform] = s
         self.logging.info("Ready.")
 
-    def shutdown(self, *args, **kwargs):
+    async def shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
         self.is_shutdown = True
 
@@ -96,6 +96,11 @@ class Handler:
     async def run(self):
         """Run."""
         await self.init()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            asyncio.get_event_loop().add_signal_handler(
+                sig, lambda signame=sig: asyncio.create_task(self.shutdown())
+            )
+
         while not self.is_shutdown:
             try:
                 await self.get_apiKey()
@@ -121,5 +126,4 @@ class Handler:
 
 if __name__ == "__main__":
     handler = Handler()
-    signal.signal(signal.SIGTERM, handler.shutdown)
     asyncio.run(handler.run())
