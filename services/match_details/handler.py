@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 import tracemalloc
 
 import aioredis
@@ -104,22 +105,45 @@ class Handler:
         finally:
             return region_status
 
+    async def test(self):
+        while True:
+            # self.logging.info(self.h.heap())
+            await asyncio.sleep(15)
+
+    async def runner(self):
+        """Main application loop"""
+        asyncio.create_task(self.test())
+        while True:
+            stop_tasks = []
+            await self.get_apiKey()
+            if not self.api_key.startswith("RGAPI"):
+                for platform in self.platforms.values():
+                    await platform.stop()
+                continue
+            if not await self.check_active():
+                for platform in self.platforms.values():
+                    await platform.stop()
+                continue
+            platform_status = await self.check_platforms()
+            for platform, active in platform_status.items():
+                if active:
+                    await self.platforms[platform].start()
+                    continue
+                await self.platforms[platform].stop()
+            await asyncio.gather(*stop_tasks, asyncio.sleep(5))
+
     async def run(self):
         """Run."""
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            asyncio.get_event_loop().add_signal_handler(
+                sig, lambda signame=sig: asyncio.create_task(self.shutdown())
+            )
         await self.init()
-        while not await self.get_apiKey():
-            await asyncio.sleep(5)
-        while not await self.check_active():
-            await asyncio.sleep(5)
-        await self.get_apiKey()
-        platform_status = await self.check_platforms()
-        tasks = []
-        for platform, active in platform_status.items():
-            if active:
-                tasks.append(asyncio.create_task(self.platforms[platform].start()))
-        if tasks:
-            await asyncio.gather(*tasks)
-
+        self._runner = asyncio.create_task(self.runner())
+        try:
+            await self._runner
+        except asyncio.CancelledError:
+            return
 
 if __name__ == "__main__":
     manager = Handler()
