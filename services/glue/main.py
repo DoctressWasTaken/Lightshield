@@ -62,6 +62,7 @@ async def sync_ranking():
             )
         INSERT INTO summoner (puuid, last_platform)
         SELECT puuid, platform::platform FROM unique_players WHERE puuid NOT IN (SELECT puuid FROM preexisting)
+        ON CONFLICT DO NOTHING
     """
         % "UNION ALL".join(ranking_query)
     )
@@ -102,6 +103,7 @@ async def sync_participants():
             )
         INSERT INTO summoner (puuid, last_platform)
                 SELECT puuid, platform::platform FROM last WHERE puuid NOT IN (SELECT puuid FROM preexisting)             
+        ON CONFLICT DO NOTHING
     """
         % "UNION ALL".join(ranking_query)
     )
