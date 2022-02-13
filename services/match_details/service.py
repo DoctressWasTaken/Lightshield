@@ -82,6 +82,7 @@ class Platform:
         while self.service_running:
             if self.match_updates.qsize() >= 200:
                 await self.flush_tasks()
+                continue
             if self.task_queue.qsize() > 200:
                 await asyncio.sleep(5)
                 continue
