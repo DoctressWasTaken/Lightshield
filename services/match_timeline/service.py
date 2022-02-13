@@ -95,6 +95,7 @@ class Platform:
                                         platform
                                     FROM %s.match
                                     WHERE timeline IS NULL
+                                    AND details IS NOT NULL
                                     AND find_fails <= 10
                                     AND (reserved_timeline IS NULL OR reserved_timeline < current_timestamp)
                                     ORDER BY find_fails, match_id DESC
