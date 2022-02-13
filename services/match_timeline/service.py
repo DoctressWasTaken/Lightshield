@@ -124,7 +124,7 @@ class Platform:
         while self.service_running:
             for i in range(10):
                 async with aiohttp.ClientSession(
-                        headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
                 ) as session:
                     task = await self.task_queue.get()
                     try:
@@ -137,8 +137,8 @@ class Platform:
                         filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
                         if not os.path.isfile(filename):
                             with open(
-                                    filename,
-                                    "w+",
+                                filename,
+                                "w+",
                             ) as file:
                                 file.write(json.dumps(response))
                         del response
@@ -172,28 +172,21 @@ class Platform:
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
+        match_updates = []
+        while True:
+            try:
+                match_updates.append(self.match_updates.get_nowait())
+                self.match_updates.task_done()
+            except asyncio.QueueEmpty:
+                break
+        match_not_found = []
+        while True:
+            try:
+                match_not_found.append(self.match_updates_faulty.get_nowait())
+                self.match_updates_faulty.task_done()
+            except asyncio.QueueEmpty:
+                break
         async with self.handler.postgres.acquire() as connection:
-            match_updates = []
-            while True:
-                try:
-                    match_updates.append(self.match_updates.get_nowait())
-                    self.match_updates.task_done()
-                except asyncio.QueueEmpty:
-                    break
-            match_not_found = []
-            while True:
-                try:
-                    match_not_found.append(self.match_updates_faulty.get_nowait())
-                    self.match_updates_faulty.task_done()
-                except asyncio.QueueEmpty:
-                    break
-
-            if match_updates or match_not_found:
-                self.logging.info(
-                    "Flushing %s match_updates (%s not found).",
-                    len(match_updates) + len(match_not_found),
-                    len(match_not_found),
-                )
             async with connection.transaction():
                 if match_updates:
                     # Insert match updates
@@ -216,6 +209,11 @@ class Platform:
                             WHERE platform::varchar || '_' || match_id::varchar = any($1::varchar[])
                         """
                         % self.name,
-                        ["%s_%s" % match for match in match_not_found]
+                        ["%s_%s" % match for match in match_not_found],
                     )
-        self.logging.info("Done Flushing")
+        if match_updates or match_not_found:
+            self.logging.info(
+                "Flushing %s match_updates (%s not found).",
+                len(match_updates) + len(match_not_found),
+                len(match_not_found),
+            )
