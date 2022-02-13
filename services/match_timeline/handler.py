@@ -82,7 +82,7 @@ class Handler:
     async def check_active(self):
         """Confirm that the service is supposed to run."""
         try:
-            status = await self.redis.get("service_match_details")
+            status = await self.redis.get("service_match_timeline")
             return status == "true"
         except Exception as err:
             print("Check Exception", err)
