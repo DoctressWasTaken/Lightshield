@@ -83,8 +83,6 @@ services:
         source: ./match_data
         target: /data
     restart: always
-    environment:
-      - "DEBUG=True"
 
   match_timeline:
     hostname: match_timeline
@@ -96,8 +94,6 @@ services:
         source: ./match_data
         target: /project/data
     restart: always
-    environment:
-      - "DEBUG=True"
 
 # Glue -- Tiny service to do some linking between data
 
