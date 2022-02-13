@@ -31,7 +31,7 @@ local function update_limit(key, request_time)
                     -- Only decrease inflights when > 0
                     redis.call('decr', key..':'..limit_raw..':inflight') -- Reduce inflights accordingly
                 end
-                if redis.call('hsetnx', key..':'..limit_raw, 'end', 'returned') == 1 then
+                if redis.call('hsetnx', key..':'..limit_raw, 'end', 'returned') == 1 then -- Value doesnt matter,  just set to see if already previously set
                     -- Update bucket end if it wasn't set before
                     redis.call('pexpireat', key..':'..limit_raw, tonumber(request_time) + 1000 * interval)
                 end

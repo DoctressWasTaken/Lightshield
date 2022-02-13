@@ -6,11 +6,12 @@ import signal
 
 import aioredis
 import asyncpg
+import uvloop
 
 from lightshield.proxy import Proxy
 from service import Service
 
-# uvloop.install()
+uvloop.install()
 
 if "DEBUG" in os.environ:
     logging.basicConfig(

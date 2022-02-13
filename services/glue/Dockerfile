@@ -12,3 +12,4 @@ RUN poetry install
 COPY *.py ./
 
 CMD ["/project/startup.sh"]
+

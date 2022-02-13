@@ -136,7 +136,7 @@ class Platform:
         except NotFoundException:
             self.not_found.append(target)
         except Exception as err:
-            self.logging.error(err)
+            self.logging.exception("General exception during fetch.")
             return target
 
     async def worker(self):

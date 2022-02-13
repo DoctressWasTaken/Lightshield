@@ -62,8 +62,8 @@ class Handler:
             self.logging.error(err)
             raise err
 
-        self.redis = await aioredis.create_redis_pool(
-            "redis://redis:6379", encoding="utf-8"
+        self.redis = aioredis.from_url(
+            "redis://redis:6379", encoding="utf-8", decode_responses=True
         )
         await self.proxy.init("redis", 6379)
 

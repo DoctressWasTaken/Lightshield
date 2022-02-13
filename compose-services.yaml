@@ -60,7 +60,6 @@ services:
     image: lightshield/league_ranking:${TAG}
     restart: always
 
-
   summoner_id:
     hostname: summoner_id
     build:
@@ -87,6 +86,27 @@ services:
     environment:
       - "DEBUG=True"
 
+  match_timeline:
+    hostname: match_timeline
+    build:
+      dockerfile: Dockerfile
+      context: services/match_timeline
+    volumes:
+      - type: bind
+        source: ./match_data
+        target: /data
+    restart: always
+    environment:
+      - "DEBUG=True"
+
+# Glue -- Tiny service to do some linking between data
+
+  glue:
+    hostname: glue
+    build:
+      dockerfile: Dockerfile
+      context: services/glue
+    restart: always
 
 x-disabled:
 

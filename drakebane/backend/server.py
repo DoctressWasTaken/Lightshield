@@ -42,7 +42,9 @@ class Server:
         return web.Response(text=json.dumps({"result": "done"}))
 
     async def update_settings(self):
-        con = await aioredis.from_url("redis://redis:6379", encoding='utf-8', decode_responses=True)
+        con = await aioredis.from_url(
+            "redis://redis:6379", encoding="utf-8", decode_responses=True
+        )
         await con.set("regions", json.dumps(self.settings["regions"]))
         await con.set("apiKey", self.settings["apiKey"])
 

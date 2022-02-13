@@ -29,8 +29,8 @@ class Service:
         self.retry_after = datetime.now()
         self.data = []
         self.url = (
-                f"https://{self.name}.api.riotgames.com/lol/"
-                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+            f"https://{self.name}.api.riotgames.com/lol/"
+            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
 
     async def init(self):
@@ -66,7 +66,7 @@ class Service:
             url = self.url % (*self.active_rank, page)
             try:
                 async with aiohttp.ClientSession(
-                        headers={"X-Riot-Token": self.handler.api_key}
+                    headers={"X-Riot-Token": self.handler.api_key}
                 ) as session:
                     data = await self.endpoint.request(url, session)
                     self.logging.debug(url)
@@ -83,7 +83,7 @@ class Service:
             except (Non200Exception, NotFoundException) as err:
                 self.logging.exception("Fetch error")
             except Exception as err:
-                self.logging.exception('General Exception in Fetch')
+                self.logging.exception("General Exception in Fetch")
             finally:
                 await self.pages.put(page)
 
@@ -101,7 +101,9 @@ class Service:
             self.data = []
             try:
                 self.logging.debug("START %s %s.", *self.active_rank)
-                await asyncio.gather(*[asyncio.create_task(self.worker()) for _ in range(10)])
+                await asyncio.gather(
+                    *[asyncio.create_task(self.worker()) for _ in range(10)]
+                )
                 self.logging.debug("DONE %s %s.", *self.active_rank)
             except asyncio.CancelledError:
                 return
@@ -139,8 +141,8 @@ class Service:
                 for new in self.data:
                     rank = [new["tier"], new["rank"], new["leaguePoints"]]
                     if (
-                            new["summonerId"] not in preset
-                            or preset[new["summonerId"]] != rank
+                        new["summonerId"] not in preset
+                        or preset[new["summonerId"]] != rank
                     ):
                         if new["summonerId"] not in already_added:
                             already_added.append(new["summonerId"])
