@@ -219,3 +219,4 @@ class Platform:
                     % self.name
                 )
                 await query.executemany(match_not_found)
+        self.logging.info("Done Flushing")
