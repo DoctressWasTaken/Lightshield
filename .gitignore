@@ -4,7 +4,7 @@ dist/*
 secrets.env
 secrets.yaml
 
-match_data/
+match_data/*
 
 .py3/
 */.py3/*
