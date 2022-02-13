@@ -220,28 +220,22 @@ class Platform:
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
-        async with self.handler.postgres.acquire() as connection:
-            match_updates = []
-            while True:
-                try:
-                    match_updates.append(self.match_updates.get_nowait())
-                    self.match_updates.task_done()
-                except asyncio.QueueEmpty:
-                    break
-            match_not_found = []
-            while True:
-                try:
-                    match_not_found.append(self.match_updates_faulty.get_nowait())
-                    self.match_updates_faulty.task_done()
-                except asyncio.QueueEmpty:
-                    break
+        match_updates = []
+        while True:
+            try:
+                match_updates.append(self.match_updates.get_nowait())
+                self.match_updates.task_done()
+            except asyncio.QueueEmpty:
+                break
+        match_not_found = []
+        while True:
+            try:
+                match_not_found.append(self.match_updates_faulty.get_nowait())
+                self.match_updates_faulty.task_done()
+            except asyncio.QueueEmpty:
+                break
 
-            if match_updates or match_not_found:
-                self.logging.info(
-                    "Flushing %s match_updates (%s not found).",
-                    len(match_updates) + len(match_not_found),
-                    len(match_not_found),
-                )
+        async with self.handler.postgres.acquire() as connection:
             async with connection.transaction():
                 if match_updates:
                     matches = [package["match"] for package in match_updates]
@@ -262,31 +256,37 @@ class Platform:
                     )
                     await query.executemany(matches)
 
-            platforms = {}
+                platforms = {}
 
-            for package in match_updates:
-                if package["match"][-2] not in platforms:
-                    platforms[package["match"][-2]] = []
-                platforms[package["match"][-2]] += package["participant"]
+                for package in match_updates:
+                    if package["match"][-2] not in platforms:
+                        platforms[package["match"][-2]] = []
+                    platforms[package["match"][-2]] += package["participant"]
 
-            for platform in platforms:
-                await connection.executemany(
-                    """INSERT INTO %s.participant
-                        VALUES ($1, $2, $3, $4)
-                        ON CONFLICT DO NOTHING
-                    """
-                    % platform,
-                    platforms[platform],
-                )
+                for platform in platforms:
+                    await connection.executemany(
+                        """INSERT INTO %s.participant
+                            VALUES ($1, $2, $3, $4)
+                            ON CONFLICT DO NOTHING
+                        """
+                        % platform,
+                        platforms[platform],
+                    )
 
-            if match_not_found:
-                query = await connection.prepare(
-                    """UPDATE %s.match
-                        SET find_fails = find_fails + 1,
-                            reserved_details = current_date + INTERVAL '10 minute'
-                        WHERE platform = $1
-                        AND match_id = $2
-                    """
-                    % self.name
-                )
-                await query.executemany(match_not_found)
+                if match_not_found:
+                    await connection.execute(
+                        """UPDATE %s.match
+                            SET find_fails = find_fails + 1,
+                                reserved_details = current_date + INTERVAL '10 minute'
+                            WHERE platform::varchar || '_' || match_id::varchar = any($1::varchar[])
+                        """
+                        % self.name,
+                        ["%s_%s" % match for match in match_not_found],
+                    )
+
+        if match_updates or match_not_found:
+            self.logging.info(
+                "Flushing %s match_updates (%s not found).",
+                len(match_updates) + len(match_not_found),
+                len(match_not_found),
+            )
