@@ -96,7 +96,6 @@ services:
     restart: always
 
 # Glue -- Tiny service to do some linking between data
-
   glue:
     hostname: glue
     build:
@@ -104,28 +103,10 @@ services:
       context: services/glue
     restart: always
 
-x-disabled:
-
-  match_timeline:
-    hostname: match_timeline
-    build:
-      dockerfile: Dockerfile
-      context: services/match_timeline/worker
-      args:
-        TAG: ${TAG}
-    image: lightshield/match_timeline:${TAG}
-    environment:
-      - SERVER=${SERVER}
-    restart: always
-    env_file:
-      - secrets.env
-
-
 volumes:
   drakebane_settings:
   postgres_data:
   redis_data:
-  timeline:
 
 networks:
   default:
