@@ -92,9 +92,10 @@ services:
       dockerfile: Dockerfile
       context: services/match_timeline
     volumes:
-      - type: bind
-        source: ./match_data
-        target: /project/data
+      - timeline:/project/data
+      # - type: bind
+      #   source: ./match_data
+      #   target: /project/data
     restart: always
     environment:
       - "DEBUG=True"
@@ -129,6 +130,7 @@ volumes:
   drakebane_settings:
   postgres_data:
   redis_data:
+  timeline:
 
 networks:
   default:
