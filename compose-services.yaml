@@ -94,7 +94,7 @@ services:
     volumes:
       - type: bind
         source: ./match_data
-        target: /data
+        target: data
     restart: always
     environment:
       - "DEBUG=True"

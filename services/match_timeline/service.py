@@ -131,7 +131,7 @@ class Platform:
                     url = self.endpoint_url % (task[0], task[1])
                     response = await self.proxy_endpoint.request(url, session)
                     folder = str(task[1])[:5]
-                    path = os.path.join(os.sep, "data", "timeline", task[0], folder)
+                    path = os.path.join("data", "timeline", task[0], folder)
                     if not os.path.exists(path):
                         os.makedirs(path)
                     filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
