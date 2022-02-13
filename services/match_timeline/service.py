@@ -150,6 +150,10 @@ class Platform:
                     )
                     await self.task_queue.put(task)
                     self.task_queue.task_done()
+                except aiohttp.ServerDisconnectedError:
+                    self.logging.error("Server Disconnected")
+                    await self.task_queue.put(task)
+                    self.task_queue.task_done()
                 except RatelimitException as err:
                     self.logging.error("Ratelimit")
                     await self.task_queue.put(task)

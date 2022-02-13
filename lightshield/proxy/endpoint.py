@@ -8,7 +8,6 @@ from lightshield.exceptions import (
     Non200Exception,
 )
 
-
 class Endpoint:
     """Handle requests for a specific endpoint."""
 
