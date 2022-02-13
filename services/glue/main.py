@@ -35,14 +35,18 @@ async def sync_ranking():
     )
     ranking_query = []
     for platform in services:
-        ranking_query.append("""
+        ranking_query.append(
+            """
         SELECT DISTINCT puuid,
                 last_updated,
                 '%s'::varchar AS platform
                 FROM %s.ranking
-        """ % (platform, platform))
+        """
+            % (platform, platform)
+        )
 
-    await con.execute("""
+    await con.execute(
+        """
         WITH preexisting AS (
                 SELECT DISTINCT puuid
                 FROM summoner
@@ -58,7 +62,9 @@ async def sync_ranking():
             )
         INSERT INTO summoner (puuid, last_platform)
         SELECT puuid, platform::platform FROM unique_players WHERE puuid NOT IN (SELECT puuid FROM preexisting)
-    """ % 'UNION ALL'.join(ranking_query))
+    """
+        % "UNION ALL".join(ranking_query)
+    )
     logging.info("Synced ranking.")
     await con.close()
 
@@ -69,15 +75,19 @@ async def sync_participants():
     )
     ranking_query = []
     for platform in services:
-        ranking_query.append("""
+        ranking_query.append(
+            """
         SELECT puuid,
                 MAX(match_id) AS last_match,
                 '%s'::varchar AS platform
                 FROM %s.participant
                 GROUP BY puuid
-        """ % (platform, platform))
+        """
+            % (platform, platform)
+        )
 
-    await con.execute("""
+    await con.execute(
+        """
         WITH preexisting AS (
             SELECT DISTINCT puuid
             FROM summoner
@@ -92,8 +102,9 @@ async def sync_participants():
             )
         INSERT INTO summoner (puuid, last_platform)
                 SELECT puuid, platform::platform FROM last WHERE puuid NOT IN (SELECT puuid FROM preexisting)             
-    """ % 'UNION ALL'.join(ranking_query)
-                      )
+    """
+        % "UNION ALL".join(ranking_query)
+    )
     await con.close()
     logging.info("Synced participants.")
 
@@ -102,9 +113,10 @@ async def main():
     while True:
         await asyncio.gather(
             asyncio.create_task(sync_participants()),
-            asyncio.create_task(sync_ranking()))
+            asyncio.create_task(sync_ranking()),
+        )
         await asyncio.sleep(60 * 60 * 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())
