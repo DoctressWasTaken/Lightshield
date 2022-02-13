@@ -124,7 +124,7 @@ class Platform:
         while self.service_running:
             for i in range(10):
                 async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                        headers={"X-Riot-Token": self.handler.api_key}
                 ) as session:
                     task = await self.task_queue.get()
                     try:
@@ -137,8 +137,8 @@ class Platform:
                         filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
                         if not os.path.isfile(filename):
                             with open(
-                                filename,
-                                "w+",
+                                    filename,
+                                    "w+",
                             ) as file:
                                 file.write(json.dumps(response))
                         del response
@@ -202,21 +202,20 @@ class Platform:
                         SET timeline = TRUE,
                             reserved_timeline = NULL
                             WHERE platform = $1
-                            AND match_id = $1
+                            AND match_id = $2
                         """
                         % self.name,
                     )
                     await query.executemany(match_updates)
 
-            if match_not_found:
-                query = await connection.prepare(
-                    """UPDATE %s.match
-                        SET find_fails = find_fails + 1,
-                            reserved_timeline = current_date + INTERVAL '10 minute'
-                        WHERE platform = $1
-                        AND match_id = $2
-                    """
-                    % self.name
-                )
-                await query.executemany(match_not_found)
+                if match_not_found:
+                    await connection.execute(
+                        """UPDATE %s.match
+                            SET find_fails = find_fails + 1,
+                                reserved_timeline = current_date + INTERVAL '10 minute'
+                            WHERE platform::varchar || '_' || match_id::varchar = any($1::varchar[])
+                        """
+                        % self.name,
+                        ["%s_%s" % match for match in match_not_found]
+                    )
         self.logging.info("Done Flushing")
