@@ -121,54 +121,54 @@ class Platform:
 
     async def worker(self):
         """Execute requests."""
-        async with aiohttp.ClientSession(
-            headers={"X-Riot-Token": self.handler.api_key}
-        ) as session:
-            while self.service_running:
-                task = await self.task_queue.get()
-                try:
-                    #   Success
-                    url = self.endpoint_url % (task[0], task[1])
-                    response = await self.proxy_endpoint.request(url, session)
-                    folder = str(task[1])[:5]
-                    path = os.path.join("data", "timeline", task[0], folder)
-                    if not os.path.exists(path):
-                        os.makedirs(path)
-                    filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
-                    if not os.path.isfile(filename):
-                        with open(
-                            filename,
-                            "w+",
-                        ) as file:
-                            file.write(json.dumps(response))
-                    # del response
-                    await self.match_updates.put([task[0], task[1]])
-                    self.task_queue.task_done()
-                except LimitBlocked as err:
-                    self.retry_after = datetime.now() + timedelta(
-                        seconds=err.retry_after
-                    )
-                    await self.task_queue.put(task)
-                    self.task_queue.task_done()
-                except aiohttp.ServerDisconnectedError:
-                    self.logging.error("Server Disconnected")
-                    await self.task_queue.put(task)
-                    self.task_queue.task_done()
-                except RatelimitException as err:
-                    self.logging.error("Ratelimit")
-                    await self.task_queue.put(task)
-                    self.task_queue.task_done()
-                except Non200Exception as err:
-                    self.logging.error("Others")
-                    await self.task_queue.put(task)
-                    self.task_queue.task_done()
-                except NotFoundException:
-                    await self.match_updates_faulty.put([task[0], task[1]])
-                    self.task_queue.task_done()
-                except Exception as err:
-                    self.logging.exception("General Exception")
-                    await self.task_queue.put(task)
-                    self.task_queue.task_done()
+        while self.service_running:
+            for i in range(10):
+                async with aiohttp.ClientSession(
+                    headers={"X-Riot-Token": self.handler.api_key}
+                ) as session:
+                    task = await self.task_queue.get()
+                    try:
+                        url = self.endpoint_url % (task[0], task[1])
+                        response = await self.proxy_endpoint.request(url, session)
+                        folder = str(task[1])[:5]
+                        path = os.path.join("data", "timeline", task[0], folder)
+                        if not os.path.exists(path):
+                            os.makedirs(path)
+                        filename = os.path.join(path, "%s_%s.json" % (task[0], task[1]))
+                        if not os.path.isfile(filename):
+                            with open(
+                                filename,
+                                "w+",
+                            ) as file:
+                                file.write(json.dumps(response))
+                        del response
+                        await self.match_updates.put([task[0], task[1]])
+                        self.task_queue.task_done()
+                    except LimitBlocked as err:
+                        self.retry_after = datetime.now() + timedelta(
+                            seconds=err.retry_after
+                        )
+                        await self.task_queue.put(task)
+                        self.task_queue.task_done()
+                    except aiohttp.ServerDisconnectedError:
+                        self.logging.error("Server Disconnected")
+                        await self.task_queue.put(task)
+                        self.task_queue.task_done()
+                    except RatelimitException:
+                        self.logging.error("Ratelimit")
+                        await self.task_queue.put(task)
+                        self.task_queue.task_done()
+                    except Non200Exception:
+                        self.logging.error("Others")
+                        await self.task_queue.put(task)
+                        self.task_queue.task_done()
+                    except NotFoundException:
+                        await self.match_updates_faulty.put([task[0], task[1]])
+                        self.task_queue.task_done()
+                    except Exception:
+                        self.logging.exception("General Exception")
+                        await self.task_queue.put(task)
+                        self.task_queue.task_done()
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""

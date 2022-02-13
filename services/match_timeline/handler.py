@@ -116,21 +116,17 @@ class Handler:
         while True:
             stop_tasks = []
             await self.get_apiKey()
-            if not self.api_key.startswith("RGAPI"):
-                for platform in self.platforms.values():
-                    await platform.stop()
-                continue
-            if not await self.check_active():
-                for platform in self.platforms.values():
-                    await platform.stop()
+            if not self.api_key.startswith("RGAPI") or not await self.check_active():
+                await asyncio.gather(*[
+                    asyncio.create_task(platform.stop())
+                    for platform in self.platforms.values()
+                ])
                 continue
             platform_status = await self.check_platforms()
-            for platform, active in platform_status.items():
-                if active:
-                    await self.platforms[platform].start()
-                    continue
-                await self.platforms[platform].stop()
-            await asyncio.gather(*stop_tasks, asyncio.sleep(5))
+            await asyncio.gather(*[
+                asyncio.create_task(self.platforms[platform].start() if active else self.platforms[platform].stop())
+                for platform, active in platform_status.items()
+            ])
 
     async def run(self):
         """Run."""
