@@ -30,7 +30,6 @@ local function update_limit(key, limits, counts, request_time)
         else
             -- Bucket exists
             local bucket_start = redis.call('hget', key..':'..limit_raw, 'start')
-            redis.log(redis.LOG_WARNING, bucket_start)
             if bucket_start <= request_time then
                 -- Request was made in currently active bucket
                 local limit_stored_count = tonumber(redis.call('hget', key..':'..limit_raw, 'count'))
