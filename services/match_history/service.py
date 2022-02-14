@@ -144,7 +144,7 @@ class Platform:
         except NotFoundException:
             self.logging.error("Not found error.")
         except Exception as err:
-            self.logging.error(err)
+            self.logging.exception(err)
             return start
 
     async def update_full(self, target):
