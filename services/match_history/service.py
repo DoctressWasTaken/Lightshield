@@ -139,7 +139,7 @@ class Platform:
             self.logging.error("Ratelimit")
             return start
         except Non200Exception as err:
-            self.logging.error("Others")
+            self.logging.exception("Non 200 Exception")
             return start
         except NotFoundException:
             self.logging.error("Not found error.")
