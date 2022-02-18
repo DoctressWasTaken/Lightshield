@@ -11,8 +11,8 @@ asyncpg = "^0.23.0"
 aioredis = "^2.0.1"
 aiohttp = "^3.7.4"
 uvloop = "^0.15.2"
-#lightshield = "^0.4.0.4b0"
-lightshield = { path = "../../dist/Lightshield-0.4.0.5b0.tar.gz" }
+lightshield = "^0.4.0.5b0"
+#lightshield = { path = "../../dist/Lightshield-0.4.0.5b0.tar.gz" }
 
 [tool.poetry.dev-dependencies]
 

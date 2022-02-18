@@ -12,6 +12,7 @@ from lightshield.exceptions import (
 
 class Endpoint:
     """Handle requests for a specific endpoint."""
+
     blocked_until = None
 
     def __init__(self, server, zone, redis, namespace):
@@ -36,11 +37,13 @@ class Endpoint:
         self.limits_update = await self.redis.get("lightshield_limits_update")
         self.update = await self.redis.get("lightshield_update_single")
 
-        await self.redis.hsetnx(self.key_server, 'placeholder', 'H')
-        await self.redis.hsetnx(self.key_zone, 'placeholder', 'H')
+        await self.redis.hsetnx(self.key_server, "placeholder", "H")
+        await self.redis.hsetnx(self.key_zone, "placeholder", "H")
         self.logging.info("Initialized")
 
-    async def response(self, local_limits, key, header_limits, header_counts, request_timestamp):
+    async def response(
+        self, local_limits, key, header_limits, header_counts, request_timestamp
+    ):
         # Changes to limits
         to_init = []
         to_drop = []
@@ -52,43 +55,43 @@ class Endpoint:
         limits = {}
         for limit in local_limits:
             limits[int(limit)] = {
-                'found': False,
-                'count': None,
-                'max': None,
-                'old_max': int(local_limits[limit]),
-                'preexisting': True
+                "found": False,
+                "count": None,
+                "max": None,
+                "old_max": int(local_limits[limit]),
+                "preexisting": True,
             }
 
         for count_string in header_counts.split(","):
-            count, span = [int(el) for el in count_string.split(':')]
+            count, span = [int(el) for el in count_string.split(":")]
             if not span in limits:
-                limits[span] = {
-                    'preexisting': False
-                }
-            limits[span]['count'] = count
-            limits[span]['found'] = True
+                limits[span] = {"preexisting": False}
+            limits[span]["count"] = count
+            limits[span]["found"] = True
 
         for limit_string in header_limits.split(","):
-            max, span = [int(el) for el in limit_string.split(':')]
-            limits[span]['max'] = max
+            max, span = [int(el) for el in limit_string.split(":")]
+            limits[span]["max"] = max
 
         for span, val in limits.items():
-            if not val['preexisting']:
-                to_init += [val['max'], span]
-            elif not val['found']:
+            if not val["preexisting"]:
+                to_init += [val["max"], span]
+            elif not val["found"]:
                 to_drop.append(span)
-            elif val['max'] != val['old_max']:
-                to_update += [val['max'], span]
+            elif val["max"] != val["old_max"]:
+                to_update += [val["max"], span]
 
-            if val['found']:
-                updates.append([
-                    self.update,
-                    2,
-                    "%s:%s" % (key, span),
-                    "%s:%s:meta" % (key, span),
-                    request_timestamp,
-                    val['count']
-                ])
+            if val["found"]:
+                updates.append(
+                    [
+                        self.update,
+                        2,
+                        "%s:%s" % (key, span),
+                        "%s:%s:meta" % (key, span),
+                        request_timestamp,
+                        val["count"],
+                    ]
+                )
         return to_init, to_update, to_drop, updates
 
     async def request(self, url, session, no_block=True):
@@ -97,14 +100,18 @@ class Endpoint:
         if self.blocked_until:
             while datetime.now() < self.blocked_until:
                 if no_block:
-                    raise LimitBlocked(retry_after=(self.blocked_until - datetime.now()).total_seconds())
+                    raise LimitBlocked(
+                        retry_after=(
+                            self.blocked_until - datetime.now()
+                        ).total_seconds()
+                    )
                 await asyncio.sleep(0.01)
             self.blocked_until = None
 
         server_limits = await self.redis.hgetall(self.key_server)
-        del server_limits['placeholder']
+        del server_limits["placeholder"]
         zone_limits = await self.redis.hgetall(self.key_zone)
-        del zone_limits['placeholder']
+        del zone_limits["placeholder"]
         if not server_limits or not zone_limits:
             self.blocked_until = datetime.now() + timedelta(seconds=5)
 
@@ -117,10 +124,7 @@ class Endpoint:
         response = 0
         if keys:
             response = await self.redis.evalsha(
-                self.permit,
-                len(keys),
-                *keys,
-                request_timestamp
+                self.permit, len(keys), *keys, request_timestamp
             )
 
         if int(response) > 0:
@@ -139,11 +143,13 @@ class Endpoint:
                 key=self.key_server,
                 header_limits=headers.get("X-App-Rate-Limit"),
                 header_counts=headers.get("X-App-Rate-Limit-Count"),
-                request_timestamp=request_timestamp
+                request_timestamp=request_timestamp,
             )
             async with self.redis.pipeline(transaction=True) as pipe:
                 if init:
-                    pipe.evalsha(self.limits_init, 1, self.key_server, response_stamp, *init)
+                    pipe.evalsha(
+                        self.limits_init, 1, self.key_server, response_stamp, *init
+                    )
                 if update:
                     pipe.evalsha(self.limits_update, 1, self.key_server, *update)
                 if drop:
@@ -159,11 +165,13 @@ class Endpoint:
                 key=self.key_zone,
                 header_limits=headers.get("X-Method-Rate-Limit"),
                 header_counts=headers.get("X-Method-Rate-Limit-Count"),
-                request_timestamp=request_timestamp
+                request_timestamp=request_timestamp,
             )
             async with self.redis.pipeline(transaction=True) as pipe:
                 if init:
-                    pipe.evalsha(self.limits_init, 1, self.key_zone, response_stamp, *init)
+                    pipe.evalsha(
+                        self.limits_init, 1, self.key_zone, response_stamp, *init
+                    )
                 if update:
                     pipe.evalsha(self.limits_update, 1, self.key_zone, *update)
                 if drop:
