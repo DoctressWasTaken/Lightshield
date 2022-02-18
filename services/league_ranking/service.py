@@ -83,6 +83,7 @@ class Service:
             except (Non200Exception, NotFoundException) as err:
                 self.logging.exception("Fetch error")
             except Exception as err:
+                await asyncio.sleep(1)
                 self.logging.exception("General Exception in Fetch")
             finally:
                 await self.pages.put(page)

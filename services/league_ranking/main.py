@@ -50,18 +50,17 @@ class Handler:
 
     async def init(self):
         self.redis = aioredis.from_url(
-            "redis://redis:6379", encoding="utf-8", decode_responses=True
+            "redis://localhost:6379", encoding="utf-8", decode_responses=True
         )
         self.postgres = await asyncpg.create_pool(
-            host="postgres", port=5432, user="postgres", database="lightshield"
+            host="localhost", port=8303, user="postgres", database="lightshield"
         )
-        await self.proxy.init("redis", 6379)
+        await self.proxy.init("localhost", 6379)
 
         for platform in services:
             s = Service(platform, self)
             await s.init()
             self.platforms[platform] = s
-        self.logging.info("Ready.")
 
     async def shutdown(self, *args, **kwargs):
         """Initiate shutdown."""

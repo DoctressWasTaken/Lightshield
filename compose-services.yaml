@@ -31,8 +31,8 @@ services:
       dockerfile: Dockerfile
       context: redis
     restart: always
-    volumes:
-      - redis_data:/data
+    # volumes:
+    #   - redis_data:/data
     ports:
       - 127.0.0.1:6379:6379
 

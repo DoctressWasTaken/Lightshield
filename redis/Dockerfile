@@ -1,5 +1,5 @@
 ARG LOG_LEVEL=INFO
-FROM redis:6.2
+FROM redis:7.0-rc
 
 WORKDIR /project
 COPY *.sh ./
