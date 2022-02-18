@@ -95,15 +95,16 @@ class Service:
                 await asyncio.sleep(5)
                 continue
             self.active_rank = await self.rankmanager.get_next()
-            self.next_page = 10
+            workers = 20
+            self.next_page = workers
             self.empty_page = False
-            for i in range(1, 11):
+            for i in range(1, workers + 1):
                 await self.pages.put(i)
             self.data = []
             try:
                 self.logging.debug("START %s %s.", *self.active_rank)
                 await asyncio.gather(
-                    *[asyncio.create_task(self.worker()) for _ in range(10)]
+                    *[asyncio.create_task(self.worker()) for _ in range(workers)]
                 )
                 self.logging.debug("DONE %s %s.", *self.active_rank)
             except asyncio.CancelledError:

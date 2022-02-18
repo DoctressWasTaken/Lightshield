@@ -8,7 +8,6 @@ import tracemalloc
 import aioredis
 import asyncpg
 import uvloop
-from guppy import hpy
 
 tracemalloc.start()
 
@@ -47,7 +46,6 @@ class Handler:
         self.redis = None
         self.platforms = {}
         self.proxy = Proxy()
-        self.h = hpy()
 
     async def init(self):
         self.redis = aioredis.from_url(

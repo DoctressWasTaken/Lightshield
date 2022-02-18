@@ -13,16 +13,15 @@ for i=1, #KEYS do
             local key_meta = key_counter..':meta'
             -- get max
             local max_count = tonumber(redis.call('hget', key_meta, 'max'))
-            local inflight = tonumber(redis.call('hget', key_meta, 'inflight'))
             local rollover = tonumber(redis.call('hget', key_meta, 'rollover'))
             -- get current
             local current = 0
-            if redis.call('exists', key_counter) then
-                local current = tonumber(redis.call('get', key_counter))
+            if redis.call('setnx', key_counter, 0) == 0 then
+                current = tonumber(redis.call('get', key_counter))
             end
-            if (current + inflight + rollover) >= max_count then
+            if (current + rollover) >= max_count then
                 -- Increase wait time if full
-                max_wait = math.max(max_wait, redis.call('pttl', key_counter))
+                max_wait = math.max(100, max_wait, redis.call('pttl', key_counter))
             end
         end
     end
