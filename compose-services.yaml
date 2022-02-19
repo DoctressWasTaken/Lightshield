@@ -1,12 +1,13 @@
 version: '3.7'
 services:
 
-  ## Drakebane
+  ### Drakebane
   drakebane_frontend:
     hostname: drakebane_frontend
     build:
       dockerfile: Dockerfile
       context: drakebane/frontend
+    image: lightshield/drakebane_frontend:${TAG}
     restart: always
     ports:
       - 127.0.0.1:8301:80
@@ -16,6 +17,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: drakebane/backend
+    image: lightshield/drakebane_backend:${TAG}
     restart: always
     volumes:
       - drakebane_settings:/project/configs/
@@ -30,6 +32,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: redis
+    image: lightshield/redis:${TAG}
     restart: always
     volumes:
       - redis_data:/data
@@ -41,6 +44,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: postgres
+    image: lightshield/postgres:${TAG}
     restart: always
     ports:
       - 127.0.0.1:8303:5432
@@ -65,6 +69,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/summoner_id
+    image: lightshield/summoner_id:${TAG}
     restart: always
 
   match_history:
@@ -78,6 +83,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_details
+    image: lightshield/match_details:${TAG}
     volumes:
       - type: bind
         source: ./match_data
@@ -89,18 +95,20 @@ services:
     build:
       dockerfile: Dockerfile
       context: services/match_timeline
+    image: lightshield/match_timeline:${TAG}
     volumes:
       - type: bind
         source: ./match_data
         target: /project/data
     restart: always
 
-# Glue -- Tiny service to do some linking between data
+  ### Glue -- Tiny service to do some linking between data
   glue:
     hostname: glue
     build:
       dockerfile: Dockerfile
       context: services/glue
+    image: lightshield/glue:${TAG}
     restart: always
 
 volumes:

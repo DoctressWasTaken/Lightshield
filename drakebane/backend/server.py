@@ -49,7 +49,6 @@ class Server:
         await con.set("regions", json.dumps(self.settings["regions"]))
         await con.set("apiKey", self.settings["apiKey"])
 
-        formatted = {}
         for key, value in self.settings["services"].items():
             if value:
                 await con.set("service_%s" % key, "true")
