@@ -17,7 +17,8 @@ class Server:
                 self.settings = json.loads(settings.read())
             with open("settings.json", "w+") as settings:
                 json.dump(self.settings, settings, indent=2, sort_keys=True)
-        asyncio.run(self.update_settings())
+        if asyncio.run(self.get_settings()):
+            asyncio.run(self.update_settings())
         self.app = web.Application()
         cors = aiohttp_cors.setup(
             self.app,
@@ -54,6 +55,21 @@ class Server:
                 await con.set("service_%s" % key, "true")
             else:
                 await con.set("service_%s" % key, "false")
+
+    async def get_settings(self):
+        """Pull settings from redis if the exist."""
+        con = await aioredis.from_url(
+            "redis://redis:6379", encoding="utf-8", decode_responses=True
+        )
+        if not await con.exists("settings_set"):
+            return 1
+        self.settings["regions"] = json.loads(con.get("regions"))
+        self.settings["apiKey"] = con.get("apiKey")
+        for key in self.settings["services"]:
+            if await con.get("service_%s" % key) == "true":
+                self.settings["services"][key] = True
+            else:
+                self.settings["services"][key] = False
 
     def run(self):
         web.run_app(self.app, port=8302)
