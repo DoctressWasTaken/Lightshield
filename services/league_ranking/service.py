@@ -29,8 +29,8 @@ class Service:
         self.retry_after = datetime.now()
         self.data = []
         self.url = (
-            f"https://{self.name}.api.riotgames.com/lol/"
-            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+                f"https://{self.name}.api.riotgames.com/lol/"
+                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
 
     async def init(self):
@@ -66,7 +66,7 @@ class Service:
             url = self.url % (*self.active_rank, page)
             try:
                 async with aiohttp.ClientSession(
-                    headers={"X-Riot-Token": self.handler.api_key}
+                        headers={"X-Riot-Token": self.handler.api_key}
                 ) as session:
                     data = await self.endpoint.request(url, session)
                     self.logging.debug(url)
@@ -143,8 +143,8 @@ class Service:
                 for new in self.data:
                     rank = [new["tier"], new["rank"], new["leaguePoints"]]
                     if (
-                        new["summonerId"] not in preset
-                        or preset[new["summonerId"]] != rank
+                            new["summonerId"] not in preset
+                            or preset[new["summonerId"]] != rank
                     ):
                         if new["summonerId"] not in already_added:
                             already_added.append(new["summonerId"])
@@ -153,10 +153,11 @@ class Service:
                     """INSERT INTO %s.ranking (summoner_id, rank, division, leaguepoints)
                         VALUES ($1, $2, $3, $4)
                         ON CONFLICT (summoner_id) DO 
-                        UPDATE SET rank = EXCLUDED.rank,
-                                   division = EXCLUDED.division,
-                                   leaguepoints = EXCLUDED.leaguepoints,
-                                   defunct = FALSE 
+                        UPDATE SET  rank = EXCLUDED.rank,
+                                    division = EXCLUDED.division,
+                                    leaguepoints = EXCLUDED.leaguepoints,
+                                    last_updated = CURRENT_TIMESTAMP
+                                    defunct = FALSE 
                     """
                     % self.name.lower(),
                     to_update,

@@ -18,14 +18,14 @@ CREATE TABLE IF NOT EXISTS PLATFORM.ranking
     games_sq       SMALLINT,
     games_fq       SMALLINT,
 
-    priority       VARCHAR(1),
+    priority       VARCHAR(1) DEFAULT NULL,
 
     reserved_until TIMESTAMP DEFAULT NULL,
     -- Update based on timestamp
     last_updated   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
--- Improved lookup speed for summoner_id service
--- and match_history service (full refresh tasks)
+-- summoner_id index included by default cause primary key
+-- selector index for ranking - summoner link
 CREATE INDEX ON PLATFORM.ranking (puuid);
+-- selector index for summoner_id service
 CREATE INDEX ON PLATFORM.ranking ((puuid IS NULL));
