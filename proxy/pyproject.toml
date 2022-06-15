@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "proxy"
+version = "0.1.0"
+description = ""
+authors = ["Robin (Nurse) <<>>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+aiohttp = "^3.8.1"
+black = "^22.3.0"
+aioredis = "^2.0.1"
+PyYAML = "^6.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

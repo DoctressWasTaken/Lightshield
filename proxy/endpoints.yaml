@@ -1,0 +1,125 @@
+version: 1
+
+placeholders:
+  puuid: "([^\/]{3,})"
+  gameName: "([^\/]*)"
+  tagLine: "([^\/]{1,5})"
+  encryptedSummonerId: "([^\/]{3,})"
+  championId: "([^\/]*)"
+  summonerId: "([^\/]{3,})"
+  teamId: "([^\/]{3,})"
+  tournamentId: "([^\/]{3,})"
+  queue: "([^\/]*)"
+  tier: "([A-Z]*)"
+  division: "(I{1,3}V?)"
+  game: "([^\/]*)"
+  leagueId: "([^\/]*)"
+  challengeId: "([^\/]*)"
+  level: "([^\/]*)"
+  matchId: "([^\/]*)"
+  encryptedAccountId: "([^\/]*)"
+  summonerName: "([^\/]*)"
+  encryptedPUUID: "([^\/]*)"
+  tournamentCode: "([^\/]*)"
+  actId: "([^\/]*)"
+
+endpoints:
+  Account-V1:
+    - /riot/account/v1/accounts/by-puuid/{puuid}
+    - /riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}
+    - /riot/account/v1/active-shards/by-game/{game}/by-puuid/{puuid}
+    - /riot/account/v1/accounts/me
+  Champion-Mastery-V4:
+    - /lol/champion-mastery/v4/champion-masteries/by-summoner/{encryptedSummonerId}
+    - /lol/champion-mastery/v4/champion-masteries/by-summoner/{encryptedSummonerId}/by-champion/{championId}
+    - /lol/champion-mastery/v4/scores/by-summoner/{encryptedSummonerId}
+  Champion-V4:
+    - /lol/platform/v3/champion-rotations
+  Clash-V1:
+    - /lol/clash/v1/players/by-summoner/{summonerId}
+    - /lol/clash/v1/teams/{teamId}
+    - /lol/clash/v1/tournaments
+    - /lol/clash/v1/tournaments/by-team/{teamId}
+    - /lol/clash/v1/tournaments/{tournamentId}
+  League-Exp-V4:
+    - /lol/league-exp/v4/entries/{queue}/{tier}/{division}
+  League-V4:
+    - /lol/league/v4/challengerleagues/by-queue/{queue}
+    - /lol/league/v4/entries/by-summoner/{encryptedSummonerId}
+    - /lol/league/v4/entries/{queue}/{tier}/{division}
+    - /lol/league/v4/grandmasterleagues/by-queue/{queue}
+    - /lol/league/v4/leagues/{leagueId}
+    - /lol/league/v4/masterleagues/by-queue/{queue}
+  LOL-Challenges-V1:
+    - /lol/challenges/v1/challenges/config
+    - /lol/challenges/v1/challenges/percentiles
+    - /lol/challenges/v1/challenges/{challengeId}/config
+    - /lol/challenges/v1/challenges/{challengeId}/leaderboards/by-level/{level}
+    - /lol/challenges/v1/challenges/{challengeId}/percentiles
+    - /lol/challenges/v1/player-data/{puuid}
+  LOL-Status-V3:
+    - /lol/status/v3/shard-data
+  LOL-Status-V4:
+    - /lol/status/v4/platform-data
+  LOR-Deck-V1:
+    - /lor/deck/v1/decks/me
+  LOR-Inventory-V1:
+    - /lor/inventory/v1/cards/me
+  LOR-Match-V1:
+    - /lor/match/v1/matches/by-puuid/{puuid}/ids
+    - /lor/match/v1/matches/{matchId}
+  LOR-Ranked-V1:
+    - /lor/ranked/v1/leaderboards
+  LOR-Status-v1:
+    - /lor/status/v1/platform-data
+  Match-V5:
+    - /lol/match/v5/matches/by-puuid/{puuid}/ids
+    - /lol/match/v5/matches/{matchId}
+    - /lol/match/v5/matches/{matchId}/timeline
+  Spectator-V5:
+    - /lol/spectator/v4/active-games/by-summoner/{encryptedSummonerId}
+    - /lol/spectator/v4/featured-games
+  Summoner-V4:
+    - /lol/summoner/v4/summoners/by-account/{encryptedAccountId}
+    - /lol/summoner/v4/summoners/by-name/{summonerName}
+    - /lol/summoner/v4/summoners/by-puuid/{encryptedPUUID}
+    - /lol/summoner/v4/summoners/{encryptedSummonerId}
+    - /lol/summoner/v4/summoners/me
+  TFT-League-V1:
+    - /tft/league/v1/challenger
+    - /tft/league/v1/entries/by-summoner/{summonerId}
+    - /tft/league/v1/entries/{tier}/{division}
+    - /tft/league/v1/grandmaster
+    - /tft/league/v1/leagues/{leagueId}
+    - /tft/league/v1/master
+    - /tft/league/v1/rated-ladders/{queue}/top
+  TFT-Match-V1:
+    - /tft/match/v1/matches/by-puuid/{puuid}/ids
+    - /tft/match/v1/matches/{matchId}
+  TFT-Summoner-V1:
+    - /tft/summoner/v1/summoners/by-account/{encryptedAccountId}
+    - /tft/summoner/v1/summoners/by-name/{summonerName}
+    - /tft/summoner/v1/summoners/by-puuid/{encryptedPUUID}
+    - /tft/summoner/v1/summoners/{encryptedSummonerId}
+    - /tft/summoner/v1/summoners/me
+  Tournament-Stub-V4:
+    - /lol/tournament-stub/v4/codes
+    - /lol/tournament-stub/v4/lobby-events/by-code/{tournamentCode}
+    - /lol/tournament-stub/v4/providers
+    - /lol/tournament-stub/v4/tournaments
+  Tournament-V4:
+    - /lol/tournament/v4/codes
+    - /lol/tournament/v4/codes/{tournamentCode}
+    - /lol/tournament/v4/lobby-events/by-code/{tournamentCode}
+    - /lol/tournament/v4/providers
+    - /lol/tournament/v4/tournaments
+  VAL-Content-V1:
+    - /val/content/v1/contents
+  VAL-Match-V1:
+    - /val/match/v1/matches/{matchId}
+    - /val/match/v1/matchlists/by-puuid/{puuid}
+    - /val/match/v1/recent-matches/by-queue/{queue}
+  VAL-Ranked-V1:
+    - /val/ranked/v1/leaderboards/by-act/{actId}
+  VAL-Status-V1:
+    - /val/status/v1/platform-data

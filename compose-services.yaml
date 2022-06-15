@@ -72,6 +72,26 @@ services:
     image: lightshield/summoner_id:${TAG}
     restart: always
 
+  summoner_activity_update:
+    hostname: summoner_activity_update
+    build:
+      dockerfile: Dockerfile
+      context: services/summoner_activity_update
+    restart: always
+    environment:
+      - ACTIVITY_CHECK_AFTER=2
+
+
+  summoner_server_update:
+    hostname: summoner_server_update
+    build:
+      dockerfile: Dockerfile
+      context: services/summoner_server_update
+    restart: always
+    environment:
+      - SERVER_CHECK_AFTER=10
+
+
   match_history:
     hostname: match_history
     build:

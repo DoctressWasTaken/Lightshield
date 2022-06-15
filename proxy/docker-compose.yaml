@@ -1,0 +1,22 @@
+version: '3.7'
+services:
+
+  proxy:
+    hostname: spiritmight_proxy
+    build:
+      dockerfile: Dockerfile
+      context: .
+    image: spiritmight/proxy:latest
+    restart: always
+    ports:
+      - 0.0.0.0:8888:8888
+
+  ### Storage
+  redis:
+    hostname: redis
+    image: redis:7.0-rc
+    restart: always
+
+networks:
+  default:
+    name: spiritmight
