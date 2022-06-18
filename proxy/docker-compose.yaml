@@ -8,6 +8,8 @@ services:
       context: .
     image: spiritmight/proxy:latest
     restart: always
+    env_file:
+      - secrets.env
     ports:
       - 0.0.0.0:8888:8888
 
