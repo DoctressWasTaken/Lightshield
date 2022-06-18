@@ -8,6 +8,7 @@ import pprint
 import os
 from datetime import datetime
 import hashlib
+import random
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -32,6 +33,15 @@ class Mapping:
     def __init__(self):
         self.logging = logging.getLogger("Mapping")
         self.logging.setLevel(logging.INFO)
+        self.env = os.environ.get('ENVIRONMENT', 'riot_api_proxy')
+        self.keys = {}
+        for key in os.environ.get('API_KEY').split('|'):
+            self.keys[key] = {
+                'key': key,
+                'hash': hashlib.md5(key.encode()).hexdigest(),
+                'session': aiohttp.ClientSession(headers={"X-Riot-Token": key})
+            }
+        self.logging.info("Recognized %i api keys.", len(self.keys))
         with open("endpoints.yaml") as endpoints:
             data = yaml.safe_load(endpoints)
             ep = data["endpoints"]
@@ -47,9 +57,6 @@ class Mapping:
         # pp.pprint(self.endpoints)
 
     async def init(self, host="localhost", port=6379):
-        self.session = aiohttp.ClientSession(
-            headers={"X-Riot-Token": os.environ.get("API_KEY")}
-        )
         self.redis = aioredis.from_url(
             "redis://%s:%s" % (host, port), encoding="utf-8", decode_responses=True
         )
@@ -65,7 +72,7 @@ class Mapping:
     @web.middleware
     async def middleware(self, request, handler):
         try:
-            assert self.session
+            assert self.redis
         except:
             await self.init(
                 host=os.environ.get("REDIS_HOST"),
@@ -87,33 +94,55 @@ class Mapping:
         send_timestamp = datetime.now().timestamp() * 1000
         request_string = "%s_%s" % (url, send_timestamp)
         request_id = hashlib.md5(request_string.encode()).hexdigest()
-        wait_time = await self.redis.evalsha(
-            self.permit, 2, server, endpoint, send_timestamp, request_id
-        )
-        if wait_time > 0:
-            return web.json_response({"Retry-At": wait_time / 1000}, status=430)
+        key_order = list(self.keys.keys())
+        random.shuffle(key_order)
+        max_wait_time = 0
+        while key_order:
+            key = key_order.pop()
+            server_key = "%s:%s:%s" % (self.env, self.keys[key]['hash'], server)
+            endpoint_key = "%s:%s:%s:%s" % (self.env, self.keys[key]['hash'], server, endpoint)
+            wait_time = await self.redis.evalsha(
+                self.permit, 2, server_key, endpoint_key, send_timestamp, request_id
+            )
+            if wait_time > 0:
+                max_wait_time = max(max_wait_time, wait_time)
+            else:
+                url = url.replace("http:", "https:")
+                async with self.keys[key]['session'].get(url) as response:
+                    headers = response.headers
+                    app_limits = None
+                    if app_limits := headers.get("X-App-Rate-Limit"):
+                        if app_limits == '20:1,100:120':
+                            app_limits = ['15', '18']
+                        else:
+                            app_limits = app_limits.split(",")[0].split(":")
 
-        url = url.replace("http:", "https:")
-        async with self.session.get(url) as response:
-            headers = response.headers
-            app_limits = None
-            if app_limits := headers.get("X-App-Rate-Limit"):
-                app_limits = app_limits.split(",")[0].split(":")
-            method_limits = None
-            if method_limits := headers.get("X-Method-Rate-Limit"):
-                method_limits = method_limits.split(",")[0].split(":")
-            if app_limits and method_limits:
-                await self.redis.evalsha(
-                    self.update,
-                    2,
-                    server,
-                    endpoint,
-                    *[int(x) for x in app_limits + method_limits],
-                )
-            if response.status != 200:
-                return web.json_response({}, status=response.status)
-            result = await response.json()
-            return web.json_response(result)
+                    method_limits = None
+                    if method_limits := headers.get("X-Method-Rate-Limit"):
+                        method_limits = method_limits.split(",")[0].split(":")
+                    self.logging.debug('%s\t%s\t%s\t%s\t%s\t%s\t%s',
+                                       key,
+                                       headers.get("X-App-Rate-Limit"),
+                                       headers.get("X-App-Rate-Limit-Count"),
+                                       headers.get("X-Method-Rate-Limit"),
+                                       headers.get("X-Method-Rate-Limit-Count"),
+                                       app_limits,
+                                       method_limits)
+                    if app_limits and method_limits:
+                        await self.redis.evalsha(
+                            self.update,
+                            2,
+                            server_key,
+                            endpoint_key,
+                            *[int(x) for x in app_limits + method_limits],
+                        )
+                    if response.status != 200:
+                        self.logging.warning("%s %i", key, response.status)
+                        return web.json_response({}, status=response.status)
+                    result = await response.json()
+                    return web.json_response(result)
+        if max_wait_time > 0:
+            return web.json_response({"Retry-At": max_wait_time / 1000}, status=430)
 
     async def pseudo_handler(request: web.Request) -> web.Response:
         """Pseudo handler that should never be called."""

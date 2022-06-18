@@ -38,7 +38,7 @@ async def worker(session):
 
 async def main():
     async with aiohttp.ClientSession() as session:
-        await asyncio.gather(*[asyncio.create_task(worker(session)) for _ in range(50)])
+        await asyncio.gather(*[asyncio.create_task(worker(session)) for _ in range(15)])
     logging.info("Exited workers")
     await asyncio.sleep(5)
 

@@ -11,7 +11,9 @@ local function check_limits(key, timestamp)
             redis.call('zremrangebyscore', requests_key, 0, timestamp)
             -- count remaining
             local current_block = redis.call('zcount', requests_key, -1, "+inf")
-            --redis.log(redis.LOG_WARNING, 'Tasks: '..current_block)
+            -- redis.log(redis.LOG_WARNING, 'Tasks: '..current_block)
+            -- redis.log(redis.LOG_WARNING, 'Max: '..max)
+            -- redis.log(redis.LOG_WARNING, 'Key: '..key)
 
             -- check against limit
             if current_block >= max then
@@ -19,7 +21,7 @@ local function check_limits(key, timestamp)
             end
         end
     else
-        redis.call('hset', key, 'duration', 10, 'max', 100)
+        redis.call('hset', key, 'duration', 10, 'max', 5)
     end
     return 0
 end
@@ -31,7 +33,7 @@ local function update_limits(key, request_id, timestamp)
     local max = tonumber(redis.call('hget', key, 'max'))
     local requests_key = key..':requests'
 
-    redis.call('zadd', requests_key, timestamp + 1000 * (duration + 1), request_id)
+    redis.call('zadd', requests_key, timestamp + 1000 * (duration + 0.5), request_id)
 
 end
 
@@ -41,10 +43,11 @@ local request_id = ARGV[2]
 
 
 local server = KEYS[1]
-local endpoint = server..':'..KEYS[2]
+local endpoint = KEYS[2]
 local wait_until = check_limits(server, timestamp)
+-- redis.log(redis.LOG_WARNING, "Server"..wait_until)
 wait_until = math.max(wait_until, check_limits(endpoint, timestamp))
---redis.log(redis.LOG_WARNING, "Wait until "..wait_until)
+-- redis.log(redis.LOG_WARNING, "Wait until "..wait_until)
 
 if wait_until > 0 then
     return wait_until
