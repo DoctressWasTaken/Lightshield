@@ -124,6 +124,7 @@ class Service:
                         if new["summonerId"] not in already_added:
                             already_added.append(new["summonerId"])
                             to_update.append([new["summonerId"]] + rank)
+                updated = len(to_update)
                 while to_update:
                     batch = to_update[:5000]
                     await connection.executemany(
@@ -144,7 +145,7 @@ class Service:
                     else:
                         to_update = []
                 self.logging.info(
-                    "Updated %s users in %s %s.", len(to_update), *self.active_rank
+                    "Updated %s users in %s %s.", updated, *self.active_rank
                 )
             except Exception as err:
                 self.logging.error(err)
