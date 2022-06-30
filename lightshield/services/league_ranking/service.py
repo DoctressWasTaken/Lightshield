@@ -1,16 +1,15 @@
 import asyncio
 import logging
+import os
 from datetime import datetime
 import aiohttp
 
-from lightshield.league_ranking.rank_manager import RankManager
+from lightshield.services.league_ranking.rank_manager import RankManager
 
 
 class Service:
-    running = False
     empty_page = False
     next_page = 1
-    daemon = None
     pages = None
     active_rank = None
 
@@ -157,8 +156,9 @@ class Service:
                         self.to_update = self.to_update[5000:]
                     else:
                         self.to_update = []
-                # self.logging.info(
-                #    "Updated %s users in %s %s.", updated, *self.active_rank
-                # )
+                if os.environ.get('OUTPUT') == 'default':
+                    self.logging.info(
+                       "Updated %s users in %s %s.", updated, *self.active_rank
+                    )
             except Exception as err:
                 self.logging.error(err)

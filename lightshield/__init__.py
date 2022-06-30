@@ -27,7 +27,7 @@ async def run(*args, configs, services=None, **kwargs):
     active_services = {}
     for service in services:
         active_services[service] = importlib.import_module(
-            "lightshield.%s" % service
+            "lightshield.services.%s" % service
         ).Handler(configs)
     tasks = []
     for service in active_services.values():

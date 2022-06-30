@@ -10,20 +10,9 @@ import asyncpg
 import uvloop
 from rich.progress import Progress
 
-from lightshield.league_ranking.service import Service
+from lightshield.services.league_ranking.service import Service
 
 uvloop.install()
-
-if "DEBUG" in os.environ:
-    logging.basicConfig(
-        level=logging.DEBUG, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
-    )
-else:
-    logging.basicConfig(
-        level=logging.INFO, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
-    )
-logging.debug("Debug enabled.")
-
 
 class Handler:
     is_shutdown = False
@@ -32,7 +21,6 @@ class Handler:
 
     def __init__(self, configs):
         self.logging = logging.getLogger("Handler")
-        self.api_key = None
         self.connections = configs.get("connections")
         self.config = configs.get("services")["league_ranking"]
         proxy = self.connections.get('proxy')
@@ -52,7 +40,7 @@ class Handler:
             password=os.getenv(psq_con.get("password_env")),
         )
 
-    async def shutdown(self, *args, **kwargs):
+    async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
         self.is_shutdown = True
 
@@ -64,7 +52,7 @@ class Handler:
         await self.init()
         for sig in (signal.SIGTERM, signal.SIGINT):
             asyncio.get_event_loop().add_signal_handler(
-                sig, lambda signame=sig: asyncio.create_task(self.shutdown())
+                sig, lambda signame=sig: asyncio.create_task(self.init_shutdown())
             )
         tasks = []
         with Progress() as progress:
