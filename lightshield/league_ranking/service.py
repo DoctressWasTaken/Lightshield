@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import datetime
-
 import aiohttp
 
 from lightshield.league_ranking.rank_manager import RankManager
@@ -21,17 +20,19 @@ class Service:
         self.handler = handler
         self.rankmanager = RankManager(config, self.logging)
         self.retry_after = datetime.now()
-        self.data = []
         self.url = (
                 f"{handler.protocol}://{self.name.lower()}.api.riotgames.com/lol/"
                 + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
+        self.preset = {}
+        self.to_update = []
+        self.already_added = []
 
     async def init(self):
         self.pages = asyncio.Queue()
         await self.rankmanager.init()
 
-    async def worker(self, session):
+    async def worker(self, session, progress, task):
         """Makes calls."""
         while not self.handler.is_shutdown:
             page = await self.pages.get()
@@ -58,11 +59,20 @@ class Service:
                 if not data:
                     self.empty_page = max(self.empty_page or 0, page)
                     return
-                self.data += data
+                for new in data:
+                    progress.update(task, advance=1)
+                    rank = [new["tier"], new["rank"], new["leaguePoints"]]
+                    if (
+                            new["summonerId"] not in self.preset
+                            or self.preset[new["summonerId"]] != rank
+                    ):
+                        if new["summonerId"] not in self.already_added:
+                            self.already_added.append(new["summonerId"])
+                            self.to_update.append([new["summonerId"]] + rank)
                 self.next_page += 1
                 await self.pages.put(self.next_page)
 
-    async def run(self):
+    async def run(self, progress):
         """Runner."""
         await self.init()
         while not self.handler.is_shutdown:
@@ -72,25 +82,29 @@ class Service:
             self.empty_page = False
             for i in range(1, workers + 1):
                 await self.pages.put(i)
-            self.data = []
+            await self.get_preset()
+            task_length = len(self.preset)
+            task = progress.add_task(
+                "[green]%s %s %s" % (self.name, self.active_rank[0], self.active_rank[1]),
+                total=task_length)
             try:
                 async with aiohttp.ClientSession() as session:
-                    self.logging.debug("START %s %s.", *self.active_rank)
                     await asyncio.gather(
-                        *[asyncio.create_task(self.worker(session)) for _ in range(workers)]
+                        *[asyncio.create_task(self.worker(session, progress, task)) for _ in range(workers)]
                     )
-                self.logging.debug("DONE %s %s.", *self.active_rank)
             except asyncio.CancelledError:
                 return
-            self.logging.debug("INSERTING %s %s.", *self.active_rank)
-            await self.update_data()
-            self.logging.debug("INSERTED %s %s.", *self.active_rank)
+            progress.update(task, visible=False)
+            task = progress.add_task(
+                "[green]%s %s %s" % (self.name, self.active_rank[0], self.active_rank[1]), total=None, start=False)
+            await asyncio.gather(asyncio.sleep(1),
+                                 self.update_data())
+            progress.update(task, visible=False)
 
             await self.rankmanager.update(key=self.active_rank)
-        self.logging.info("< Exited service")
 
-    async def update_data(self):
-        """Update all changed users in the DB."""
+    async def get_preset(self):
+        """Get the already existing data."""
         async with self.handler.postgres.acquire() as connection:
             try:
                 latest = await connection.fetch(
@@ -104,29 +118,28 @@ class Service:
                     """
                     % self.name.lower(),
                     *self.active_rank,
-                timeout=30,)
-                preset = {}
+                    timeout=30, )
+                self.preset = {}
                 if latest:
                     for line in latest:
-                        preset[line["summoner_id"]] = [
+                        self.preset[line["summoner_id"]] = [
                             line["rank"],
                             line["division"],
                             line["leaguepoints"],
                         ]
-                to_update = []
-                already_added = []
-                for new in self.data:
-                    rank = [new["tier"], new["rank"], new["leaguePoints"]]
-                    if (
-                            new["summonerId"] not in preset
-                            or preset[new["summonerId"]] != rank
-                    ):
-                        if new["summonerId"] not in already_added:
-                            already_added.append(new["summonerId"])
-                            to_update.append([new["summonerId"]] + rank)
-                updated = len(to_update)
-                while to_update:
-                    batch = to_update[:5000]
+                self.to_update = []
+                self.already_added = []
+            except Exception as err:
+                self.logging.error(err)
+
+    async def update_data(self):
+        """Update all changed users in the DB."""
+        async with self.handler.postgres.acquire() as connection:
+            try:
+
+                updated = len(self.to_update)
+                while self.to_update:
+                    batch = self.to_update[:5000]
                     await connection.executemany(
                         """INSERT INTO %s.ranking (summoner_id, rank, division, leaguepoints)
                             VALUES ($1, $2, $3, $4)
@@ -139,13 +152,13 @@ class Service:
                         """
                         % self.name.lower(),
                         batch,
-                    timeout=30,)
-                    if len(to_update) > 5000:
-                        to_update = to_update[5000:]
+                        timeout=30, )
+                    if len(self.to_update) > 5000:
+                        self.to_update = self.to_update[5000:]
                     else:
-                        to_update = []
-                self.logging.info(
-                    "Updated %s users in %s %s.", updated, *self.active_rank
-                )
+                        self.to_update = []
+                # self.logging.info(
+                #    "Updated %s users in %s %s.", updated, *self.active_rank
+                # )
             except Exception as err:
                 self.logging.error(err)

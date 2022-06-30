@@ -8,6 +8,7 @@ import signal
 import aioredis
 import asyncpg
 import uvloop
+from rich.progress import Progress
 
 from lightshield.league_ranking.service import Service
 
@@ -53,7 +54,6 @@ class Handler:
 
     async def shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
-        self.logging.info("Received shutdown signal.")
         self.is_shutdown = True
 
     async def handle_shutdown(self):
@@ -67,8 +67,9 @@ class Handler:
                 sig, lambda signame=sig: asyncio.create_task(self.shutdown())
             )
         tasks = []
-        for platform in self.platforms.values():
-            tasks.append(asyncio.create_task(platform.run()))
+        with Progress() as progress:
+            for platform in self.platforms.values():
+                tasks.append(asyncio.create_task(platform.run(progress)))
 
-        await asyncio.gather(*tasks)
-        await self.handle_shutdown()
+            await asyncio.gather(*tasks)
+            await self.handle_shutdown()
