@@ -75,6 +75,7 @@ def main():
             level=logging.INFO,
             format="%(levelname)8s %(asctime)s %(name)15s| %(message)s",
         )
+    configs=None
     if not args.get("init_config"):
         try:
             with open("config.yaml") as configs_file:
