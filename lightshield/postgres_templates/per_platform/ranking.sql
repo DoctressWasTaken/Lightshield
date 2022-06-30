@@ -1,7 +1,6 @@
 -- A platform specific table that pulls and updates data from the league endpoint.
 -- A second central table will be used to connect rankings to actual players based on puuid
 --  to accommodate the issue of rankings persisting in the API after a user swaps server
-\connect lightshield;
 CREATE TABLE IF NOT EXISTS PLATFORM.ranking
 (
 
@@ -12,7 +11,7 @@ CREATE TABLE IF NOT EXISTS PLATFORM.ranking
     division       division,
     leaguepoints   SMALLINT,
 
-    defunct        BOOLEAN   DEFAULT FALSE, -- summoner-v4 could not be found (swapped account)
+    defunct        BOOLEAN  DEFAULT FALSE, -- summoner-v4 could not be found (swapped account)
 
     -- Ranked wins + losses
     games_sq       SMALLINT,

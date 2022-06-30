@@ -1,4 +1,3 @@
-\connect lightshield;
 CREATE TABLE IF NOT EXISTS PLATFORM.participant
 (
     match_id BIGINT,

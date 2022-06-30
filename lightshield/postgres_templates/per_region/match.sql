@@ -1,4 +1,3 @@
-\connect lightshield;
 CREATE TABLE IF NOT EXISTS REGION.match
 (
     match_id          BIGINT,

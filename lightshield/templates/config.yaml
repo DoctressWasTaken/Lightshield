@@ -1,0 +1,75 @@
+version: 1.0
+
+connections:
+  postgres:
+    hostname: postgres
+    port: 5432
+    user: postgres
+    database: lightshield
+    password_env: POSTGRES_PASSWORD
+  proxy:
+    location: 'proxy:8888'
+    protocol: http  # So that the requests themselves are sent in accordance to the proxy type.
+
+services:
+  league_ranking:
+    cycle_min_length_hours: 6
+    platform:
+      - EUW1
+      - EUN1
+      - TR1
+      - RU
+      - NA1
+      - BR1
+      - LA1
+      - LA2
+      - OC1
+      - KR
+      - JP1
+    tiers:
+      - IRON
+      - BRONZE
+      - SILVER
+      - GOLD
+      - PLATINUM
+      - DIAMOND
+      - MASTER
+      - GRANDMASTER
+      - CHALLENGER
+  summoner_id:
+    platform:
+      - EUW1
+      - EUN1
+      - TR1
+      - RU
+      - NA1
+      - BR1
+      - LA1
+      - LA2
+      - OC1
+      - KR
+      - JP1
+  match_history:
+    regions:
+      - europe
+      - americas
+      - asia
+      - sea
+  match_details:
+    regions:
+      - europe
+      - americas
+      - asia
+      - sea
+  match_timeline:
+    regions:
+      - europe
+      - americas
+      - asia
+      - sea
+
+statics: # Don't change unless changes happen to the API
+  platform: [ 'EUW1', 'EUN1', 'TR1', 'RU', 'NA1', 'BR1', 'LA1', 'LA2', 'OC1', 'KR', 'JP1' ]
+  region: [ 'europe', 'americas', 'asia', 'sea' ]
+  rank: [ 'IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER' ]
+  division: [ 'I', 'II', 'III', 'IV' ]

@@ -1,3 +1,0 @@
-\connect lightshield;
-CREATE SCHEMA REGION;
-GRANT ALL PRIVILEGES ON SCHEMA REGION TO postgres;

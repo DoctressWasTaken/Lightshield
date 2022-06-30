@@ -1,42 +1,29 @@
 """Manage which rank is to be crawled next."""
 from datetime import datetime, timedelta
 
-from lightshield import settings
-
-tiers = [
-    "IRON",
-    "BRONZE",
-    "SILVER",
-    "GOLD",
-    "PLATINUM",
-    "DIAMOND",
-    "MASTER",
-    "GRANDMASTER",
-    "CHALLENGER",
-]
-
-divisions = ["IV", "III", "II", "I"]
-
-
 class RankManager:
     """Ordering and Management of ranking updates."""
 
-    def __init__(self, logging):
+    def __init__(self, config, logging):
         """Initiate logging."""
+        service = config['services']['league_ranking']
         self.logging = logging
         self.ranks = None
+        self.tiers = service.get('tiers')
+        self.divisions = config['statics']['division']
+        self.cycle_length = service.get('cycle_min_length_hours')
 
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
         now = datetime.timestamp(
-            datetime.now() - timedelta(hours=settings.LEAGUE_UPDATE)
+            datetime.now() - timedelta(hours=self.cycle_length)
         )
         self.ranks = []
-        for tier in tiers:
+        for tier in self.tiers:
             if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
                 self.ranks.append([tier, "I", now])
                 continue
-            for division in divisions:
+            for division in self.divisions:
                 self.ranks.append([tier, division, now])
 
     async def get_next(self):
