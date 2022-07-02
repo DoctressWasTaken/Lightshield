@@ -15,7 +15,7 @@ uvloop.install()
 
 default_services = (
     "league_ranking",
-    "summoner_id",
+    "puuid_collector",
     "match_history",
     "match_details",
     "match_timeline",

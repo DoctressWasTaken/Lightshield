@@ -112,7 +112,7 @@ class Service:
                 self.preset = {}
                 if latest:
                     for line in latest:
-                        self.preset[line["summoner_id"]] = [
+                        self.preset[line["puuid_collector"]] = [
                             line["rank"],
                             line["division"],
                             line["leaguepoints"],

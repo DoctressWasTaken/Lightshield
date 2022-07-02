@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS PLATFORM.ranking
     last_updated   TIMESTAMP  DEFAULT CURRENT_TIMESTAMP
 
 );
--- summoner_id index included by default cause primary key
+-- puuid_collector index included by default cause primary key
 -- selector index for ranking - summoner link
 CREATE INDEX ON PLATFORM.ranking (puuid);
--- selector index for summoner_id service
+-- selector index for puuid_collector service
 CREATE INDEX ON PLATFORM.ranking ((puuid IS NULL));

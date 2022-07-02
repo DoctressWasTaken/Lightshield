@@ -35,18 +35,18 @@ services:
     restart: always
 
   summoner_id:
-    hostname: summoner_id
+    hostname: puuid_collector
     build:
       dockerfile: Service_Dockerfile
       context: .
       args:
-        service: summoner_id
+        service: puuid_collector
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - "OUTPUT=default"
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-    entrypoint: "poetry run lightshield run summoner_id"
+    entrypoint: "poetry run lightshield run puuid_collector"
     restart: always
 
   match_history:

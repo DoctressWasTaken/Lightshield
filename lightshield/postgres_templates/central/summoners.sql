@@ -7,6 +7,6 @@ CREATE TABLE summoner
     reserved_match_history TIMESTAMP DEFAULT NULL,
     last_updated           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_platform          platform,
-    last_match             BIGINT
+    last_match             BIGINT DEFAULT NULL
 );
 

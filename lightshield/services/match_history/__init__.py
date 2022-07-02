@@ -14,31 +14,13 @@ uvloop.install()
 from service import Platform
 from lightshield.proxy import Proxy
 
-if "DEBUG" in os.environ:
-    logging.basicConfig(
-        level=logging.DEBUG, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
-    )
-else:
-    logging.basicConfig(
-        level=logging.INFO, format="%(levelname)8s %(asctime)s %(name)15s| %(message)s"
-    )
-logging.debug("Debug enabled")
-
-regions = ["europe", "americas", "asia"]
-
-server = {
-    "europe": ["EUW1", "EUN1", "TR1", "RU"],
-    "americas": ["NA1", "BR1", "LA1", "LA2", "OC1"],
-    "asia": ["KR", "JP1"],
-}
-
-
 class Handler:
-    api_key = ""
-    _runner = None
 
-    def __init__(self):
+    def __init__(self, configs):
         self.logging = logging.getLogger("Service")
+        self.connections = configs.get("connections")
+        self.config = configs.get("services")['match_history']
+        self.mapping = configs.get("statics")['mapping']
         # Buffer
         self.postgres = None
         self.redis = None
@@ -46,11 +28,13 @@ class Handler:
         self.proxy = Proxy()
 
     async def init(self):
+        psq_con = self.connections.get("postgres")
         self.postgres = await asyncpg.create_pool(
-            host="postgres",
-            port=5432,
-            user="postgres",
-            database="lightshield",
+            host=psq_con.get("hostname"),
+            port=psq_con.get("port"),
+            user=psq_con.get("user"),
+            database=psq_con.get("database"),
+            password=os.getenv(psq_con.get("password_env")),
         )
         self.redis = aioredis.from_url(
             "redis://redis:6379", encoding="utf-8", decode_responses=True

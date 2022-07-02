@@ -11,7 +11,7 @@ import uvloop
 
 uvloop.install()
 
-from lightshield.services.summoner_id.service import Platform
+from lightshield.services.puuid_collector.service import Platform
 
 
 class Handler:
@@ -21,7 +21,7 @@ class Handler:
     def __init__(self, configs):
         self.logging = logging.getLogger("Handler")
         self.connections = configs.get("connections")
-        self.config = configs.get("services")["summoner_id"]
+        self.config = configs.get("services")["puuid_collector"]
         proxy = self.connections.get('proxy')
         self.protocol = proxy.get('protocol')
         self.proxy = "%s://%s" % (proxy.get('protocol'), proxy.get('location'))
@@ -45,6 +45,7 @@ class Handler:
         self.is_shutdown = True
 
     async def handle_shutdown(self):
+        """Close db connection pool after services have shut down."""
         await self.postgres.close()
 
     async def run(self):

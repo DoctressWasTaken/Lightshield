@@ -69,7 +69,7 @@ class Platform:
                 except aiohttp.ContentTypeError:
                     continue
                 if response.status == 200:
-                    self.results.append([data["puuid"], data["id"]])
+                    self.results.append([data["id"], data["puuid"], data['name'], data['revisionDate']])
                     target = None
                     continue
                 if response.status == 429:
@@ -90,14 +90,32 @@ class Platform:
                 len(self.not_found),
             )
         if self.results:
-            prep = await connection.prepare(
-                """UPDATE %s.ranking
-                    SET puuid = $1
-                    WHERE summoner_id =  $2
-                """
-                % self.name
-            )
-            await prep.executemany(self.results)
+            async with connection.transaction():
+                prep = await connection.prepare(
+                    """UPDATE %s.ranking
+                        SET puuid = $2
+                        WHERE summoner_id =  $1
+                    """
+                    % self.name
+                )
+                await prep.executemany([res[:2] for res in self.results])
+                # update summoner Table
+                converted_results = [
+                    [res[1],
+                     res[2],
+                     datetime.fromtimestamp(res[3] / 1000),
+                     self.name]
+                    for res in self.results
+                ]
+                prep = await connection.prepare(
+                    """INSERT INTO summoner (puuid, name, last_updated, last_platform)
+                    VALUES($1, $2, $3, $4)
+                    ON CONFLICT (puuid) 
+                    DO NOTHING
+                    """
+                )
+                await prep.executemany(converted_results)
+
         if self.not_found:
             await connection.execute(
                 """UPDATE %s.ranking
