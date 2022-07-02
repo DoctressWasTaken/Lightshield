@@ -3,7 +3,7 @@ venv/*
 dist/*
 secrets.env
 secrets.yaml
-
+.env
 match_data/*
 
 .py3/

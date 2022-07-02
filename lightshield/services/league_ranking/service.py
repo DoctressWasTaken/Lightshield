@@ -17,7 +17,7 @@ class Service:
         self.name = name
         self.logging = logging.getLogger("%s" % name)
         self.handler = handler
-        self.rankmanager = RankManager(config, self.logging)
+        self.rankmanager = RankManager(config, self.logging, handler)
         self.retry_after = datetime.now()
         self.url = (
                 f"{handler.protocol}://{self.name.lower()}.api.riotgames.com/lol/"
@@ -31,7 +31,7 @@ class Service:
         self.pages = asyncio.Queue()
         await self.rankmanager.init()
 
-    async def worker(self, session, progress, task):
+    async def worker(self, session):
         """Makes calls."""
         while not self.handler.is_shutdown:
             page = await self.pages.get()
@@ -59,7 +59,6 @@ class Service:
                     self.empty_page = max(self.empty_page or 0, page)
                     return
                 for new in data:
-                    progress.update(task, advance=1)
                     rank = [new["tier"], new["rank"], new["leaguePoints"]]
                     if (
                             new["summonerId"] not in self.preset
@@ -71,7 +70,7 @@ class Service:
                 self.next_page += 1
                 await self.pages.put(self.next_page)
 
-    async def run(self, progress):
+    async def run(self):
         """Runner."""
         await self.init()
         while not self.handler.is_shutdown:
@@ -82,23 +81,15 @@ class Service:
             for i in range(1, workers + 1):
                 await self.pages.put(i)
             await self.get_preset()
-            task_length = len(self.preset)
-            task = progress.add_task(
-                "[green]%s %s %s" % (self.name, self.active_rank[0], self.active_rank[1]),
-                total=task_length)
             try:
                 async with aiohttp.ClientSession() as session:
                     await asyncio.gather(
-                        *[asyncio.create_task(self.worker(session, progress, task)) for _ in range(workers)]
+                        *[asyncio.create_task(self.worker(session)) for _ in range(workers)]
                     )
             except asyncio.CancelledError:
                 return
-            progress.update(task, visible=False)
-            task = progress.add_task(
-                "[green]%s %s %s" % (self.name, self.active_rank[0], self.active_rank[1]), total=None, start=False)
             await asyncio.gather(asyncio.sleep(1),
                                  self.update_data())
-            progress.update(task, visible=False)
 
             await self.rankmanager.update(key=self.active_rank)
 

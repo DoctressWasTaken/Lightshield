@@ -8,7 +8,6 @@ import signal
 import aioredis
 import asyncpg
 import uvloop
-from rich.progress import Progress
 
 from lightshield.services.league_ranking.service import Service
 
@@ -55,9 +54,8 @@ class Handler:
                 sig, lambda signame=sig: asyncio.create_task(self.init_shutdown())
             )
         tasks = []
-        with Progress() as progress:
-            for platform in self.platforms.values():
-                tasks.append(asyncio.create_task(platform.run(progress)))
+        for platform in self.platforms.values():
+            tasks.append(asyncio.create_task(platform.run()))
 
-            await asyncio.gather(*tasks)
-            await self.handle_shutdown()
+        await asyncio.gather(*tasks)
+        await self.handle_shutdown()
