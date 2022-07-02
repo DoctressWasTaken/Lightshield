@@ -9,6 +9,7 @@ import shutil
 import yaml
 from lightshield.postgres import init_db
 from dotenv import load_dotenv
+import signal
 
 load_dotenv()
 uvloop.install()
@@ -21,6 +22,11 @@ default_services = (
     "match_timeline",
 )
 
+async def shutdown(services):
+    """Init shutdown in all active services."""
+    for service in services.values():
+        await service.init_shutdown()
+
 
 async def run(*args, configs, services=None, **kwargs):
     """Import and start the select services."""
@@ -30,6 +36,10 @@ async def run(*args, configs, services=None, **kwargs):
             "lightshield.services.%s" % service
         ).Handler(configs)
     tasks = []
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        asyncio.get_event_loop().add_signal_handler(
+            sig, lambda signame=sig: asyncio.create_task(shutdown(active_services))
+        )
     for service in active_services.values():
         tasks.append(asyncio.create_task(service.run()))
 

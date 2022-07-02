@@ -33,8 +33,7 @@ class Platform:
                 self.tasks = await connection.fetch("""
                         SELECT summoner_id 
                         FROM %s.ranking 
-                        WHERE NOT DEFUNCT
-                            AND puuid IS NULL
+                        WHERE puuid IS NULL
                         LIMIT $1 FOR UPDATE 
                         SKIP LOCKED    
                         """ % self.name, workers * 50)
@@ -118,8 +117,7 @@ class Platform:
 
         if self.not_found:
             await connection.execute(
-                """UPDATE %s.ranking
-                    SET defunct=TRUE
+                """DELETE FROM %s.ranking
                     WHERE summoner_id = ANY($1::varchar)
                 """
                 % self.name,

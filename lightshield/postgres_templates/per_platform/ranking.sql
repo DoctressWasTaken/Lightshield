@@ -11,21 +11,16 @@ CREATE TABLE IF NOT EXISTS PLATFORM.ranking
     division       division,
     leaguepoints   SMALLINT,
 
-    defunct        BOOLEAN    DEFAULT FALSE, -- summoner-v4 could not be found (swapped account)
-
     -- Ranked wins + losses
     games_sq       SMALLINT,
     games_fq       SMALLINT,
 
     -- Ranked wins + losses on last match_history pull
     last_games_sq  SMALLINT,
-    last_games_fq  SMALLINT,
-
-    -- Update based on timestamp
-    last_updated   TIMESTAMP  DEFAULT CURRENT_TIMESTAMP
+    last_games_fq  SMALLINT
 
 );
--- puuid_collector index included by default cause primary key
+-- summoner_id index included by default cause primary key
 -- selector index for ranking - summoner link
 CREATE INDEX ON PLATFORM.ranking (puuid);
 -- selector index for puuid_collector service

@@ -50,10 +50,6 @@ class Handler:
     async def run(self):
         """Run."""
         await self.init()
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            asyncio.get_event_loop().add_signal_handler(
-                sig, lambda signame=sig: asyncio.create_task(self.init_shutdown())
-            )
         tasks = []
         for platform in self.platforms.values():
             tasks.append(asyncio.create_task(platform.run()))

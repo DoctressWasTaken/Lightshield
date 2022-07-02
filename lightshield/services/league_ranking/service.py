@@ -112,7 +112,7 @@ class Service:
                 self.preset = {}
                 if latest:
                     for line in latest:
-                        self.preset[line["puuid_collector"]] = [
+                        self.preset[line["summonerId"]] = [
                             line["rank"],
                             line["division"],
                             line["leaguepoints"],
@@ -136,9 +136,7 @@ class Service:
                             ON CONFLICT (summoner_id) DO 
                             UPDATE SET  rank = EXCLUDED.rank,
                                         division = EXCLUDED.division,
-                                        leaguepoints = EXCLUDED.leaguepoints,
-                                        last_updated = CURRENT_TIMESTAMP,
-                                        defunct = FALSE 
+                                        leaguepoints = EXCLUDED.leaguepoints
                         """
                         % self.name.lower(),
                         batch,
