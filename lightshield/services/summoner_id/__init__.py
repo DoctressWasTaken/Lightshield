@@ -54,9 +54,7 @@ class Handler:
             asyncio.get_event_loop().add_signal_handler(
                 sig, lambda signame=sig: asyncio.create_task(self.init_shutdown())
             )
-        tasks = []
-        for platform in self.platforms.values():
-            tasks.append(asyncio.create_task(platform.run()))
-
-        await asyncio.gather(*tasks)
+        await asyncio.gather(*[
+            asyncio.create_task(platform.run()) for platform in self.platforms.values()
+        ])
         await self.handle_shutdown()

@@ -147,9 +147,8 @@ class Service:
                         self.to_update = self.to_update[5000:]
                     else:
                         self.to_update = []
-                if os.environ.get('OUTPUT') == 'default':
-                    self.logging.info(
-                       "Updated %s users in %s %s.", updated, *self.active_rank
-                    )
+                self.logging.info(
+                   "Updated %s users in %s %s.", updated, *self.active_rank
+                )
             except Exception as err:
                 self.logging.error(err)

@@ -41,6 +41,7 @@ class Handler:
 
     async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
+        self.logging.info("Received shutdown signal.")
         self.is_shutdown = True
 
     async def handle_shutdown(self):

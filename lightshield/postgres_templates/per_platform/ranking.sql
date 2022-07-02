@@ -11,17 +11,19 @@ CREATE TABLE IF NOT EXISTS PLATFORM.ranking
     division       division,
     leaguepoints   SMALLINT,
 
-    defunct        BOOLEAN  DEFAULT FALSE, -- summoner-v4 could not be found (swapped account)
+    defunct        BOOLEAN    DEFAULT FALSE, -- summoner-v4 could not be found (swapped account)
 
     -- Ranked wins + losses
     games_sq       SMALLINT,
     games_fq       SMALLINT,
 
-    priority       VARCHAR(1) DEFAULT NULL,
+    -- Ranked wins + losses on last match_history pull
+    last_games_sq  SMALLINT,
+    last_games_fq  SMALLINT,
 
-    reserved_until TIMESTAMP DEFAULT NULL,
     -- Update based on timestamp
-    last_updated   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    last_updated   TIMESTAMP  DEFAULT CURRENT_TIMESTAMP
+
 );
 -- summoner_id index included by default cause primary key
 -- selector index for ranking - summoner link

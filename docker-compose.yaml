@@ -48,8 +48,21 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run summoner_id"
     restart: always
-    #image: lightshield/summoner_id:${TAG}
 
+  match_history:
+    hostname: match_history
+    build:
+      dockerfile: Service_Dockerfile
+      context: .
+      args:
+        service: match_history
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - "OUTPUT=default"
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+    entrypoint: "poetry run lightshield run match_history"
+    restart: always
 
 
   ### Storage
