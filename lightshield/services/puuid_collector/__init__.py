@@ -4,9 +4,6 @@ import logging
 import os
 
 import asyncpg
-import uvloop
-
-uvloop.install()
 
 from lightshield.services.puuid_collector.service import Platform
 

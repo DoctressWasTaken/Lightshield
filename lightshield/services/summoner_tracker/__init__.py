@@ -128,13 +128,22 @@ class Handler:
             tries = 0
             while not self.is_shutdown:
                 try:
-                    async with session.get(url, proxy=self.proxy) as resp:
-                        if resp.status == 404:
+                    async with session.get(url, proxy=self.proxy) as response:
+                        if response.status == 404:
                             break
-                        if resp.status == 200:
-                            data = await resp.json()
+                        if response.status == 200:
+                            data = await response.json()
                             account.add_result(platform, data['revisionDate'])
                             break
+                        if response.status == 429:
+                            await asyncio.sleep(0.5)
+                        if response.status == 430:
+                            data = await response.json()
+                            wait_until = datetime.fromtimestamp(data["Retry-At"])
+                            seconds = (wait_until - datetime.now()).total_seconds()
+                            seconds = max(0.1, seconds)
+                            await asyncio.sleep(seconds)
+
                 except aiohttp.ContentTypeError:
                     continue
                 except asyncio.CancelledError:

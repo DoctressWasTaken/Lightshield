@@ -40,7 +40,6 @@ class Config:
     def __repr__(self):
         return str(self.__dict__)
 
-
 def parse_config():
     """Load files and init parse."""
     with open("config.yaml") as configs_file:
@@ -76,7 +75,6 @@ async def shutdown(services):
 
 async def run(*args, config, services=None, **kwargs):
     """Import and start the select services."""
-    pp.pprint(config)
     active_services = {}
     for service in services:
         active_services[service] = importlib.import_module(

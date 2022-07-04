@@ -4,11 +4,9 @@ import logging
 import os
 
 import asyncpg
-import uvloop
 
 from lightshield.services.league_ranking.service import Service
 
-uvloop.install()
 
 
 class Handler:

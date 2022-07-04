@@ -26,7 +26,8 @@ services:
     history:
       days: 14
       matches: 100
-    types: 'ranked'
+    type:
+    queue:
     platforms:
 
   match_details:
