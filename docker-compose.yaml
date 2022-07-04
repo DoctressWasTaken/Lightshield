@@ -13,6 +13,8 @@ services:
       - API_KEY=${API_KEY}
     ports:
       - "8888:8888"
+    depends_on:
+      - redis
 
   redis:
     hostname: redis
@@ -34,7 +36,7 @@ services:
     entrypoint: "poetry run lightshield run league_ranking"
     restart: always
 
-  summoner_id:
+  puuid_collector:
     hostname: puuid_collector
     build:
       dockerfile: Service_Dockerfile

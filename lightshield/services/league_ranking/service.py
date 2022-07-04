@@ -1,7 +1,7 @@
 import asyncio
 import logging
-import os
 from datetime import datetime
+
 import aiohttp
 
 from lightshield.services.league_ranking.rank_manager import RankManager
@@ -95,32 +95,37 @@ class Service:
 
     async def get_preset(self):
         """Get the already existing data."""
-        async with self.handler.postgres.acquire() as connection:
-            try:
-                latest = await connection.fetch(
-                    """SELECT summoner_id,
-                    rank,
-                    division,
-                    leaguepoints
-                    FROM %s.ranking
-                    WHERE rank = $1
-                    AND division = $2
-                    """
-                    % self.name.lower(),
-                    *self.active_rank,
-                    timeout=30, )
-                self.preset = {}
-                if latest:
-                    for line in latest:
-                        self.preset[line["summonerId"]] = [
-                            line["rank"],
-                            line["division"],
-                            line["leaguepoints"],
-                        ]
-                self.to_update = []
-                self.already_added = []
-            except Exception as err:
-                self.logging.error(err)
+        while not self.handler.is_shutdown:
+            async with self.handler.postgres.acquire() as connection:
+                try:
+                    latest = await connection.fetch(
+                        """SELECT summoner_id,
+                        rank,
+                        division,
+                        leaguepoints
+                        FROM %s.ranking
+                        WHERE rank = $1
+                        AND division = $2
+                        """
+                        % self.name.lower(),
+                        *self.active_rank,
+                        timeout=60, )
+                    self.preset = {}
+                    if latest:
+                        for line in latest:
+                            self.preset[line["summoner_id"]] = [
+                                line["rank"],
+                                line["division"],
+                                line["leaguepoints"],
+                            ]
+                    self.to_update = []
+                    self.already_added = []
+                    return
+                except asyncio.exceptions.TimeoutError:
+                    self.logging.error("Fetching preexisting entries timed out")
+                except Exception as err:
+                    self.logging.error(err)
+                    raise err
 
     async def update_data(self):
         """Update all changed users in the DB."""
@@ -128,25 +133,32 @@ class Service:
             try:
 
                 updated = len(self.to_update)
+                batch = self.to_update[:5000]
                 while self.to_update:
-                    batch = self.to_update[:5000]
-                    await connection.executemany(
-                        """INSERT INTO %s.ranking (summoner_id, rank, division, leaguepoints)
-                            VALUES ($1, $2, $3, $4)
-                            ON CONFLICT (summoner_id) DO 
-                            UPDATE SET  rank = EXCLUDED.rank,
-                                        division = EXCLUDED.division,
-                                        leaguepoints = EXCLUDED.leaguepoints
-                        """
-                        % self.name.lower(),
-                        batch,
-                        timeout=30, )
+                    try:
+                        await connection.executemany(
+                            """INSERT INTO %s.ranking (summoner_id, rank, division, leaguepoints)
+                                VALUES ($1, $2, $3, $4)
+                                ON CONFLICT (summoner_id) DO 
+                                UPDATE SET  rank = EXCLUDED.rank,
+                                            division = EXCLUDED.division,
+                                            leaguepoints = EXCLUDED.leaguepoints
+                            """
+                            % self.name.lower(),
+                            batch,
+                            timeout=60, )
+                    except asyncio.exceptions.TimeoutError:
+                        self.logging.error("Fetching preexisting entries timed out")
+                        continue
                     if len(self.to_update) > 5000:
                         self.to_update = self.to_update[5000:]
                     else:
                         self.to_update = []
+                    batch = self.to_update[:5000]
                 self.logging.info(
-                   "Updated %s users in %s %s.", updated, *self.active_rank
+                    "Updated %s users in %s %s.", updated, *self.active_rank
                 )
+
             except Exception as err:
                 self.logging.error(err)
+                raise err

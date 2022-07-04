@@ -1,20 +1,20 @@
-import asyncpg
-import asyncio
-from asyncpg.exceptions import DuplicateDatabaseError
-import os
-import logging
-from pprint import PrettyPrinter
 import json
+import logging
+import os
+from pprint import PrettyPrinter
+
+import asyncpg
+from asyncpg.exceptions import DuplicateDatabaseError
 
 pp = PrettyPrinter(indent=2)
 
 logger = logging.getLogger("Postgres")
 
 
-async def init_db(configs, **kwargs):
-    psq_con = configs["connections"]["postgres"]
+async def init_db(config, **kwargs):
+    psq_con = config.connections.postgres
     logger.info("Found the following postgres connection details.")
-    print(json.dumps(psq_con, indent=4))
+    print(json.dumps(psq_con.__dict__, indent=4))
     if input("\nAre those details correct? [yes/no] ").lower() not in ["y", "yes"]:
         logger.info("Exiting...")
         exit()
@@ -22,21 +22,21 @@ async def init_db(configs, **kwargs):
     if input(
         "\nDoes the %s database already exist? "
         "If not it will be created which requires elevated user rights. [yes/no] "
-        % psq_con["database"]
+        % psq_con.database
     ).lower() not in ["y", "yes"]:
         logger.info("Attempting to generate the database")
         db_creator = await asyncpg.create_pool(
-            host=psq_con.get("hostname"),
-            port=psq_con.get("port"),
-            user=psq_con.get("user"),
-            password=os.getenv(psq_con.get("password_env")),
+            host=psq_con.hostname,
+            port=psq_con.port,
+            user=psq_con.user,
+            password=os.getenv(psq_con.password_env),
         )
         async with db_creator.acquire() as connection:
             try:
-                await connection.execute("CREATE DATABASE %s" % psq_con["database"])
+                await connection.execute("CREATE DATABASE %s" % psq_con.database)
                 await connection.execute(
                     "GRANT ALL PRIVILEGES ON DATABASE %s TO %s"
-                    % (psq_con["database"], psq_con["user"])
+                    % (psq_con.database, psq_con.user)
                 )
             except DuplicateDatabaseError as err:
                 print(
@@ -44,20 +44,20 @@ async def init_db(configs, **kwargs):
                 )
         await db_creator.close()
     if input(
-        "\nAll content in the database `%s` will be overwritten, are you sure? [yes/no] " % psq_con['database']
+        "\nAll content in the database `%s` will be overwritten, are you sure? [yes/no] " % psq_con.database
     ).lower() not in ["y", "yes"]:
         exit()
     db = await asyncpg.create_pool(
-        host=psq_con.get("hostname"),
-        port=psq_con.get("port"),
-        user=psq_con.get("user"),
-        database=psq_con.get("database"),
-        password=os.getenv(psq_con.get("password_env")),
+        host=psq_con.hostname,
+        port=psq_con.port,
+        user=psq_con.user,
+        database=psq_con.database,
+        password=os.getenv(psq_con.password_env),
     )
     # Generate the database
     logger.info("Generating enums")
-    statics = configs.get("statics")
-    for enum, values in statics.items():
+    enums = config.statics.enums
+    for enum, values in enums.__dict__.items():
         async with db.acquire() as connection:
             query = "DROP TYPE IF EXISTS %s CASCADE; CREATE TYPE %s AS ENUM %s" % (
                 enum,
@@ -81,14 +81,14 @@ async def init_db(configs, **kwargs):
                 GRANT ALL PRIVILEGES ON SCHEMA %s TO %s;
             """
     async with db.acquire() as connection:
-        for platform in statics.get("platform"):
+        for platform in enums.platforms:
             await connection.execute(
                 schema_query
                 % (
                     platform,
                     platform,
                     platform,
-                    psq_con.get("user"),
+                    psq_con.user,
                 )
             )
             logger.info("Generated schema %s", platform)
@@ -103,14 +103,14 @@ async def init_db(configs, **kwargs):
         with open(os.path.join(per_region, file)) as content:
             query_files[file] = content.read()
     async with db.acquire() as connection:
-        for region in statics.get("region"):
+        for region in enums.regions:
             await connection.execute(
                 schema_query
                 % (
                     region,
                     region,
                     region,
-                    psq_con.get("user"),
+                    psq_con.user,
                 )
             )
             logger.info("Generated schema %s", region)

@@ -1,37 +1,37 @@
 """Manage which rank is to be crawled next."""
-from datetime import datetime, timedelta
 import asyncio
+from datetime import datetime, timedelta
 
 
 class RankManager:
     """Ordering and Management of ranking updates."""
+    tasks = None
 
     def __init__(self, config, logging, handler):
         """Initiate logging."""
-        service = config['services']['league_ranking']
+        service = config.services.league_ranking
         self.handler = handler
         self.logging = logging
-        self.ranks = None
-        self.tiers = service.get('tiers')
-        self.divisions = config['statics']['division']
-        self.cycle_length = service.get('cycle_min_length_hours')
+        self.ranks = service.ranks or config.statics.enums.ranks
+        self.divisions = config.statics.enums.divisions
+        self.cycle_length = service.cycle_length
 
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
         now = datetime.now()
-        self.ranks = []
-        for tier in self.tiers:
-            if tier in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
-                self.ranks.append([tier, "I", now])
+        self.tasks = []
+        for rank in self.ranks:
+            if rank in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
+                self.tasks.append([rank, "I", now])
                 continue
             for division in self.divisions:
-                self.ranks.append([tier, division, now])
+                self.tasks.append([rank, division, now])
 
     async def get_next(self):
         """Return the next tier/division combination to be called."""
         oldest_timestamp = None
         oldest_key = None
-        for entry in self.ranks:
+        for entry in self.tasks:
             if not oldest_timestamp or entry[2] < oldest_timestamp:
                 oldest_key = entry[0:2]
                 oldest_timestamp = entry[2]
@@ -44,7 +44,7 @@ class RankManager:
     async def update(self, key):
         """Update the stats on a rank that is done pulling."""
         now = datetime.now() + timedelta(hours=self.cycle_length)
-        for index, entry in enumerate(self.ranks):
+        for index, entry in enumerate(self.tasks):
             if entry[0] == key[0] and entry[1] == key[1]:
-                self.ranks[index][2] = now
+                self.tasks[index][2] = now
                 return

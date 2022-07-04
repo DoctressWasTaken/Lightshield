@@ -7,5 +7,6 @@ RUN pip install poetry
 COPY wait-for-it.sh .
 COPY pyproject.toml poetry.lock ./
 RUN poetry install
+COPY lightshield/templates/ lightshield/templates/
 COPY lightshield/*.py lightshield/
 COPY lightshield/services/$service/ lightshield/services/$service/

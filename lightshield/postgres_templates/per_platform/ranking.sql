@@ -13,11 +13,7 @@ CREATE TABLE IF NOT EXISTS PLATFORM.ranking
 
     -- Ranked wins + losses
     games_sq       SMALLINT,
-    games_fq       SMALLINT,
-
-    -- Ranked wins + losses on last match_history pull
-    last_games_sq  SMALLINT,
-    last_games_fq  SMALLINT
+    games_fq       SMALLINT
 
 );
 -- summoner_id index included by default cause primary key

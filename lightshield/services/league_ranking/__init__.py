@@ -1,11 +1,8 @@
 """League Updater Module."""
 import asyncio
-import json
 import logging
 import os
-import signal
 
-import aioredis
 import asyncpg
 import uvloop
 
@@ -13,30 +10,33 @@ from lightshield.services.league_ranking.service import Service
 
 uvloop.install()
 
+
 class Handler:
     is_shutdown = False
     platforms = {}
     redis = postgres = None
 
-    def __init__(self, configs):
+    def __init__(self, config):
         self.logging = logging.getLogger("Handler")
-        self.connections = configs.get("connections")
-        self.config = configs.get("services")["league_ranking"]
-        proxy = self.connections.get('proxy')
-        self.protocol = proxy.get('protocol')
-        self.proxy = "%s://%s" % (proxy.get('protocol'), proxy.get('location'))
+        self.connections = config.connections
+        self.service = config.services.league_ranking
+        proxy = self.connections.proxy
 
-        for platform in self.config["platform"]:
-            self.platforms[platform] = Service(platform, configs, self)
+        self.protocol = proxy.protocol
+        self.proxy = "%s://%s" % (proxy.protocol, proxy.location)
+
+        select_platforms = self.service.platforms or config.statics.enums.platforms
+        for platform in select_platforms:
+            self.platforms[platform] = Service(platform, config, self)
 
     async def init(self):
-        psq_con = self.connections.get("postgres")
+        psq_con = self.connections.postgres
         self.postgres = await asyncpg.create_pool(
-            host=psq_con.get("hostname"),
-            port=psq_con.get("port"),
-            user=psq_con.get("user"),
-            database=psq_con.get("database"),
-            password=os.getenv(psq_con.get("password_env")),
+            host=psq_con.hostname,
+            port=psq_con.port,
+            user=psq_con.user,
+            database=psq_con.database,
+            password=os.getenv(psq_con.password_env),
         )
 
     async def init_shutdown(self, *args, **kwargs):

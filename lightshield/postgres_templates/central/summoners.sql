@@ -1,12 +1,18 @@
 DROP TABLE IF EXISTS summoner;
 CREATE TABLE summoner
 (
-    puuid                  VARCHAR(78) PRIMARY KEY,
-    name                   VARCHAR(18),
+    puuid                VARCHAR(78) PRIMARY KEY,
+    name                 VARCHAR(18),
 
-    reserved_match_history TIMESTAMP DEFAULT NULL,
-    last_updated           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_platform          platform,
-    last_match             BIGINT DEFAULT NULL
+    -- Currently assumed platform
+    platform             platform,
+
+    -- Last time match-history was updated for the user
+    last_history_update  TIMESTAMP DEFAULT NULL,
+    latest_match         BIGINT DEFAULT NULL,
+    -- Either through a match found or a summoner-v4 endpoint
+    last_activity TIMESTAMP,
+    -- summoner_tracker update timestamp. So it only updates every x days
+    last_updated DATE
 );
 

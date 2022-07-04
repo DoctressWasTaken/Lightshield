@@ -2,74 +2,48 @@ version: 1.0
 
 connections:
   postgres:
-    hostname: postgres
+    hostname: localhost
     port: 5432
     user: postgres
     database: lightshield
     password_env: POSTGRES_PASSWORD
   proxy:
-    location: 'proxy:8888'
-    protocol: http  # So that the requests themselves are sent in accordance to the proxy type.
+    location: 'localhost:8888'
+    protocol: http
 
 services:
   league_ranking:
-    cycle_min_length_hours: 6
-    platform:
-      - EUW1
-      - EUN1
-      - TR1
-      - RU
-      - NA1
-      - BR1
-      - LA1
-      - LA2
-      - OC1
-      - KR
-      - JP1
-    tiers:
-      - IRON
-      - BRONZE
-      - SILVER
-      - GOLD
-      - PLATINUM
-      - DIAMOND
-      - MASTER
-      - GRANDMASTER
-      - CHALLENGER
-  summoner_id:
-    platform:
-      - EUW1
-      - EUN1
-      - TR1
-      - RU
-      - NA1
-      - BR1
-      - LA1
-      - LA2
-      - OC1
-      - KR
-      - JP1
+    cycle_length: 6
+    platforms:
+    ranks:
+
+  puuid_collector:
+
+  summoner_tracker:
+    update_interval: 12
+
   match_history:
-    regions:
-      - europe
-      - americas
-      - asia
-      - sea
+    history:
+      days: 14
+      matches: 100
+    types: 'ranked'
+    platforms:
+
   match_details:
     regions:
-      - europe
-      - americas
-      - asia
-      - sea
+
   match_timeline:
     regions:
-      - europe
-      - americas
-      - asia
-      - sea
+
 
 statics: # Don't change unless changes happen to the API
-  platform: [ 'EUW1', 'EUN1', 'TR1', 'RU', 'NA1', 'BR1', 'LA1', 'LA2', 'OC1', 'KR', 'JP1' ]
-  region: [ 'europe', 'americas', 'asia', 'sea' ]
-  rank: [ 'IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER' ]
-  division: [ 'I', 'II', 'III', 'IV' ]
+  enums:
+    platforms: [ 'EUW1', 'EUN1', 'TR1', 'RU', 'NA1', 'BR1', 'LA1', 'LA2', 'OC1', 'KR', 'JP1' ]
+    regions: [ 'europe', 'americas', 'asia', 'sea' ]
+    ranks: [ 'IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER' ]
+    divisions: [ 'I', 'II', 'III', 'IV' ]
+  mapping:
+    europe: [ "EUW1", "EUN1", "TR1", "RU" ]
+    americas: [ "NA1", "BR1", "LA1", "LA2" ]
+    asia: [ "KR", "JP1" ]
+    sea: [ "OC1" ]

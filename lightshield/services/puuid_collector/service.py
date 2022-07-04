@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import aiohttp
 
@@ -8,7 +8,7 @@ import aiohttp
 class Platform:
     _runner = None
 
-    def __init__(self, name, config, handler):
+    def __init__(self, name, handler):
         self.name = name
         self.handler = handler
         self.logging = logging.getLogger("%s" % name)
@@ -28,26 +28,28 @@ class Platform:
         workers = 10
         while not self.handler.is_shutdown:
             async with self.handler.postgres.acquire() as connection:
-                self.results = []
-                self.not_found = []
-                self.tasks = await connection.fetch("""
-                        SELECT summoner_id 
-                        FROM %s.ranking 
-                        WHERE puuid IS NULL
-                        LIMIT $1 FOR UPDATE 
-                        SKIP LOCKED    
-                        """ % self.name, workers * 50)
-                if not self.tasks:
-                    await asyncio.sleep(5)
-                    workers = max(workers - 1, 1)
-                    continue
-                workers = len(self.tasks) // 50
-                async with aiohttp.ClientSession() as session:
-                    await asyncio.gather(*[
-                        asyncio.create_task(self.worker(session)) for _ in range(workers)
-                    ])
-                await self.flush_tasks(connection=connection)
-                workers = min(10, workers + 1)
+                async with connection.transaction():
+                    self.results = []
+                    self.not_found = []
+                    self.tasks = await connection.fetch("""
+                            SELECT summoner_id 
+                            FROM %s.ranking 
+                            WHERE puuid IS NULL
+                            LIMIT $1 
+                            FOR UPDATE 
+                            SKIP LOCKED    
+                            """ % self.name, workers * 50)
+                    if not self.tasks:
+                        await asyncio.sleep(5)
+                        workers = max(workers - 1, 1)
+                        continue
+                    workers = len(self.tasks) // 50
+                    async with aiohttp.ClientSession() as session:
+                        await asyncio.gather(*[
+                            asyncio.create_task(self.worker(session)) for _ in range(workers)
+                        ])
+                    await self.flush_tasks(connection=connection)
+                    workers = min(10, workers + 1)
 
     async def worker(self, session):
         """Execute requests."""
@@ -89,31 +91,30 @@ class Platform:
                 len(self.not_found),
             )
         if self.results:
-            async with connection.transaction():
-                prep = await connection.prepare(
-                    """UPDATE %s.ranking
-                        SET puuid = $2
-                        WHERE summoner_id =  $1
-                    """
-                    % self.name
-                )
-                await prep.executemany([res[:2] for res in self.results])
-                # update summoner Table
-                converted_results = [
-                    [res[1],
-                     res[2],
-                     datetime.fromtimestamp(res[3] / 1000),
-                     self.name]
-                    for res in self.results
-                ]
-                prep = await connection.prepare(
-                    """INSERT INTO summoner (puuid, name, last_updated, last_platform)
-                    VALUES($1, $2, $3, $4)
-                    ON CONFLICT (puuid) 
-                    DO NOTHING
-                    """
-                )
-                await prep.executemany(converted_results)
+            prep = await connection.prepare(
+                """UPDATE %s.ranking
+                    SET puuid = $2
+                    WHERE summoner_id =  $1
+                """
+                % self.name
+            )
+            await prep.executemany([res[:2] for res in self.results])
+            # update summoner Table
+            converted_results = [
+                [res[1],
+                 res[2],
+                 datetime.fromtimestamp(res[3] / 1000),
+                 self.name]
+                for res in self.results
+            ]
+            prep = await connection.prepare(
+                """INSERT INTO summoner (puuid, name, last_activity, platform, last_updated)
+                VALUES($1, $2, $3, $4, CURRENT_DATE)
+                ON CONFLICT (puuid) 
+                DO NOTHING
+                """
+            )
+            await prep.executemany(converted_results)
 
         if self.not_found:
             await connection.execute(

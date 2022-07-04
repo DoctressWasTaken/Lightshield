@@ -1,26 +1,72 @@
-import sys
-import asyncio
 import argparse
-import os
-import logging
-import uvloop
+import asyncio
 import importlib
+import logging
+import os
 import shutil
-import yaml
-from lightshield.postgres import init_db
-from dotenv import load_dotenv
 import signal
 
+import uvloop
+import yaml
+from dotenv import load_dotenv
+
+from lightshield.postgres import init_db
+from pprint import PrettyPrinter
+import json
+
+pp = PrettyPrinter(indent=4, width=160)
 load_dotenv()
 uvloop.install()
 
 default_services = (
     "league_ranking",
     "puuid_collector",
+    "summoner_tracker",
     "match_history",
     "match_details",
     "match_timeline",
 )
+
+
+class Config:
+    """Config containing class."""
+
+    def __init__(self, data):
+        self.__dict__ = data
+        for key in data:
+            if isinstance(getattr(self, key), dict):
+                setattr(self, key, Config(getattr(self, key)))
+
+    def __repr__(self):
+        return str(self.__dict__)
+
+
+def parse_config():
+    """Load files and init parse."""
+    with open("config.yaml") as configs_file:
+        configs = yaml.safe_load(configs_file)
+    with open(os.path.join(os.path.dirname(__file__), "templates", "config.yaml")) as configs_defaults:
+        default = yaml.safe_load(configs_defaults)
+    data = merge(configs, default)
+    return Config(data)
+
+
+def merge(source, destination):
+    """
+    >>> a = { 'first' : { 'all_rows' : { 'pass' : 'dog', 'number' : '1' } } }
+    >>> b = { 'first' : { 'all_rows' : { 'fail' : 'cat', 'number' : '5' } } }
+    >>> merge(b, a) == { 'first' : { 'all_rows' : { 'pass' : 'dog', 'fail' : 'cat', 'number' : '5' } } }
+    True
+    """
+    for key, value in source.items():
+        if isinstance(value, dict):
+            # get node or create one
+            node = destination.setdefault(key, {})
+            merge(value, node)
+        elif value:
+            destination[key] = value
+    return destination
+
 
 async def shutdown(services):
     """Init shutdown in all active services."""
@@ -28,13 +74,14 @@ async def shutdown(services):
         await service.init_shutdown()
 
 
-async def run(*args, configs, services=None, **kwargs):
+async def run(*args, config, services=None, **kwargs):
     """Import and start the select services."""
+    pp.pprint(config)
     active_services = {}
     for service in services:
         active_services[service] = importlib.import_module(
             "lightshield.services.%s" % service
-        ).Handler(configs)
+        ).Handler(config)
     tasks = []
     for sig in (signal.SIGTERM, signal.SIGINT):
         asyncio.get_event_loop().add_signal_handler(
@@ -85,14 +132,16 @@ def main():
             level=logging.INFO,
             format="%(levelname)8s %(asctime)s %(name)15s| %(message)s",
         )
-    configs=None
+    # TODO: Add an option for a changed config name.
+    config = None
     if not args.get("init_config"):
         try:
-            with open("config.yaml") as configs_file:
-                configs = yaml.safe_load(configs_file)
+            with open("config.yaml"):
+                pass
         except FileNotFoundError:
             logging.error(
                 "The config file was not found, please run `lightshield generate-config` first to generate it."
             )
             exit()
-    asyncio.run(args.get("func")(configs=configs, **args))
+        config = parse_config()
+    asyncio.run(args.get("func")(config=config, **args))
