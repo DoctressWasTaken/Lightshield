@@ -103,7 +103,7 @@ class Service:
                         rank,
                         division,
                         leaguepoints
-                        FROM %s.ranking
+                        FROM "ranking_{platform_lower:s}"
                         WHERE rank = $1
                         AND division = $2
                         """
