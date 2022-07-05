@@ -106,8 +106,7 @@ class Service:
                         FROM "ranking_{platform_lower:s}"
                         WHERE rank = $1
                         AND division = $2
-                        """
-                        % self.name.lower(),
+                        """.format(platform_lower=self.name.lower()),
                         *self.active_rank,
                         timeout=60, )
                     self.preset = {}
