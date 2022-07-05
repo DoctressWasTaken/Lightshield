@@ -66,42 +66,24 @@ services:
     entrypoint: "poetry run lightshield run match_history"
     restart: always
 
-
-  ### Storage
-  #redis:
-  #  hostname: redis
-  #  build:
-  #    dockerfile: Dockerfile
-  #    context: redis
-  #  image: lightshield/redis:${TAG}
-  #  restart: always
-  #  volumes:
-  #    - redis_data:/data
-  #  ports:
-  #    - 127.0.0.1:6379:6379
-#
-  #postgres:
-  #  hostname: postgres
-  #  build:
-  #    dockerfile: Dockerfile
-  #    context: postgres
-  #  image: lightshield/postgres:${TAG}
-  #  restart: always
-  #  ports:
-  #    - 127.0.0.1:8303:5432
-  #  environment:
-  #    - "POSTGRES_HOST_AUTH_METHOD=trust"
-  #  volumes:
-  #    - postgres_data:/var/lib/postgresql/data
-  #  stop_grace_period: 60s
+  match_details:
+    hostname: match_details
+    build:
+      dockerfile: Service_Dockerfile
+      context: .
+      args:
+        service: match_details
+    entrypoint: "poetry run lightshield run match_details"
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+      - type: bind
+        source: /mnt/g/data
+        target: /data
+    restart: always
 
 
-  #match_history:
-  #  hostname: match_history
-  #  build:
-  #    dockerfile: Dockerfile
-  #    context: services/match_history
-#
   #match_details:
   #  hostname: match_details
   #  build:

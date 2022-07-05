@@ -19,9 +19,7 @@ class Platform:
         self.not_found = []  # Empty returning summoner-v4
 
         self.retry_after = datetime.now()
-        self.endpoint_url = (
-            f"{handler.protocol}://{platform.lower()}.api.riotgames.com/lol/summoner/v4/summoners/%s"
-        )
+        self.endpoint_url = f"{handler.protocol}://{platform.lower()}.api.riotgames.com/lol/summoner/v4/summoners/%s"
 
     async def run(self):
         """Main object loop."""
@@ -31,24 +29,31 @@ class Platform:
                 async with connection.transaction():
                     self.results = []
                     self.not_found = []
-                    self.tasks = await connection.fetch("""
+                    self.tasks = await connection.fetch(
+                        """
                             SELECT summoner_id 
                             FROM "ranking_{platform:s}"
                             WHERE puuid IS NULL
                             LIMIT $1 
                             FOR UPDATE 
                             SKIP LOCKED    
-                            """.format(platform=self.platform.lower()),
-                                                        workers * 50)
+                            """.format(
+                            platform=self.platform.lower()
+                        ),
+                        workers * 50,
+                    )
                     if not self.tasks:
                         await asyncio.sleep(5)
                         workers = max(workers - 1, 1)
                         continue
                     workers = len(self.tasks) // 50
                     async with aiohttp.ClientSession() as session:
-                        await asyncio.gather(*[
-                            asyncio.create_task(self.worker(session)) for _ in range(workers)
-                        ])
+                        await asyncio.gather(
+                            *[
+                                asyncio.create_task(self.worker(session))
+                                for _ in range(workers)
+                            ]
+                        )
                     await self.flush_tasks(connection=connection)
                     workers = min(10, workers + 1)
 
@@ -64,14 +69,16 @@ class Platform:
                 if not self.tasks:
                     return
                 target = self.tasks.pop()
-            url = self.endpoint_url % target['summoner_id']
+            url = self.endpoint_url % target["summoner_id"]
             async with session.get(url, proxy=self.handler.proxy) as response:
                 try:
                     data = await response.json()
                 except aiohttp.ContentTypeError:
                     continue
                 if response.status == 200:
-                    self.results.append([data["id"], data["puuid"], data['name'], data['revisionDate']])
+                    self.results.append(
+                        [data["id"], data["puuid"], data["name"], data["revisionDate"]]
+                    )
                     target = None
                     continue
                 if response.status == 429:
@@ -96,15 +103,14 @@ class Platform:
                 """UPDATE "ranking_{platform:s}"
                     SET puuid = $2
                     WHERE summoner_id =  $1
-                """.format(platform=self.platform.lower())
+                """.format(
+                    platform=self.platform.lower()
+                )
             )
             await prep.executemany([res[:2] for res in self.results])
             # update summoner Table
             converted_results = [
-                [res[1],
-                 res[2],
-                 datetime.fromtimestamp(res[3] / 1000),
-                 self.platform]
+                [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), self.platform]
                 for res in self.results
             ]
             prep = await connection.prepare(
@@ -120,6 +126,8 @@ class Platform:
             await connection.execute(
                 """DELETE FROM "ranking_{platform:s}"
                     WHERE summoner_id = ANY($1::varchar)
-                """.format(platform=self.platform.lower()),
+                """.format(
+                    platform=self.platform.lower()
+                ),
                 self.not_found,
             )

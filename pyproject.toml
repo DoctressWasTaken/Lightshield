@@ -8,7 +8,7 @@ authors = ["Doctress <lightshielddev@gmail.com>"]
 readme = 'README.md'
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 aiohttp = "^3.7.4"
 aioredis = "^2.0.1"
 uvloop = "^0.16.0"

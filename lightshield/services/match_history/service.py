@@ -33,7 +33,8 @@ class Platform:
         while not self.handler.is_shutdown:
             async with self.handler.postgres.acquire() as connection:
                 async with connection.transaction():
-                    players = await connection.fetch("""
+                    players = await connection.fetch(
+                        """
                         SELECT  puuid, 
                                 latest_match, 
                                 last_history_update
@@ -48,22 +49,27 @@ class Platform:
                         LIMIT 200
                         FOR UPDATE 
                         SKIP LOCKED
-                    """, self.platform, self.service.min_wait)
+                    """,
+                        self.platform,
+                        self.service.min_wait,
+                    )
                     if not players:
                         await asyncio.sleep(5)
                         continue
                     async with aiohttp.ClientSession() as session:
-                        matches = await asyncio.gather(*[
-                            asyncio.create_task(self.worker(player, session))
-                            for player in players
-                        ])
+                        matches = await asyncio.gather(
+                            *[
+                                asyncio.create_task(self.worker(player, session))
+                                for player in players
+                            ]
+                        )
                     if self.handler.is_shutdown:
                         return
                     set_matches = list(set([m for mm in matches for m in mm]))
                     if set_matches:
                         by_platform = {}
                         for match in set_matches:
-                            platform, id = match.split('_')
+                            platform, id = match.split("_")
                             if platform not in by_platform:
                                 by_platform[platform] = []
                             by_platform[platform].append(int(id))
@@ -74,30 +80,43 @@ class Platform:
                                     [platform, id, self.service.queue]
                                     for id in by_platform[platform]
                                 ]
-                                await connection.executemany("""
+                                await connection.executemany(
+                                    """
                                     INSERT INTO "match_{platform:s}" (platform, match_id, queue)
                                     VALUES ($1, $2, $3)
                                     ON CONFLICT DO NOTHING
-                                """.format(platform=platform.lower()), data)
+                                """.format(
+                                        platform=platform.lower()
+                                    ),
+                                    data,
+                                )
                             else:
-                                data = [
-                                    [platform, id]
-                                    for id in by_platform[platform]
-                                ]
-                                await connection.executemany("""
+                                data = [[platform, id] for id in by_platform[platform]]
+                                await connection.executemany(
+                                    """
                                     INSERT INTO "match_{platform:s}" (platform, match_id)
                                     VALUES ($1, $2)
                                     ON CONFLICT DO NOTHING
-                                """.format(platform=platform.lower()), data)
+                                """.format(
+                                        platform=platform.lower()
+                                    ),
+                                    data,
+                                )
                     if self.updated_players:
-                        prep = await connection.prepare("""
+                        prep = await connection.prepare(
+                            """
                             UPDATE summoner
                             SET latest_match = $2,
                                 last_history_update = $3
                             WHERE puuid = $1
-                        """)
+                        """
+                        )
                         await prep.executemany(self.updated_players)
-                        self.logging.info("Updated %s users [%s matches]", len(self.updated_players), len(set_matches))
+                        self.logging.info(
+                            "Updated %s users [%s matches]",
+                            len(self.updated_players),
+                            len(set_matches),
+                        )
                     self.updated_players = []
 
     async def worker_calls(self, session, task):
@@ -123,17 +142,16 @@ class Platform:
         while not self.handler.is_shutdown:
             now = datetime.now() - timedelta(days=self.service.history.days)
             now_tst = int(now.timestamp())
-            url = self.endpoint_url % player['puuid']
-            url += '&startTime=%s' % now_tst
+            url = self.endpoint_url % player["puuid"]
+            url += "&startTime=%s" % now_tst
             tasks = []
             page = 0
             while page * 100 < self.service.history.matches:
                 tasks.append([url + "&start=%s" % page, page])
                 page += 1
-            results = await asyncio.gather(*[
-                self.worker_calls(session, task)
-                for task in tasks
-            ])
+            results = await asyncio.gather(
+                *[self.worker_calls(session, task) for task in tasks]
+            )
             if len(results) == 0:
                 continue
             pages_sorted = {page[0]: page[1] for page in results}
@@ -143,10 +161,5 @@ class Platform:
             new_latest = None
             if matches:
                 new_latest = int(matches.pop().split("_")[1])
-            self.updated_players.append(
-                [player['puuid'],
-                 new_latest,
-                 now
-                 ]
-            )
+            self.updated_players.append([player["puuid"], new_latest, now])
             return matches

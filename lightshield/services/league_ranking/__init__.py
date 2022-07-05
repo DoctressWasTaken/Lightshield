@@ -8,7 +8,6 @@ import asyncpg
 from lightshield.services.league_ranking.service import Service
 
 
-
 class Handler:
     is_shutdown = False
     platforms = {}

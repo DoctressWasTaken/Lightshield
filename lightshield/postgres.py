@@ -20,9 +20,9 @@ async def init_db(config, **kwargs):
         exit()
 
     if input(
-            "\nDoes the %s database already exist? "
-            "If not it will be created which requires elevated user rights. [yes/no] "
-            % psq_con.database
+        "\nDoes the %s database already exist? "
+        "If not it will be created which requires elevated user rights. [yes/no] "
+        % psq_con.database
     ).lower() not in ["y", "yes"]:
         logger.info("Attempting to generate the database")
         db_creator = await asyncpg.create_pool(
@@ -44,7 +44,8 @@ async def init_db(config, **kwargs):
                 )
         await db_creator.close()
     if input(
-            "\nAll content in the database `%s` will be overwritten, are you sure? [yes/no] " % psq_con.database
+        "\nAll content in the database `%s` will be overwritten, are you sure? [yes/no] "
+        % psq_con.database
     ).lower() not in ["y", "yes"]:
         exit()
     db = await asyncpg.create_pool(
@@ -66,25 +67,27 @@ async def init_db(config, **kwargs):
             )
             await connection.execute(query)
 
-    path = os.path.join(
-        os.path.dirname(__file__), "postgres_templates"
-    )
+    path = os.path.join(os.path.dirname(__file__), "postgres_templates")
     files = os.listdir(path)
 
     async with db.acquire() as connection:
         for file in files:
-            if not file.endswith('_partition.sql'):
+            if not file.endswith("_partition.sql"):
                 logger.info("Generated %s", file)
                 with open(os.path.join(path, file)) as sql_file:
                     sql = sql_file.read()
                     logger.debug(sql)
                     await connection.execute(sql)
-                if '%s_partition.sql' % file.strip('.sql') in files:
-                    with open(os.path.join(path, '%s_partition.sql' % file.strip('.sql')),
-                              encoding='utf-8') as partition_sql:
+                if "%s_partition.sql" % file.strip(".sql") in files:
+                    with open(
+                        os.path.join(path, "%s_partition.sql" % file.strip(".sql")),
+                        encoding="utf-8",
+                    ) as partition_sql:
                         sql_string = partition_sql.read()
                         for platform in config.statics.enums.platforms:
-                            sql = sql_string.format(platform=platform.lower(), platform_caps=platform)
+                            sql = sql_string.format(
+                                platform=platform.lower(), platform_caps=platform
+                            )
                             logger.debug(sql)
                             await connection.execute(sql)
                             logger.info("\t> %s", platform)

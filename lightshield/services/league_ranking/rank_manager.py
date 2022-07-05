@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 class RankManager:
     """Ordering and Management of ranking updates."""
+
     tasks = None
 
     def __init__(self, config, logging, handler):

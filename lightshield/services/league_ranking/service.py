@@ -20,8 +20,8 @@ class Service:
         self.rankmanager = RankManager(config, self.logging, handler)
         self.retry_after = datetime.now()
         self.url = (
-                f"{handler.protocol}://{self.name.lower()}.api.riotgames.com/lol/"
-                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+            f"{handler.protocol}://{self.name.lower()}.api.riotgames.com/lol/"
+            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
         self.preset = {}
         self.to_update = []
@@ -61,8 +61,8 @@ class Service:
                 for new in data:
                     rank = [new["tier"], new["rank"], new["leaguePoints"]]
                     if (
-                            new["summonerId"] not in self.preset
-                            or self.preset[new["summonerId"]] != rank
+                        new["summonerId"] not in self.preset
+                        or self.preset[new["summonerId"]] != rank
                     ):
                         if new["summonerId"] not in self.already_added:
                             self.already_added.append(new["summonerId"])
@@ -84,12 +84,14 @@ class Service:
             try:
                 async with aiohttp.ClientSession() as session:
                     await asyncio.gather(
-                        *[asyncio.create_task(self.worker(session)) for _ in range(workers)]
+                        *[
+                            asyncio.create_task(self.worker(session))
+                            for _ in range(workers)
+                        ]
                     )
             except asyncio.CancelledError:
                 return
-            await asyncio.gather(asyncio.sleep(1),
-                                 self.update_data())
+            await asyncio.gather(asyncio.sleep(1), self.update_data())
 
             await self.rankmanager.update(key=self.active_rank)
 
@@ -106,9 +108,12 @@ class Service:
                         FROM "ranking_{platform_lower:s}"
                         WHERE rank = $1
                         AND division = $2
-                        """.format(platform_lower=self.name.lower()),
+                        """.format(
+                            platform_lower=self.name.lower()
+                        ),
                         *self.active_rank,
-                        timeout=60, )
+                        timeout=60,
+                    )
                     self.preset = {}
                     if latest:
                         for line in latest:
@@ -142,9 +147,12 @@ class Service:
                                 UPDATE SET  rank = EXCLUDED.rank,
                                             division = EXCLUDED.division,
                                             leaguepoints = EXCLUDED.leaguepoints
-                            """.format(platform=self.name, platform_lower=self.name.lower()),
+                            """.format(
+                                platform=self.name, platform_lower=self.name.lower()
+                            ),
                             batch,
-                            timeout=60, )
+                            timeout=60,
+                        )
                     except asyncio.exceptions.TimeoutError:
                         self.logging.error("Fetching preexisting entries timed out")
                         continue

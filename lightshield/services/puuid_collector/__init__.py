@@ -46,7 +46,10 @@ class Handler:
     async def run(self):
         """Run."""
         await self.init()
-        await asyncio.gather(*[
-            asyncio.create_task(platform.run()) for platform in self.platforms.values()
-        ])
+        await asyncio.gather(
+            *[
+                asyncio.create_task(platform.run())
+                for platform in self.platforms.values()
+            ]
+        )
         await self.handle_shutdown()

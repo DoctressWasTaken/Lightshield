@@ -1,29 +1,25 @@
-"""Match History"""
+"""Summoner ID Updater Module."""
 import asyncio
-import json
 import logging
 import os
-import signal
-
-import aioredis
 import asyncpg
 
-from lightshield.services.match_history.service import Platform
+from lightshield.services.match_details.service import Platform
 
 
 class Handler:
-    platforms = {}
     is_shutdown = False
     postgres = None
+    platforms = {}
 
     def __init__(self, configs):
         self.logging = logging.getLogger("Service")
+        # Buffer
         self.connections = configs.connections
-        self.service = configs.services.match_history
-        self.configs = configs
-
         proxy = self.connections.proxy
         self.proxy = "%s://%s" % (proxy.protocol, proxy.location)
+        self.service = configs.services.match_history
+        self.configs = configs
 
     async def init(self):
         psq_con = self.connections.postgres

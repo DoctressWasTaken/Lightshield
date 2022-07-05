@@ -40,11 +40,14 @@ class Config:
     def __repr__(self):
         return str(self.__dict__)
 
+
 def parse_config():
     """Load files and init parse."""
     with open("config.yaml") as configs_file:
         configs = yaml.safe_load(configs_file)
-    with open(os.path.join(os.path.dirname(__file__), "templates", "config.yaml")) as configs_defaults:
+    with open(
+        os.path.join(os.path.dirname(__file__), "templates", "config.yaml")
+    ) as configs_defaults:
         default = yaml.safe_load(configs_defaults)
     data = merge(configs, default)
     return Config(data)

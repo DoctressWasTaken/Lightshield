@@ -12,11 +12,10 @@ uvloop.install()
 
 
 class Account:
-
     def __init__(self, data):
-        self.puuid = data['puuid']
-        self.platform = data['platform']
-        self.activity = data['last_activity']
+        self.puuid = data["puuid"]
+        self.platform = data["platform"]
+        self.activity = data["last_activity"]
         self.updated = False
 
     def add_result(self, platform, activity):
@@ -39,10 +38,11 @@ class Handler:
         self.logging = logging.getLogger("Handler")
         self.service = configs.services.summoner_tracker
         self.config = configs
-        self.endpoint_url = (
-            f"{configs.connections.proxy.protocol}://%s.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/%s"
+        self.endpoint_url = f"{configs.connections.proxy.protocol}://%s.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/%s"
+        self.proxy = "%s://%s" % (
+            configs.connections.proxy.protocol,
+            configs.connections.proxy.location,
         )
-        self.proxy = "%s://%s" % (configs.connections.proxy.protocol, configs.connections.proxy.location)
 
     async def init(self):
         psq_con = self.config.connections.postgres
@@ -70,7 +70,8 @@ class Handler:
             async with self.postgres.acquire() as connection:
                 async with connection.transaction():
                     self.accounts = {}
-                    tasks = await connection.fetch("""
+                    tasks = await connection.fetch(
+                        """
                         SELECT puuid, platform, last_activity
                         FROM summoner
                         WHERE last_updated IS NULL
@@ -79,17 +80,21 @@ class Handler:
                         LIMIT 10
                         FOR UPDATE 
                         SKIP LOCKED 
-                    """ % self.service.update_interval)
+                    """
+                        % self.service.update_interval
+                    )
                     if not tasks:
                         await asyncio.sleep(5)
                         continue
                     for task in tasks:
-                        self.accounts[task['puuid']] = Account(task)
+                        self.accounts[task["puuid"]] = Account(task)
                     async with aiohttp.ClientSession() as session:
-                        await asyncio.gather(*[
-                            asyncio.create_task(self.worker(session, platform)) for platform in
-                            self.config.statics.enums.platforms
-                        ])
+                        await asyncio.gather(
+                            *[
+                                asyncio.create_task(self.worker(session, platform))
+                                for platform in self.config.statics.enums.platforms
+                            ]
+                        )
                     if self.is_shutdown:
                         break
                     updated = []
@@ -116,10 +121,14 @@ class Handler:
                             """ UPDATE summoner
                                 SET last_updated = CURRENT_DATE
                                 WHERE puuid = ANY($1::varchar)
-                            """, unchanged
+                            """,
+                            unchanged,
                         )
-                    self.logging.info("Found %s updated and %s unupdated users.",
-                                      len(updated), len(unchanged))
+                    self.logging.info(
+                        "Found %s updated and %s unupdated users.",
+                        len(updated),
+                        len(unchanged),
+                    )
 
     async def worker(self, session, platform):
         """Make calls for a user on a specific server."""
@@ -133,7 +142,7 @@ class Handler:
                             break
                         if response.status == 200:
                             data = await response.json()
-                            account.add_result(platform, data['revisionDate'])
+                            account.add_result(platform, data["revisionDate"])
                             break
                         if response.status == 429:
                             await asyncio.sleep(0.5)
