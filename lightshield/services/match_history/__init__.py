@@ -36,7 +36,8 @@ class Handler:
         )
 
         for region, platforms in self.configs.statics.mapping.__dict__.items():
-            self.platforms[region] = Platform(region, platforms, self.configs, self)
+            for platform in platforms:
+                self.platforms[platform] = Platform(region, platform, self.configs, self)
 
 
     async def init_shutdown(self, *args, **kwargs):
