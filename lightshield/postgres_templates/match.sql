@@ -1,4 +1,5 @@
-CREATE TABLE IF NOT EXISTS REGION.match
+DROP TABLE IF EXISTS match CASCADE;
+CREATE TABLE IF NOT EXISTS match
 (
     match_id          BIGINT,
     platform          platform,
@@ -16,14 +17,7 @@ CREATE TABLE IF NOT EXISTS REGION.match
     reserved_details  TIMESTAMP,
     reserved_timeline TIMESTAMP,
     details           BOOLEAN,
-    timeline          BOOLEAN,
-    PRIMARY KEY (platform, match_id)
-);
--- General lookups
-CREATE INDEX ON REGION.match ((timestamp::date), queue);
--- Lookup for undone tasks
--- This will only  be used if most data in the table is not null,
--- so to use it data older than your minimum match_details age should be removed
--- see https://stackoverflow.com/questions/5203755/why-does-postgresql-perform-sequential-scan-on-indexed-column
-CREATE INDEX ON REGION.match ((details IS NULL), find_fails);
-CREATE INDEX ON REGION.match ((timeline IS NULL), find_fails);
+    timeline          BOOLEAN
+)
+    PARTITION BY LIST (platform)
+;

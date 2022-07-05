@@ -8,10 +8,10 @@ import aiohttp
 class Platform:
     _runner = None
 
-    def __init__(self, name, handler):
-        self.name = name
+    def __init__(self, platform, handler):
+        self.platform = platform
         self.handler = handler
-        self.logging = logging.getLogger("%s" % name)
+        self.logging = logging.getLogger("%s" % platform)
         # Todos
         self.tasks = []  # List of summonerIds
         # Dones
@@ -20,7 +20,7 @@ class Platform:
 
         self.retry_after = datetime.now()
         self.endpoint_url = (
-            f"{handler.protocol}://{name.lower()}.api.riotgames.com/lol/summoner/v4/summoners/%s"
+            f"{handler.protocol}://{platform.lower()}.api.riotgames.com/lol/summoner/v4/summoners/%s"
         )
 
     async def run(self):
@@ -33,12 +33,13 @@ class Platform:
                     self.not_found = []
                     self.tasks = await connection.fetch("""
                             SELECT summoner_id 
-                            FROM %s.ranking 
+                            FROM "ranking_{platform:s}"
                             WHERE puuid IS NULL
                             LIMIT $1 
                             FOR UPDATE 
                             SKIP LOCKED    
-                            """ % self.name, workers * 50)
+                            """.format(platform=self.platform.lower()),
+                                                        workers * 50)
                     if not self.tasks:
                         await asyncio.sleep(5)
                         workers = max(workers - 1, 1)
@@ -92,11 +93,10 @@ class Platform:
             )
         if self.results:
             prep = await connection.prepare(
-                """UPDATE %s.ranking
+                """UPDATE "ranking_{platform:s}"
                     SET puuid = $2
                     WHERE summoner_id =  $1
-                """
-                % self.name
+                """.format(platform=self.platform.lower())
             )
             await prep.executemany([res[:2] for res in self.results])
             # update summoner Table
@@ -104,7 +104,7 @@ class Platform:
                 [res[1],
                  res[2],
                  datetime.fromtimestamp(res[3] / 1000),
-                 self.name]
+                 self.platform]
                 for res in self.results
             ]
             prep = await connection.prepare(
@@ -118,9 +118,8 @@ class Platform:
 
         if self.not_found:
             await connection.execute(
-                """DELETE FROM %s.ranking
+                """DELETE FROM "ranking_{platform:s}"
                     WHERE summoner_id = ANY($1::varchar)
-                """
-                % self.name,
+                """.format(platform=self.platform.lower()),
                 self.not_found,
             )

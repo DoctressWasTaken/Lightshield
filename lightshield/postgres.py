@@ -20,9 +20,9 @@ async def init_db(config, **kwargs):
         exit()
 
     if input(
-        "\nDoes the %s database already exist? "
-        "If not it will be created which requires elevated user rights. [yes/no] "
-        % psq_con.database
+            "\nDoes the %s database already exist? "
+            "If not it will be created which requires elevated user rights. [yes/no] "
+            % psq_con.database
     ).lower() not in ["y", "yes"]:
         logger.info("Attempting to generate the database")
         db_creator = await asyncpg.create_pool(
@@ -44,7 +44,7 @@ async def init_db(config, **kwargs):
                 )
         await db_creator.close()
     if input(
-        "\nAll content in the database `%s` will be overwritten, are you sure? [yes/no] " % psq_con.database
+            "\nAll content in the database `%s` will be overwritten, are you sure? [yes/no] " % psq_con.database
     ).lower() not in ["y", "yes"]:
         exit()
     db = await asyncpg.create_pool(
@@ -66,61 +66,25 @@ async def init_db(config, **kwargs):
             )
             await connection.execute(query)
 
-    logger.info("Generating schemas")
+    path = os.path.join(
+        os.path.dirname(__file__), "postgres_templates"
+    )
+    files = os.listdir(path)
 
-    query_files = {}
-    per_platform = os.path.join(
-        os.path.dirname(__file__), "postgres_templates", "per_platform"
-    )
-    for file in os.listdir(per_platform):
-        with open(os.path.join(per_platform, file)) as content:
-            query_files[file] = content.read()
-    schema_query = """
-                DROP SCHEMA IF EXISTS %s CASCADE;
-                CREATE SCHEMA IF NOT EXISTS %s;
-                GRANT ALL PRIVILEGES ON SCHEMA %s TO %s;
-            """
     async with db.acquire() as connection:
-        for platform in enums.platforms:
-            await connection.execute(
-                schema_query
-                % (
-                    platform,
-                    platform,
-                    platform,
-                    psq_con.user,
-                )
-            )
-            logger.info("Generated schema %s", platform)
-            for name, query in query_files.items():
-                await connection.execute(query.replace("PLATFORM", platform))
-                logger.info("\t- Table %s", name)
-    query_files = {}
-    per_region = os.path.join(
-        os.path.dirname(__file__), "postgres_templates", "per_region"
-    )
-    for file in os.listdir(per_region):
-        with open(os.path.join(per_region, file)) as content:
-            query_files[file] = content.read()
-    async with db.acquire() as connection:
-        for region in enums.regions:
-            await connection.execute(
-                schema_query
-                % (
-                    region,
-                    region,
-                    region,
-                    psq_con.user,
-                )
-            )
-            logger.info("Generated schema %s", region)
-            for name, query in query_files.items():
-                await connection.execute(query.replace("REGION", region))
-                logger.info("\t- Table %s", name)
-    async with db.acquire() as connection:
-        central = os.path.join(
-            os.path.dirname(__file__), "postgres_templates", "central"
-        )
-        for file in os.listdir(central):
-            with open(os.path.join(central, file)) as content:
-                await connection.execute(content.read())
+        for file in files:
+            if not file.endswith('_partition.sql'):
+                logger.info("Generated %s", file)
+                with open(os.path.join(path, file)) as sql_file:
+                    sql = sql_file.read()
+                    logger.debug(sql)
+                    await connection.execute(sql)
+                if '%s_partition.sql' % file.strip('.sql') in files:
+                    with open(os.path.join(path, '%s_partition.sql' % file.strip('.sql')),
+                              encoding='utf-8') as partition_sql:
+                        sql_string = partition_sql.read()
+                        for platform in config.statics.enums.platforms:
+                            sql = sql_string.format(platform=platform.lower(), platform_caps=platform)
+                            logger.debug(sql)
+                            await connection.execute(sql)
+                            logger.info("\t> %s", platform)

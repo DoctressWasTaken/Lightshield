@@ -137,14 +137,13 @@ class Service:
                 while self.to_update:
                     try:
                         await connection.executemany(
-                            """INSERT INTO %s.ranking (summoner_id, rank, division, leaguepoints)
-                                VALUES ($1, $2, $3, $4)
+                            """INSERT INTO "ranking_{platform_lower:s}" (summoner_id, platform, rank, division, leaguepoints)
+                                VALUES ($1, '{platform:s}', $2, $3, $4)
                                 ON CONFLICT (summoner_id) DO 
                                 UPDATE SET  rank = EXCLUDED.rank,
                                             division = EXCLUDED.division,
                                             leaguepoints = EXCLUDED.leaguepoints
-                            """
-                            % self.name.lower(),
+                            """.format(platform=self.name, platform_lower=self.name.lower()),
                             batch,
                             timeout=60, )
                     except asyncio.exceptions.TimeoutError:
