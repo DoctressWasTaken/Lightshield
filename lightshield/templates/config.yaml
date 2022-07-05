@@ -23,6 +23,7 @@ services:
     update_interval: 12
 
   match_history:
+    min_wait: 1
     history:
       days: 14
       matches: 100

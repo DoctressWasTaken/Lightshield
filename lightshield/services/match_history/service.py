@@ -42,11 +42,13 @@ class Platform:
                             AND (
                                 last_activity > last_history_update
                                 OR last_history_update IS NULL)
+                            AND (last_history_update + INTERVAL '1 days' * $2 < CURRENT_DATE
+                            OR last_history_update IS NULL)
                         ORDER BY last_history_update NULLS FIRST
                         LIMIT 200
                         FOR UPDATE 
                         SKIP LOCKED
-                    """, self.platform)
+                    """, self.platform, self.service.min_wait)
                     if not players:
                         await asyncio.sleep(5)
                         continue
@@ -132,7 +134,7 @@ class Platform:
                 self.worker_calls(session, task)
                 for task in tasks
             ])
-            if not results:
+            if len(results) == 0:
                 continue
             pages_sorted = {page[0]: page[1] for page in results}
             matches = []
