@@ -11,7 +11,10 @@ CREATE TABLE ranking
 
     -- Ranked wins + losses
     games_sq     SMALLINT,
-    games_fq     SMALLINT
+    games_fq     SMALLINT,
+
+    -- Last updated value
+    last_updated TIMESTAMP
 
 )
     PARTITION BY LIST (platform)

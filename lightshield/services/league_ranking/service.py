@@ -146,7 +146,8 @@ class Service:
                                 ON CONFLICT (summoner_id) DO 
                                 UPDATE SET  rank = EXCLUDED.rank,
                                             division = EXCLUDED.division,
-                                            leaguepoints = EXCLUDED.leaguepoints
+                                            leaguepoints = EXCLUDED.leaguepoints,
+                                            last_updated = NOW()
                             """.format(
                                 platform=self.name, platform_lower=self.name.lower()
                             ),
