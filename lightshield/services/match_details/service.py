@@ -103,7 +103,7 @@ class Platform:
                 """.format(
                     platform=self.platform.lower()
                 ),
-                self.found,
+                self.missing,
             )
             self.missing = []
 

@@ -2,7 +2,7 @@ DROP TABLE IF EXISTS summoner;
 CREATE TABLE summoner
 (
     puuid                VARCHAR(78) PRIMARY KEY,
-    name                 VARCHAR(18),
+    name                 VARCHAR,
 
     -- Currently assumed platform
     platform             platform,
