@@ -122,21 +122,25 @@ class Platform:
     async def worker_calls(self, session, task):
         url, page = task
         while not self.handler.is_shutdown:
-            async with session.get(url, proxy=self.proxy) as response:
-                if response.status == 200:
-                    return [page, await response.json()]
-                if response.status == 404:
-                    return [page, []]
-                if response.status == 429:
-                    await asyncio.sleep(0.5)
-                elif response.status == 430:
-                    data = await response.json()
-                    wait_until = datetime.fromtimestamp(data["Retry-At"])
-                    seconds = (wait_until - datetime.now()).total_seconds()
-                    seconds = max(0.1, seconds)
-                    await asyncio.sleep(seconds)
-                else:
-                    await asyncio.sleep(0.1)
+            try:
+                async with session.get(url, proxy=self.proxy) as response:
+                    if response.status == 200:
+                        return [page, await response.json()]
+                    if response.status == 404:
+                        return [page, []]
+                    if response.status == 429:
+                        await asyncio.sleep(0.5)
+                    elif response.status == 430:
+                        data = await response.json()
+                        wait_until = datetime.fromtimestamp(data["Retry-At"])
+                        seconds = (wait_until - datetime.now()).total_seconds()
+                        seconds = max(0.1, seconds)
+                        await asyncio.sleep(seconds)
+                    else:
+                        await asyncio.sleep(0.1)
+            except aiohttp.ClientProxyConnectionError:
+                await asyncio.sleep(0.1)
+                continue
 
     async def worker(self, player, session):
         while not self.handler.is_shutdown:
