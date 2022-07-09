@@ -96,15 +96,12 @@ class Platform:
             await query.executemany(self.found)
             self.found = []
         if self.missing:
-            await connection.execute(
+            prep = await connection.prepare(
                 """UPDATE "match_{platform:s}"
-                   SET find_fails = find_fails + 1
-                   WHERE match_id = ANY($1::bigint)
-                """.format(
-                    platform=self.platform.lower()
-                ),
-                [entry['match_id'] for entry in self.missing],
-            )
+                                   SET find_fails = find_fails + 1
+                                   WHERE match_id = $1
+                                """.format(platform=self.platform.lower()))
+            await prep.executemany([entry['match_id'] for entry in self.missing])
             self.missing = []
 
         if self.summoner_updates:
