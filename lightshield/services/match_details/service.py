@@ -103,7 +103,7 @@ class Platform:
                 """.format(
                     platform=self.platform.lower()
                 ),
-                self.missing,
+                [entry['match_id'] for entry in self.missing],
             )
             self.missing = []
 
