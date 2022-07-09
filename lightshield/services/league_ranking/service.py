@@ -143,7 +143,7 @@ class Service:
                         await connection.executemany(
                             """INSERT INTO "ranking_{platform_lower:s}" (summoner_id, platform, rank, division, leaguepoints)
                                 VALUES ($1, '{platform:s}', $2, $3, $4)
-                                ON CONFLICT (summoner_id) DO 
+                                ON CONFLICT (summoner_id, platform) DO 
                                 UPDATE SET  rank = EXCLUDED.rank,
                                             division = EXCLUDED.division,
                                             leaguepoints = EXCLUDED.leaguepoints,

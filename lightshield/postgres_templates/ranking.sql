@@ -14,8 +14,8 @@ CREATE TABLE ranking
     games_fq     SMALLINT,
 
     -- Last updated value
-    last_updated TIMESTAMP
-
+    last_updated TIMESTAMP,
+    PRIMARY KEY (summoner_id, platform)
 )
     PARTITION BY LIST (platform)
 ;
