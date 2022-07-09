@@ -101,7 +101,7 @@ class Platform:
                                    SET find_fails = find_fails + 1
                                    WHERE match_id = $1
                                 """.format(platform=self.platform.lower()))
-            await prep.executemany([entry['match_id'] for entry in self.missing])
+            await prep.executemany([(entry['match_id']) for entry in self.missing])
             self.missing = []
 
         if self.summoner_updates:
