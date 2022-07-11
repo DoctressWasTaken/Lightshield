@@ -16,8 +16,8 @@ async def init_db(config, **kwargs):
         exit()
 
     if input(
-            "\nAll content in the `%s` tables will be overwritten, are you sure? [yes/no] "
-            % psq_con.schema
+        "\nAll content in the `%s` tables will be overwritten, are you sure? [yes/no] "
+        % psq_con.schema
     ).lower() not in ["y", "yes"]:
         exit()
     db = await asyncpg.create_pool(
@@ -35,6 +35,6 @@ async def init_db(config, **kwargs):
             logger.info("Generated %s", file)
             with open(os.path.join(path, file)) as sql_file:
                 sql = sql_file.read()
-                sql = sql.replace('{{schema}}', psq_con.schema)
+                sql = sql.replace("{{schema}}", psq_con.schema)
 
                 await connection.execute(sql)

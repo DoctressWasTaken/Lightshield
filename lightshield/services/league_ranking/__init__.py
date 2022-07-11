@@ -23,7 +23,8 @@ class Handler:
         self.protocol = config.connections.proxy.protocol
         self.proxy = "%s://%s" % (
             config.connections.proxy.protocol,
-            config.connections.proxy.location)
+            config.connections.proxy.location,
+        )
 
         select_platforms = self.service.platforms or config.statics.enums.platforms
         for platform in select_platforms:
@@ -46,8 +47,3 @@ class Handler:
 
         await asyncio.gather(*tasks)
         await self.handle_shutdown()
-
-
-
-
-

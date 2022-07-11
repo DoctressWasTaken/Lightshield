@@ -100,8 +100,11 @@ class Platform:
                 """UPDATE "match_{platform:s}"
                                    SET find_fails = find_fails + 1
                                    WHERE match_id = $1
-                                """.format(platform=self.platform.lower()))
-            await prep.executemany([(entry['match_id']) for entry in self.missing])
+                                """.format(
+                    platform=self.platform.lower()
+                )
+            )
+            await prep.executemany([(entry["match_id"]) for entry in self.missing])
             self.missing = []
 
         if self.summoner_updates:
@@ -125,12 +128,12 @@ class Platform:
         creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
         patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
         if (
-                "gameStartTimestamp" in response["info"]
-                and "gameEndTimestamp" in response["info"]
+            "gameStartTimestamp" in response["info"]
+            and "gameEndTimestamp" in response["info"]
         ):
             game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                response["info"]["gameEndTimestamp"]
+                - response["info"]["gameStartTimestamp"]
             )
         else:
             game_duration = response["info"]["gameDuration"]
@@ -166,8 +169,8 @@ class Platform:
         filename = os.path.join(path, "%s_%s.json" % (self.platform, task[0]))
         if not os.path.isfile(filename):
             with open(
-                    filename,
-                    "w+",
+                filename,
+                "w+",
             ) as file:
                 file.write(json.dumps(response))
 

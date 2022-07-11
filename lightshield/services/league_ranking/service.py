@@ -20,8 +20,8 @@ class Service:
         self.rankmanager = RankManager(config, self.logging, handler)
         self.retry_after = datetime.now()
         self.url = (
-                f"{handler.protocol}://{self.name.lower()}.api.riotgames.com/lol/"
-                + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
+            f"{handler.protocol}://{self.name.lower()}.api.riotgames.com/lol/"
+            + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
         self.preset = {}
         self.to_update = {}
@@ -51,8 +51,8 @@ class Service:
             for entry in data:
                 rank = [entry["tier"], entry["rank"], entry["leaguePoints"]]
                 if (
-                        entry["summonerId"] not in self.preset
-                        or self.preset[entry["summonerId"]] != rank
+                    entry["summonerId"] not in self.preset
+                    or self.preset[entry["summonerId"]] != rank
                 ):
                     self.to_update[entry["summonerId"]] = rank
 
@@ -67,7 +67,9 @@ class Service:
             self.empty_page = False
             async with aiohttp.ClientSession() as session:
                 while pages and not self.handler.is_shutdown:
-                    tasks = [asyncio.create_task(self.fetch(page, session)) for page in pages]
+                    tasks = [
+                        asyncio.create_task(self.fetch(page, session)) for page in pages
+                    ]
                     pages = list(filter(None, await asyncio.gather(*tasks)))
 
                     if not self.empty_page:
@@ -86,17 +88,20 @@ class Service:
         try:
             async with self.handler.db.acquire() as connection:
                 if latest := await connection.fetch(
-                        queries.preexisting[self.database].format(
-                            platform_lower=self.name.lower(),
-                            schema=self.handler.connection.schema
-                        ),
-                        *self.active_rank,
+                    queries.preexisting[self.database].format(
+                        platform_lower=self.name.lower(),
+                        schema=self.handler.connection.schema,
+                    ),
+                    *self.active_rank,
                 ):
-                    self.preset = {line["summoner_id"]: [
-                        line["rank"],
-                        line["division"],
-                        line["leaguepoints"],
-                    ] for line in latest}
+                    self.preset = {
+                        line["summoner_id"]: [
+                            line["rank"],
+                            line["division"],
+                            line["leaguepoints"],
+                        ]
+                        for line in latest
+                    }
         except Exception as err:
             self.logging.error(err)
             raise err
@@ -108,19 +113,18 @@ class Service:
                 to_update_list = [[key] + val for key, val in self.to_update.items()]
                 updated = len(to_update_list)
                 batch = to_update_list[:5000]
-                while to_update_list:
+                while to_update_list and not self.handler.is_shutdown:
                     try:
-                        await connection.executemany(
+                        prep = await connection.prepare(
                             queries.update[self.handler.connection.type].format(
                                 platform=self.name,
                                 platform_lower=self.name.lower(),
-                                schema=self.handler.connection.schema
-                            ),
-                            batch,
-                            timeout=60,
+                                schema=self.handler.connection.schema,
+                            )
                         )
+                        await prep.executemany(batch)
                     except asyncio.exceptions.TimeoutError:
-                        self.logging.error("Fetching preexisting entries timed out")
+                        self.logging.error("Inserting entries timed out")
                         continue
                     if len(to_update_list) > 5000:
                         to_update_list = to_update_list[5000:]
@@ -128,7 +132,9 @@ class Service:
                         to_update_list = []
                     batch = to_update_list[:5000]
                 self.logging.info(
-                    "Updated %s users in %s %s.", updated, *self.active_rank
+                    "Updated %s users in %s %s.",
+                    updated - len(to_update_list),
+                    *self.active_rank,
                 )
         except Exception as err:
             self.logging.error(err)

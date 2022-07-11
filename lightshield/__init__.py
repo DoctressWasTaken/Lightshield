@@ -118,7 +118,9 @@ def main():
     )
     _init_config.set_defaults(func=init_config, init_config=True)
 
-    _init_postgres = subparsers.add_parser("init-postgres", help="Initialize the Postgres DB")
+    _init_postgres = subparsers.add_parser(
+        "init-postgres", help="Initialize the Postgres DB"
+    )
     _init_postgres.set_defaults(func=postgres.init_db)
 
     _init_crate = subparsers.add_parser("init-crate", help="Initialize the Crate DB")
