@@ -8,7 +8,7 @@ tasks = {
     """,
     "crate": """
             UPDATE "{schema:s}".ranking
-            SET "lock" = NOW() + INTERVAL '10 minutes'
+            SET "lock" = NOW() + INTERVAL '10' MINUTE 
             WHERE platform = '{platform:s}'
             AND summoner_id IN (
                 SELECT summoner_id
