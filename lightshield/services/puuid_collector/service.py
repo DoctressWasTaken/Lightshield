@@ -34,7 +34,11 @@ class Platform:
                     platform_lower=self.platform.lower(),
                     schema=self.handler.connection.schema
                 )
-                self.tasks = await connection.fetch(query, workers * 20, )
+                try:
+                    self.tasks = await connection.fetch(query, workers * 20, )
+                except:
+                    self.logging.warning("Error is here")
+                    raise
                 if not self.tasks:
                     await asyncio.sleep(5)
                     workers = max(workers - 1, 1)
