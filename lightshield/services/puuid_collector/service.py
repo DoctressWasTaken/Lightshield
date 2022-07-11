@@ -30,14 +30,13 @@ class Platform:
                 async with connection.transaction():
                     self.results = []
                     self.not_found = []
-                    self.tasks = await connection.fetch(
-                        queries.tasks[self.handler.connection.type].format(
-                            platform=self.platform,
-                            platform_lower=self.platform.lower(),
-                            schema=self.handler.connection.schema
-                        ),
-                        workers * 20,
+                    query = queries.tasks[self.handler.connection.type].format(
+                        platform=self.platform,
+                        platform_lower=self.platform.lower(),
+                        schema=self.handler.connection.schema
                     )
+                    self.logging.info(query)
+                    self.tasks = await connection.fetch(query, workers * 20, )
                     if not self.tasks:
                         await asyncio.sleep(5)
                         workers = max(workers - 1, 1)
