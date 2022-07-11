@@ -1,39 +1,30 @@
 """Match History"""
 import asyncio
-import json
 import logging
 import os
-import signal
-
-import aioredis
 import asyncpg
 
 from lightshield.services.match_history.service import Platform
+from lightshield.connection_handler import Connection
 
 
 class Handler:
     platforms = {}
     is_shutdown = False
-    postgres = None
+    db = None
 
     def __init__(self, configs):
         self.logging = logging.getLogger("Service")
-        self.connections = configs.connections
         self.service = configs.services.match_history
         self.configs = configs
-
-        proxy = self.connections.proxy
-        self.proxy = "%s://%s" % (proxy.protocol, proxy.location)
+        self.connection = Connection(config=configs)
+        self.protocol = configs.connections.proxy.protocol
+        self.proxy = "%s://%s" % (
+            configs.connections.proxy.protocol,
+            configs.connections.proxy.location)
 
     async def init(self):
-        psq_con = self.connections.postgres
-        self.postgres = await asyncpg.create_pool(
-            host=psq_con.hostname,
-            port=psq_con.port,
-            user=psq_con.user,
-            database=psq_con.database,
-            password=os.getenv(psq_con.password_env),
-        )
+        self.db = await self.connection.init()
 
         for region, platforms in self.configs.statics.mapping.__dict__.items():
             for platform in platforms:
@@ -47,7 +38,7 @@ class Handler:
         self.is_shutdown = True
 
     async def handle_shutdown(self):
-        await self.postgres.close()
+        await self.db.close()
 
     async def run(self):
         """Run."""

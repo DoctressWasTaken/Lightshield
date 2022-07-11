@@ -12,7 +12,7 @@ from lightshield.connection_handler import Connection
 class Handler:
     platforms = {}
     is_shutdown = False
-    postgres = None
+    db = None
 
     def __init__(self, configs):
         self.logging = logging.getLogger("Handler")

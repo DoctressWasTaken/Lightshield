@@ -11,14 +11,14 @@ lock = {
                """,
     "crate": """
                 UPDATE "{schema}"."match"
-                    SET "lock" = NOW() + INTERVAL '10 minutes'
+                    SET "lock_details" = NOW() + INTERVAL '10 minutes'
                 WHERE platform = '{platform:s}'
                     AND match_id IN (
                         SELECT match_id
                         FROM lightshield."match"
                         WHERE platform = '{platform:s}'
-                            AND ("lock" IS NULL
-                            OR "lock" < NOW())
+                            AND ("lock_details" IS NULL
+                            OR "lock_details" < NOW())
                     LIMIT $1)
                 RETURNING match_id
                """

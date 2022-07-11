@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 
 import aiohttp
 
+from lightshield.services.match_history import queries
+
 
 class Platform:
     running = False
@@ -27,143 +29,120 @@ class Platform:
         if self.service.queue:
             self.endpoint_url += "&queue=%s" % self.service.queue
 
+        self.matches = []
         self.updated_players = []
 
+    async def insert_matches(self, connection):
+        by_platform = {}
+        for match in list(set(self.matches)):
+            platform, id = match.split("_")
+            if platform not in by_platform:
+                by_platform[platform] = []
+            by_platform[platform].append(int(id))
+
+        for platform in by_platform.keys():
+            if self.service.queue:
+                data = [
+                    [platform, id, self.service.queue]
+                    for id in by_platform[platform]
+                ]
+                await connection.executemany(
+                    queries.insert_queue_known[self.handler.connection.type]
+                    .format(
+                        platform=self.platform,
+                        platform_lower=self.platform.lower(),
+                        schema=self.handler.connection.schema
+                    ),
+                    data,
+                )
+            else:
+                data = [[platform, id] for id in by_platform[platform]]
+                await connection.executemany(
+                    queries.insert_queue_unknown[self.handler.connection.type]
+                    .format(
+                        platform=self.platform,
+                        platform_lower=self.platform.lower(),
+                        schema=self.handler.connection.schema
+                    ),
+                    data,
+                )
+        self.logging.info("Inserted %s matches.", len(self.matches))
+
+    async def insert_players(self, connection):
+        prep = await connection.prepare(
+            queries.update_players[self.handler.connection.type].format(
+                platform=self.platform,
+                platform_lower=self.platform.lower(),
+                schema=self.handler.connection.schema
+            ))
+        await prep.executemany(self.updated_players)
+        self.logging.info("Updated %s players.", len(self.updated_players))
+
     async def run(self):
+        semaphore = asyncio.Semaphore(20)
         while not self.handler.is_shutdown:
-            async with self.handler.postgres.acquire() as connection:
-                async with connection.transaction():
-                    players = await connection.fetch(
-                        """
-                        SELECT  puuid, 
-                                latest_match, 
-                                last_history_update
-                        FROM summoner
-                        WHERE platform = $1
-                            AND (
-                                last_activity > last_history_update
-                                OR last_history_update IS NULL)
-                            AND (last_history_update + INTERVAL '1 days' * $2 < CURRENT_DATE
-                            OR last_history_update IS NULL)
-                        ORDER BY last_history_update NULLS FIRST
-                        LIMIT 200
-                        FOR UPDATE 
-                        SKIP LOCKED
-                    """,
-                        self.platform,
-                        self.service.min_wait,
+            async with self.handler.db.acquire() as connection:
+                self.matches = []
+                players = await connection.fetch(
+                    queries.reserve[self.handler.connection.type].format(
+                        platform=self.platform,
+                        platform_lower=self.platform.lower(),
+                        schema=self.handler.connection.schema,
+                        min_wait=self.service.min_wait
+                    ), self.service.min_wait
+                )
+                if not players:
+                    await asyncio.sleep(5)
+                    continue
+                async with aiohttp.ClientSession() as session:
+                    await asyncio.gather(
+                        *[
+                            asyncio.create_task(self.worker(player, semaphore, session))
+                            for player in players
+                        ]
                     )
-                    if not players:
-                        await asyncio.sleep(5)
-                        continue
-                    async with aiohttp.ClientSession() as session:
-                        matches = await asyncio.gather(
-                            *[
-                                asyncio.create_task(self.worker(player, session))
-                                for player in players
-                            ]
-                        )
-                    if self.handler.is_shutdown:
-                        return
-                    set_matches = list(set([m for mm in matches for m in mm]))
-                    if set_matches:
-                        by_platform = {}
-                        for match in set_matches:
-                            platform, id = match.split("_")
-                            if platform not in by_platform:
-                                by_platform[platform] = []
-                            by_platform[platform].append(int(id))
+                if self.handler.is_shutdown:
+                    return
+                if self.matches:
+                    await self.insert_matches(connection=connection)
+                if self.updated_players:
+                    await self.insert_players(connection=connection)
 
-                        for platform in by_platform.keys():
-                            if self.service.queue:
-                                data = [
-                                    [platform, id, self.service.queue]
-                                    for id in by_platform[platform]
-                                ]
-                                await connection.executemany(
-                                    """
-                                    INSERT INTO "match_{platform:s}" (platform, match_id, queue)
-                                    VALUES ($1, $2, $3)
-                                    ON CONFLICT DO NOTHING
-                                """.format(
-                                        platform=platform.lower()
-                                    ),
-                                    data,
-                                )
-                            else:
-                                data = [[platform, id] for id in by_platform[platform]]
-                                await connection.executemany(
-                                    """
-                                    INSERT INTO "match_{platform:s}" (platform, match_id)
-                                    VALUES ($1, $2)
-                                    ON CONFLICT DO NOTHING
-                                """.format(
-                                        platform=platform.lower()
-                                    ),
-                                    data,
-                                )
-                    if self.updated_players:
-                        prep = await connection.prepare(
-                            """
-                            UPDATE summoner
-                            SET latest_match = $2,
-                                last_history_update = $3
-                            WHERE puuid = $1
-                        """
-                        )
-                        await prep.executemany(self.updated_players)
-                        self.logging.info(
-                            "Updated %s users [%s matches]",
-                            len(self.updated_players),
-                            len(set_matches),
-                        )
-                    self.updated_players = []
-
-    async def worker_calls(self, session, task):
-        url, page = task
-        while not self.handler.is_shutdown:
-            try:
-                async with session.get(url, proxy=self.proxy) as response:
-                    if response.status == 200:
-                        return [page, await response.json()]
-                    if response.status == 404:
-                        return [page, []]
-                    if response.status == 429:
-                        await asyncio.sleep(0.5)
-                    elif response.status == 430:
-                        data = await response.json()
-                        wait_until = datetime.fromtimestamp(data["Retry-At"])
-                        seconds = (wait_until - datetime.now()).total_seconds()
-                        seconds = max(0.1, seconds)
-                        await asyncio.sleep(seconds)
-                    else:
-                        await asyncio.sleep(0.1)
-            except aiohttp.ClientProxyConnectionError:
-                await asyncio.sleep(0.1)
-                continue
-
-    async def worker(self, player, session):
-        while not self.handler.is_shutdown:
-            now = datetime.now() - timedelta(days=self.service.history.days)
-            now_tst = int(now.timestamp())
-            url = self.endpoint_url % player["puuid"]
-            url += "&startTime=%s" % now_tst
-            tasks = []
-            page = 0
-            while page * 100 < self.service.history.matches:
-                tasks.append([url + "&start=%s" % page, page])
-                page += 1
-            results = await asyncio.gather(
-                *[self.worker_calls(session, task) for task in tasks]
-            )
-            if len(results) == 0:
-                continue
-            pages_sorted = {page[0]: page[1] for page in results}
-            matches = []
-            for page in range(len(pages_sorted)):
-                matches += pages_sorted[page]
-            new_latest = None
-            if matches:
-                new_latest = int(matches.pop().split("_")[1])
-            self.updated_players.append([player["puuid"], new_latest, now])
-            return matches
+    async def worker(self, player, semaphore, session):
+        now = datetime.now() - timedelta(days=self.service.history.days)
+        now_tst = int(now.timestamp())
+        url = self.endpoint_url % player["puuid"]
+        url += "&startTime=%s" % now_tst
+        start_index = 0
+        is_404 = False
+        latest_match = None
+        while start_index < self.service.history.matches and not is_404 and not self.handler.is_shutdown:
+            task_url = url + "&start=%s" % start_index
+            async with semaphore:
+                try:
+                    async with session.get(task_url, proxy=self.proxy) as response:
+                        match response.status:
+                            case 200:
+                                matches = await response.json()
+                                if not matches:
+                                    break
+                                if start_index == 0:
+                                    latest_match = int(matches[0].split('_')[1])
+                                start_index += 100
+                                self.matches += matches
+                            case 404:
+                                is_404 = True
+                            case 429:
+                                await asyncio.sleep(0.5)
+                            case 430:
+                                data = await response.json()
+                                wait_until = datetime.fromtimestamp(data["Retry-At"])
+                                seconds = (wait_until - datetime.now()).total_seconds()
+                                seconds = max(0.1, seconds)
+                                await asyncio.sleep(seconds)
+                            case _:
+                                await asyncio.sleep(0.1)
+                except aiohttp.ClientProxyConnectionError:
+                    await asyncio.sleep(0.1)
+                    continue
+        self.updated_players.append([player["puuid"], latest_match, now])

@@ -41,18 +41,17 @@ class Platform:
     async def run(self):
         while not self.handler.is_shutdown:
             async with self.handler.db.acquire() as connection:
-                async with connection.transaction():
-                    await self.pull_tasks(connection)
-                    async with aiohttp.ClientSession() as session:
-                        await asyncio.gather(
-                            *[
-                                asyncio.create_task(self.worker(session, _))
-                                for _ in range(self.worker_count)
-                            ]
-                        )
-                    if self.handler.is_shutdown:
-                        return
-                    await self.flush(connection)
+                await self.pull_tasks(connection)
+                async with aiohttp.ClientSession() as session:
+                    await asyncio.gather(
+                        *[
+                            asyncio.create_task(self.worker(session, _))
+                            for _ in range(self.worker_count)
+                        ]
+                    )
+                if self.handler.is_shutdown:
+                    return
+                await self.flush(connection)
 
     async def pull_tasks(self, connection):
         """Get match_ids from the db."""
