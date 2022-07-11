@@ -14,8 +14,8 @@ CREATE TABLE "{{schema}}"."ranking"
     games_fq     SMALLINT,
 
     -- Last updated value
-    last_updated TIMESTAMP,
+    last_updated TIMESTAMP WITHOUT TIME ZONE,
     -- Updating key
-    lock         TIMESTAMP,
+    lock         TIMESTAMP WITHOUT TIME ZONE,
     PRIMARY KEY (summoner_id, platform)
 ) PARTITIONED BY (platform);

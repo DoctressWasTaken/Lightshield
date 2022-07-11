@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta
 
 import aiohttp
+from lightshield.services.match_details import queries
 
 
 class Platform:
@@ -56,19 +57,11 @@ class Platform:
     async def pull_tasks(self, connection):
         """Get match_ids from the db."""
         while not self.handler.is_shutdown:
-            self.matches = await connection.fetch(
-                """
-               SELECT  match_id
-               FROM "match_{platform:s}"
-                   WHERE details IS NULL
-                    AND find_fails < 10
-                ORDER BY find_fails 
-               LIMIT $1
-               FOR UPDATE 
-               SKIP LOCKED
-               """.format(
-                    platform=self.platform.lower()
-                ),
+            self.matches = await connection.fetch(queries.lock[self.handler.connection.type].format(
+                platform=self.platform,
+                platform_lower=self.platform.lower(),
+                schema=self.handler.connection.schema
+            ),
                 self.worker_count * 10,
             )
             if not self.matches:
@@ -81,42 +74,28 @@ class Platform:
         """Insert results from requests into the db."""
         if self.found:
             query = await connection.prepare(
-                """UPDATE "match_{platform:s}"
-                SET queue = $1,
-                    timestamp = $2,
-                    version = $3,
-                    duration = $4,
-                    win = $5,
-                    details = TRUE
-                    WHERE match_id = $6
-                """.format(
-                    platform=self.platform.lower()
+                queries.flush_found[self.handler.connection.type].format(
+                    platform=self.platform,
+                    platform_lower=self.platform.lower(),
+                    schema=self.handler.connection.schema
                 ),
             )
             await query.executemany(self.found)
             self.found = []
         if self.missing:
-            prep = await connection.prepare(
-                """UPDATE "match_{platform:s}"
-                                   SET find_fails = find_fails + 1
-                                   WHERE match_id = $1
-                                """.format(
-                    platform=self.platform.lower()
-                )
-            )
+            prep = await connection.prepare(queries.flush_missing[self.handler.connection.type].format(
+                platform=self.platform,
+                platform_lower=self.platform.lower(),
+                schema=self.handler.connection.schema,
+            ))
             await prep.executemany([(entry["match_id"]) for entry in self.missing])
             self.missing = []
 
         if self.summoner_updates:
             query = await connection.prepare(
-                """UPDATE summoner
-                    SET last_activity = $1,
-                        platform = $2,
-                        name = $3
-                    WHERE puuid = $4 
-                        AND last_activity < $1
-                """
-            )
+                queries.flush_updates[self.handler.connection.type].format(
+                    schema=self.handler.connection.schema,
+                ))
             await query.executemany(self.summoner_updates)
             self.summoner_updates = []
 
@@ -128,12 +107,12 @@ class Platform:
         creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
         patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
         if (
-            "gameStartTimestamp" in response["info"]
-            and "gameEndTimestamp" in response["info"]
+                "gameStartTimestamp" in response["info"]
+                and "gameEndTimestamp" in response["info"]
         ):
             game_duration = (
-                response["info"]["gameEndTimestamp"]
-                - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
             )
         else:
             game_duration = response["info"]["gameDuration"]
@@ -169,8 +148,8 @@ class Platform:
         filename = os.path.join(path, "%s_%s.json" % (self.platform, task[0]))
         if not os.path.isfile(filename):
             with open(
-                filename,
-                "w+",
+                    filename,
+                    "w+",
             ) as file:
                 file.write(json.dumps(response))
 

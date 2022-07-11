@@ -11,10 +11,10 @@ CREATE TABLE "{{schema}}"."summoner"
     last_history_update TIMESTAMP DEFAULT NULL,
     latest_match        BIGINT    DEFAULT NULL,
     -- Either through a match found or a summoner-v4 endpoint
-    last_activity       TIMESTAMP,
+    last_activity       TIMESTAMP WITHOUT TIME ZONE,
     -- summoner_tracker update timestamp. So it only updates every x days
-    last_updated        TIMESTAMP,
+    last_updated        TIMESTAMP WITHOUT TIME ZONE,
     -- Updating key
-    lock                TIMESTAMP,
+    lock                TIMESTAMP WITHOUT TIME ZONE,
     PRIMARY KEY (puuid)
 );
