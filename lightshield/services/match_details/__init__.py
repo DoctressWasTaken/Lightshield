@@ -39,7 +39,7 @@ class Handler:
         self.is_shutdown = True
 
     async def handle_shutdown(self):
-        await self.postgres.close()
+        await self.db.close()
 
     async def run(self):
         """Run."""

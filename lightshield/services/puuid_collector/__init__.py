@@ -6,6 +6,7 @@ import os
 import asyncpg
 
 from lightshield.services.puuid_collector.service import Platform
+from lightshield.connection_handler import Connection
 
 
 class Handler:
@@ -15,24 +16,18 @@ class Handler:
 
     def __init__(self, configs):
         self.logging = logging.getLogger("Handler")
-        self.connections = configs.connections
         self.config = configs.services.puuid_collector
-        proxy = self.connections.proxy
-        self.protocol = proxy.protocol
-        self.proxy = "%s://%s" % (proxy.protocol, proxy.location)
+        self.connection = Connection(config=configs)
+        self.protocol = configs.connections.proxy.protocol
+        self.proxy = "%s://%s" % (
+            configs.connections.proxy.protocol,
+            configs.connections.proxy.location)
 
         for platform in configs.statics.enums.platforms:
             self.platforms[platform] = Platform(platform, self)
 
     async def init(self):
-        psq_con = self.connections.postgres
-        self.postgres = await asyncpg.create_pool(
-            host=psq_con.hostname,
-            port=psq_con.port,
-            user=psq_con.user,
-            database=psq_con.database,
-            password=os.getenv(psq_con.password_env),
-        )
+        self.db = await self.connection.init()
 
     async def init_shutdown(self, *args, **kwargs):
         """Shutdown handler"""
@@ -41,7 +36,7 @@ class Handler:
 
     async def handle_shutdown(self):
         """Close db connection pool after services have shut down."""
-        await self.postgres.close()
+        await self.db.close()
 
     async def run(self):
         """Run."""

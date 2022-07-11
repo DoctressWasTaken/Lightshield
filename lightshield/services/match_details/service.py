@@ -40,7 +40,7 @@ class Platform:
 
     async def run(self):
         while not self.handler.is_shutdown:
-            async with self.handler.postgres.acquire() as connection:
+            async with self.handler.db.acquire() as connection:
                 async with connection.transaction():
                     await self.pull_tasks(connection)
                     async with aiohttp.ClientSession() as session:

@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 
 import aiohttp
+from lightshield.services.puuid_collector import queries
 
 
 class Platform:
@@ -25,28 +26,23 @@ class Platform:
         """Main object loop."""
         workers = 10
         while not self.handler.is_shutdown:
-            async with self.handler.postgres.acquire() as connection:
+            async with self.handler.db.acquire() as connection:
                 async with connection.transaction():
                     self.results = []
                     self.not_found = []
                     self.tasks = await connection.fetch(
-                        """
-                            SELECT summoner_id 
-                            FROM "ranking_{platform:s}"
-                            WHERE puuid IS NULL
-                            LIMIT $1 
-                            FOR UPDATE 
-                            SKIP LOCKED    
-                            """.format(
-                            platform=self.platform.lower()
+                        queries.tasks[self.handler.connection.type].format(
+                            platform=self.platform,
+                            platform_lower=self.platform.lower(),
+                            schema=self.handler.connection.schema
                         ),
-                        workers * 50,
+                        workers * 20,
                     )
                     if not self.tasks:
                         await asyncio.sleep(5)
                         workers = max(workers - 1, 1)
                         continue
-                    workers = len(self.tasks) // 50
+                    workers = len(self.tasks) // 20
                     async with aiohttp.ClientSession() as session:
                         await asyncio.gather(
                             *[
@@ -100,11 +96,10 @@ class Platform:
             )
         if self.results:
             prep = await connection.prepare(
-                """UPDATE "ranking_{platform:s}"
-                    SET puuid = $2
-                    WHERE summoner_id =  $1
-                """.format(
-                    platform=self.platform.lower()
+                queries.update_ranking[self.handler.connection.type].format(
+                    platform=self.platform,
+                    platform_lower=self.platform.lower(),
+                    schema=self.handler.connection.schema
                 )
             )
             await prep.executemany([res[:2] for res in self.results])
@@ -114,20 +109,19 @@ class Platform:
                 for res in self.results
             ]
             prep = await connection.prepare(
-                """INSERT INTO summoner (puuid, name, last_activity, platform, last_updated)
-                VALUES($1, $2, $3, $4, CURRENT_DATE)
-                ON CONFLICT (puuid) 
-                DO NOTHING
-                """
-            )
+                queries.insert_summoner[self.handler.connection.type].format(
+                    platform=self.platform,
+                    platform_lower=self.platform.lower(),
+                    schema=self.handler.connection.schema
+                ))
             await prep.executemany(converted_results)
 
         if self.not_found:
             await connection.execute(
-                """DELETE FROM "ranking_{platform:s}"
-                    WHERE summoner_id = ANY($1::varchar)
-                """.format(
-                    platform=self.platform.lower()
+                queries.missing_summoner[self.handler.connection.type].format(
+                    platform=self.platform,
+                    platform_lower=self.platform.lower(),
+                    schema=self.handler.connection.schema
                 ),
                 self.not_found,
             )
