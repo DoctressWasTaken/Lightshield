@@ -1,5 +1,7 @@
 version: 1.0
 
+database: postgres
+
 connections:
   postgres:
     hostname: localhost
@@ -7,6 +9,12 @@ connections:
     user: postgres
     database: lightshield
     password_env: POSTGRES_PASSWORD
+  crate:
+    hostname: localhost
+    port: 5433
+    user: crate
+    schema: lightshield # Crate doesnt have databases
+    password_env: CRATE_PASSWORD
   proxy:
     location: 'localhost:8888'
     protocol: http

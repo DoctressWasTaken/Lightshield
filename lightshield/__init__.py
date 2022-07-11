@@ -10,9 +10,8 @@ import uvloop
 import yaml
 from dotenv import load_dotenv
 
-from lightshield.postgres import init_db
+from lightshield.cli_commands import crate, postgres
 from pprint import PrettyPrinter
-import json
 
 pp = PrettyPrinter(indent=4, width=160)
 load_dotenv()
@@ -119,8 +118,11 @@ def main():
     )
     _init_config.set_defaults(func=init_config, init_config=True)
 
-    _init_db = subparsers.add_parser("init-postgres", help="Initialize the Postgres DB")
-    _init_db.set_defaults(func=init_db)
+    _init_postgres = subparsers.add_parser("init-postgres", help="Initialize the Postgres DB")
+    _init_postgres.set_defaults(func=postgres.init_db)
+
+    _init_crate = subparsers.add_parser("init-crate", help="Initialize the Crate DB")
+    _init_crate.set_defaults(func=crate.init_db)
 
     args = vars(parser.parse_args())
     if "DEBUG" in os.environ or args.get("d"):

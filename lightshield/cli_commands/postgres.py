@@ -67,7 +67,7 @@ async def init_db(config, **kwargs):
             )
             await connection.execute(query)
 
-    path = os.path.join(os.path.dirname(__file__), "postgres_templates")
+    path = os.path.join(os.path.dirname(__file__), "../postgres_templates")
     files = os.listdir(path)
 
     async with db.acquire() as connection:
