@@ -27,30 +27,28 @@ class Platform:
         workers = 10
         while not self.handler.is_shutdown:
             async with self.handler.db.acquire() as connection:
-                async with connection.transaction():
-                    self.results = []
-                    self.not_found = []
-                    query = queries.tasks[self.handler.connection.type].format(
-                        platform=self.platform,
-                        platform_lower=self.platform.lower(),
-                        schema=self.handler.connection.schema
+                self.results = []
+                self.not_found = []
+                query = queries.tasks[self.handler.connection.type].format(
+                    platform=self.platform,
+                    platform_lower=self.platform.lower(),
+                    schema=self.handler.connection.schema
+                )
+                self.tasks = await connection.fetch(query, workers * 20, )
+                if not self.tasks:
+                    await asyncio.sleep(5)
+                    workers = max(workers - 1, 1)
+                    continue
+                workers = len(self.tasks) // 20
+                async with aiohttp.ClientSession() as session:
+                    await asyncio.gather(
+                        *[
+                            asyncio.create_task(self.worker(session))
+                            for _ in range(workers)
+                        ]
                     )
-                    self.logging.info(query)
-                    self.tasks = await connection.fetch(query, workers * 20, )
-                    if not self.tasks:
-                        await asyncio.sleep(5)
-                        workers = max(workers - 1, 1)
-                        continue
-                    workers = len(self.tasks) // 20
-                    async with aiohttp.ClientSession() as session:
-                        await asyncio.gather(
-                            *[
-                                asyncio.create_task(self.worker(session))
-                                for _ in range(workers)
-                            ]
-                        )
-                    await self.flush_tasks(connection=connection)
-                    workers = min(10, workers + 1)
+                await self.flush_tasks(connection=connection)
+                workers = min(10, workers + 1)
 
     async def worker(self, session):
         """Execute requests."""
