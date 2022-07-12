@@ -64,34 +64,43 @@ class Platform:
         """Execute requests."""
         target = None
         while not self.handler.is_shutdown:
-            await asyncio.sleep(0.1)
             if self.retry_after > datetime.now():
+                await asyncio.sleep(0.1)
                 continue
-            await asyncio.sleep(0.1)
             if not target:
                 if not self.tasks:
                     return
                 target = self.tasks.pop()
             url = self.endpoint_url % target["summoner_id"]
-            async with session.get(url, proxy=self.handler.proxy) as response:
-                try:
+            try:
+                async with session.get(url, proxy=self.handler.proxy) as response:
                     data = await response.json()
-                except aiohttp.ContentTypeError:
-                    continue
-                if response.status == 200:
-                    self.results.append(
-                        [data["id"], data["puuid"], data["name"], data["revisionDate"]]
-                    )
-                    target = None
-                    continue
-                if response.status == 429:
-                    await asyncio.sleep(0.5)
-                if response.status == 430:
-                    wait_until = datetime.fromtimestamp(data["Retry-At"])
-                    seconds = (wait_until - datetime.now()).total_seconds()
-                    self.retry_after = wait_until
-                    seconds = max(0.1, seconds)
-                    await asyncio.sleep(seconds)
+                match response.status:
+                    case 200:
+                        self.results.append(
+                            [data["id"], data["puuid"], data["name"], data["revisionDate"]]
+                        )
+                        target = None
+                    case 404:
+                        self.not_found.append(target["summoner_id"])
+                        target = None
+                    case 429:
+                        await asyncio.sleep(0.5)
+                    case 430:
+                        wait_until = datetime.fromtimestamp(data["Retry-At"])
+                        seconds = (wait_until - datetime.now()).total_seconds()
+                        self.retry_after = wait_until
+                        seconds = max(0.1, seconds)
+                        await asyncio.sleep(seconds)
+                    case _:
+                        # Other response error
+                        continue
+            except aiohttp.ContentTypeError:
+                self.logging.error("Response was not a json.")
+                continue
+            except aiohttp.ClientProxyConnectionError:
+                self.logging.error("Lost connection to proxy.")
+                continue
 
     async def flush_tasks(self, connection):
         """Insert results from requests into the db."""
