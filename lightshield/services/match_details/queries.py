@@ -10,7 +10,7 @@ lock = {
                SKIP LOCKED
                """,
     "crate": """
-                UPDATE "{schema}"."match"
+                UPDATE "{schema:s}"."match"
                     SET "lock_details" = NOW() + INTERVAL '10 minutes'
                 WHERE platform = '{platform:s}'
                     AND match_id IN (
@@ -34,7 +34,7 @@ flush_found = {
                     details = TRUE
                     WHERE match_id = $6
                 """,
-    "crate": """UPDATE "{schema}"."match"
+    "crate": """UPDATE "{schema:s}"."match"
                 SET queue = $1,
                     timestamp = $2,
                     version = $3,
@@ -51,7 +51,7 @@ flush_missing = {
                                    SET find_fails = find_fails + 1
                                    WHERE match_id = $1
                                 """,
-    "crate": """UPDATE "{schema}"."match"
+    "crate": """UPDATE "{schema:s}"."match"
                                    SET find_fails = find_fails + 1,
                                        lock_details = NULL
                                    WHERE match_id = $1
@@ -66,7 +66,7 @@ flush_updates = {
                     WHERE puuid = $4 
                         AND last_activity < $1
                 """,
-    "crate": """UPDATE "{schema}".summoner
+    "crate": """UPDATE "{schema:s}".summoner
                     SET last_activity = $1,
                         platform = $2,
                         name = $3

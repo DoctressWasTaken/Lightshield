@@ -11,7 +11,7 @@ preexisting = {
                         rank,
                         division,
                         leaguepoints
-                        FROM "{schema}"."ranking"
+                        FROM "{schema:s}"."ranking"
                         WHERE rank = $1
                         AND division = $2
                         """,
@@ -27,7 +27,7 @@ update = {
                                             leaguepoints = EXCLUDED.leaguepoints,
                                             last_updated = NOW()
                             """,
-    "crate": """INSERT INTO "{schema}"."ranking" 
+    "crate": """INSERT INTO "{schema:s}"."ranking" 
                                 (summoner_id, platform, rank, division, leaguepoints, last_updated)
                                 VALUES ($1, '{platform:s}', $2, $3, $4, NOW())
                                 ON CONFLICT (summoner_id, platform) DO 
