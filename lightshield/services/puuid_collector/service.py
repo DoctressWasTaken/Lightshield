@@ -18,13 +18,12 @@ class Platform:
         # Dones
         self.results = []  # Properly returning entries. List of [puuid, summonerId]
         self.not_found = []  # Empty returning summoner-v4
-
+        self.batchsize = 500
         self.retry_after = datetime.now()
         self.endpoint_url = f"{handler.protocol}://{platform.lower()}.api.riotgames.com/lol/summoner/v4/summoners/%s"
 
     async def run(self):
         """Main object loop."""
-        workers = 10
         self.logging.info("Start")
         while not self.handler.is_shutdown:
             async with self.handler.db.acquire() as connection:
@@ -38,69 +37,65 @@ class Platform:
                 )
                 self.logging.info("Finished task query")
                 try:
-                    self.tasks = await connection.fetch(query, workers * 20)
+                    tasks = await connection.fetch(query, self.batchsize)
                 except:
                     self.logging.warning("Error is here")
                     raise
-                if not self.tasks:
+                if not tasks:
                     await asyncio.sleep(5)
-                    workers = max(workers - 1, 1)
                     continue
-                workers = len(self.tasks) // 20
+                semaphore = asyncio.Semaphore(20)
                 self.logging.info("Starting workers.")
                 async with aiohttp.ClientSession() as session:
                     await asyncio.gather(
                         *[
-                            asyncio.create_task(self.worker(session))
-                            for _ in range(workers)
+                            asyncio.create_task(self.worker(session, semaphore, task))
+                            for task in tasks
                         ]
                     )
                 self.logging.info("Done with workers.")
                 await self.flush_tasks(connection=connection)
                 self.logging.info("Done with flushing.")
-                workers = min(10, workers + 1)
 
-    async def worker(self, session):
+    async def worker(self, session, semaphore, task):
         """Execute requests."""
-        target = None
+        url = self.endpoint_url % task["summoner_id"]
         while not self.handler.is_shutdown:
-            if self.retry_after > datetime.now():
-                await asyncio.sleep(0.1)
-                continue
-            if not target:
-                if not self.tasks:
-                    return
-                target = self.tasks.pop()
-            url = self.endpoint_url % target["summoner_id"]
             try:
-                async with session.get(url, proxy=self.handler.proxy) as response:
-                    data = await response.json()
-                match response.status:
-                    case 200:
-                        self.results.append(
-                            [data["id"], data["puuid"], data["name"], data["revisionDate"]]
-                        )
-                        target = None
-                    case 404:
-                        self.not_found.append(target["summoner_id"])
-                        target = None
-                    case 429:
-                        await asyncio.sleep(0.5)
-                    case 430:
-                        wait_until = datetime.fromtimestamp(data["Retry-At"])
-                        seconds = (wait_until - datetime.now()).total_seconds()
-                        self.retry_after = wait_until
-                        seconds = max(0.1, seconds)
-                        await asyncio.sleep(seconds)
-                    case _:
-                        # Other response error
+                async with semaphore:
+                    if self.retry_after > datetime.now():
+                        await asyncio.sleep(0.1)
                         continue
+                    async with session.get(url, proxy=self.handler.proxy) as response:
+                        data = await response.json()
+                    match response.status:
+                        case 200:
+                            self.results.append(
+                                [data["id"], data["puuid"], data["name"], data["revisionDate"]]
+                            )
+                            return
+                        case 404:
+                            self.not_found.append(task["summoner_id"])
+                            return
+                        case 429:
+                            await asyncio.sleep(0.5)
+                        case 430:
+                            wait_until = datetime.fromtimestamp(data["Retry-At"])
+                            self.retry_after = wait_until
+                            seconds = (wait_until - datetime.now()).total_seconds()
+                            seconds = max(0.1, seconds)
+                            await asyncio.sleep(seconds)
+                        case _:
+                            # Other response error
+                            continue
             except aiohttp.ContentTypeError:
                 self.logging.error("Response was not a json.")
                 continue
             except aiohttp.ClientProxyConnectionError:
                 self.logging.error("Lost connection to proxy.")
                 continue
+            except aiohttp.ClientOSError:
+                self.logging.error("Connection reset.")
 
     async def flush_tasks(self, connection):
         """Insert results from requests into the db."""
