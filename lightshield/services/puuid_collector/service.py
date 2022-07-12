@@ -35,7 +35,7 @@ class Platform:
                     schema=self.handler.connection.schema
                 )
                 try:
-                    self.tasks = await connection.fetch(query, workers * 20, )
+                    self.tasks = await connection.fetch(query, workers * 20)
                 except:
                     self.logging.warning("Error is here")
                     raise

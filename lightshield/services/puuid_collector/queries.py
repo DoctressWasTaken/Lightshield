@@ -6,19 +6,21 @@ tasks = {
                    FOR UPDATE 
                    SKIP LOCKED    
     """,
-    "crate": """
-            UPDATE "{schema:s}".ranking
-            SET "lock" = NOW() + INTERVAL '10' MINUTE 
-            WHERE platform = '{platform:s}'
-            AND summoner_id IN (
-                SELECT summoner_id
+    "crate": """           
+            INSERT INTO "{schema:s}".ranking_lock (summoner_id, platform)
+            (
+                SELECT summoner_id,
+                       platform
                 FROM "{schema:s}".ranking
                 WHERE puuid IS NULL
-                AND platform = '{platform:s}'
-                AND ("lock" IS NULL OR "lock" < NOW())
-                LIMIT $1
-                )
-            RETURNING summoner_id
+                  AND platform = '{platform:s}'
+                  AND summoner_id NOT IN (
+                    SELECT summoner_id
+                    FROM lightshield.ranking_lock
+                    WHERE platform = '{platform:s}')
+                LIMIT $1)
+        ON CONFLICT DO NOTHING
+        RETURNING summoner_id
     """
 }
 
