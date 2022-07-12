@@ -25,8 +25,10 @@ class Platform:
     async def run(self):
         """Main object loop."""
         workers = 10
+        self.logging.info("Start")
         while not self.handler.is_shutdown:
             async with self.handler.db.acquire() as connection:
+                self.logging.info("Established Connection")
                 self.results = []
                 self.not_found = []
                 query = queries.tasks[self.handler.connection.type].format(
@@ -34,6 +36,7 @@ class Platform:
                     platform_lower=self.platform.lower(),
                     schema=self.handler.connection.schema
                 )
+                self.logging.info("Finished task query")
                 try:
                     self.tasks = await connection.fetch(query, workers * 20)
                 except:
@@ -44,6 +47,7 @@ class Platform:
                     workers = max(workers - 1, 1)
                     continue
                 workers = len(self.tasks) // 20
+                self.logging.info("Starting workers.")
                 async with aiohttp.ClientSession() as session:
                     await asyncio.gather(
                         *[
@@ -51,7 +55,9 @@ class Platform:
                             for _ in range(workers)
                         ]
                     )
+                self.logging.info("Done with workers.")
                 await self.flush_tasks(connection=connection)
+                self.logging.info("Done with flushing.")
                 workers = min(10, workers + 1)
 
     async def worker(self, session):
