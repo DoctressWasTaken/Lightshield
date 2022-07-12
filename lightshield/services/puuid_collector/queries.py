@@ -3,7 +3,7 @@ tasks = {
                    FROM "ranking_{platform:s}"
                    WHERE puuid IS NULL
                    LIMIT $1 
-                   FOR UPDATE 
+                   FOR SHARE 
                    SKIP LOCKED    
     """,
     "crate": """
@@ -11,7 +11,7 @@ tasks = {
             SET "lock" = NOW() + INTERVAL '10' MINUTE 
             WHERE platform = '{platform:s}'
             AND summoner_id IN (
-                SELECT summoner_id
+                SELECT summoner_id::varchar
                 FROM "{schema:s}".ranking
                 WHERE puuid IS NULL
                 AND platform = '{platform:s}'

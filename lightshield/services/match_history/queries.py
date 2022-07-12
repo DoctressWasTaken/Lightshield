@@ -12,7 +12,7 @@ reserve = {
                             OR last_history_update IS NULL)
                         ORDER BY last_history_update NULLS FIRST
                         LIMIT 200
-                        FOR UPDATE 
+                        FOR SHARE 
                         SKIP LOCKED
                     """,
     "crate": """

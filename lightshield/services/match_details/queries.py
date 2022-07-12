@@ -6,7 +6,7 @@ lock = {
                     AND find_fails < 10
                 ORDER BY find_fails 
                LIMIT $1
-               FOR UPDATE 
+               FOR SHARE 
                SKIP LOCKED
                """,
     "crate": """
