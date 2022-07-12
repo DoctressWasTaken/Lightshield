@@ -2,6 +2,7 @@ DROP TABLE IF EXISTS "{{schema}}"."summoner";
 CREATE TABLE "{{schema}}"."summoner"
 (
     puuid               VARCHAR(78),
+    part                GENERATED ALWAYS AS SUBSTR(puuid, 1, 1),
     name                VARCHAR,
 
     -- Currently assumed platform
@@ -16,5 +17,5 @@ CREATE TABLE "{{schema}}"."summoner"
     last_updated        TIMESTAMP WITHOUT TIME ZONE,
     -- Updating key
     lock                TIMESTAMP WITHOUT TIME ZONE,
-    PRIMARY KEY (puuid)
-);
+    PRIMARY KEY (puuid, part)
+) PARTITIONED BY (part);

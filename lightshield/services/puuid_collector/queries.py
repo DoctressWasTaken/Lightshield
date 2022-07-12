@@ -44,7 +44,7 @@ insert_summoner = {
     "crate": """INSERT INTO "{schema:s}".summoner 
                     (puuid, name, last_activity, platform, last_updated)
                     VALUES($1, $2, $3, $4, NOW())
-                    ON CONFLICT (puuid) 
+                    ON CONFLICT (puuid, part) 
                     DO NOTHING
                 """
 }
