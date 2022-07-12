@@ -24,10 +24,8 @@ class Platform:
 
     async def run(self):
         """Main object loop."""
-        self.logging.info("Start")
         while not self.handler.is_shutdown:
             async with self.handler.db.acquire() as connection:
-                self.logging.info("Established Connection")
                 self.results = []
                 self.not_found = []
                 query = queries.tasks[self.handler.connection.type].format(
@@ -35,17 +33,14 @@ class Platform:
                     platform_lower=self.platform.lower(),
                     schema=self.handler.connection.schema
                 )
-                self.logging.info("Finished task query")
                 try:
                     tasks = await connection.fetch(query, self.batchsize)
                 except:
-                    self.logging.warning("Error is here")
                     raise
                 if not tasks:
                     await asyncio.sleep(5)
                     continue
                 semaphore = asyncio.Semaphore(20)
-                self.logging.info("Starting workers.")
                 async with aiohttp.ClientSession() as session:
                     await asyncio.gather(
                         *[
@@ -53,9 +48,7 @@ class Platform:
                             for task in tasks
                         ]
                     )
-                self.logging.info("Done with workers.")
                 await self.flush_tasks(connection=connection)
-                self.logging.info("Done with flushing.")
 
     async def worker(self, session, semaphore, task):
         """Execute requests."""
