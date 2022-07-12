@@ -6,7 +6,7 @@ services:
     image: doctress/spiritmight:latest
     environment:
       - ENVIRONMENT=riot_api_proxy
-      - EXTRA_LENGTH=0.5
+      - EXTRA_LENGTH=1
       - DEBUG=False
       - REDIS_HOST=redis
       - REDIS_PORT=6379

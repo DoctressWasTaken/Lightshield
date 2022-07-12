@@ -23,6 +23,8 @@ class Handler:
             configs.connections.proxy.location)
         self.service = configs.services.match_history
         self.configs = configs
+        self.output_folder = configs.services.match_details.location or os.getcwd()
+        self.logging.info("Output folder: %s", self.output_folder)
 
     async def init(self):
         self.db = await self.connection.init()

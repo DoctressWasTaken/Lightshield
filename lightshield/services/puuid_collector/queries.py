@@ -50,10 +50,10 @@ insert_summoner = {
 }
 missing_summoner = {
     "postgres": """DELETE FROM "ranking_{platform_lower:s}"
-                    WHERE summoner_id = ANY($1::VARCHAR)
+                    WHERE summoner_id = $1
                 """,
     "crate": """DELETE FROM "{schema:s}".ranking
                     WHERE platform = '{platform:s}'
-                    AND summoner_id = ANY($1::VARCHAR)
+                    AND summoner_id = $1
     """
 }

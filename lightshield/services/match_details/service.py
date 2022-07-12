@@ -30,7 +30,6 @@ class Platform:
         self.summoner_updates = []
 
         self.output_folder = config.services.match_details.location or os.getcwd()
-        self.logging.info("Output folder: %s", self.output_folder)
         self.retry_after = datetime.now()
         self.proxy = handler.proxy
         self.endpoint_url = (
@@ -64,7 +63,6 @@ class Platform:
                 self.worker_count * 10,
             )
             if not self.matches:
-                self.logging.info("Found no tasks")
                 await asyncio.sleep(5)
                 continue
             return
