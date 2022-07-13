@@ -29,7 +29,8 @@ class Platform:
         """Main object loop."""
         while not self.handler.is_shutdown:
             if len(self.tasks) <= 2000:
-                self.tasks += await self.gather_tasks()
+                self.tasks += [entry['summoner_id'] for entry in await self.gather_tasks()]
+                self.tasks = list(set(self.tasks))
             if not self.tasks:
                 await asyncio.sleep(5)
                 continue
@@ -68,7 +69,7 @@ class Platform:
 
     async def task_handler(self, session, semaphore, task):
         """Execute requests."""
-        url = self.endpoint_url % task["summoner_id"]
+        url = self.endpoint_url % task
         try:
             async with semaphore:
                 async with session.get(url, proxy=self.handler.proxy) as response:
@@ -81,7 +82,7 @@ class Platform:
                         task = None
                         self.logging.debug('200 | %s', url)
                     case 404:
-                        self.not_found.append(task["summoner_id"])
+                        self.not_found.append(task)
                         task = None
                         self.logging.debug('404 | %s', url)
                     case 429:

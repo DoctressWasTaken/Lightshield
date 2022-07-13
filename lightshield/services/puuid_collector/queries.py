@@ -7,18 +7,11 @@ tasks = {
                    SKIP LOCKED    
     """,
     "crate": """
-            UPDATE "{schema:s}".ranking
-            SET "lock" = NOW() + INTERVAL '10' MINUTE 
-            WHERE platform = '{platform:s}'
-            AND summoner_id IN (
-                SELECT summoner_id::varchar
-                FROM "{schema:s}".ranking
-                WHERE puuid IS NULL
-                AND platform = '{platform:s}'
-                AND ("lock" IS NULL OR "lock" < NOW())
-                LIMIT $1
-                )
-            RETURNING summoner_id
+        SELECT summoner_id
+        FROM lightshield.ranking
+        WHERE puuid IS NULL
+          AND platform = 'EUW1'
+        LIMIT 4000
     """
 }
 
@@ -28,8 +21,7 @@ update_ranking = {
                     WHERE summoner_id =  $1
                 """,
     "crate": """UPDATE "{schema:s}".ranking
-                SET puuid = $2,
-                    lock = NULL
+                SET puuid = $2
                 WHERE summoner_id = $1
     """
 }
