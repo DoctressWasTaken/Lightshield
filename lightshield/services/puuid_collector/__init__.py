@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import socket
 
 import asyncpg
 
@@ -21,7 +22,7 @@ class Handler:
         self.protocol = configs.connections.proxy.protocol
         self.proxy = "%s://%s" % (
             configs.connections.proxy.protocol,
-            configs.connections.proxy.location)
+            socket.gethostbyname(configs.connections.proxy.location))
 
         for platform in configs.statics.enums.platforms:
             self.platforms[platform] = Platform(platform, self)
