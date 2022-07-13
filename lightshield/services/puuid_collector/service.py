@@ -43,7 +43,7 @@ class Platform:
                         task = self.tasks.pop()
                         async_threads.append(
                             asyncio.create_task(self.task_handler(session, task)))
-            await asyncio.gather(*async_threads)
+                await asyncio.gather(*async_threads)
             await self.flush_tasks()
             self.batchsize = 4000 - len(self.tasks)
 
