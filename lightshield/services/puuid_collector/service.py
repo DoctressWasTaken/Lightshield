@@ -73,25 +73,25 @@ class Platform:
         url = self.endpoint_url % task
         async with semaphore:
             try:
-                    async with session.get(url, proxy=self.handler.proxy) as response:
-                        data = await response.json()
-                    match response.status:
-                        case 200:
-                            self.results.append(
-                                [data["id"], data["puuid"], data["name"], data["revisionDate"]]
-                            )
-                            task = None
-                            self.logging.debug('200 | %s', url)
-                        case 404:
-                            self.not_found.append(task)
-                            task = None
-                            self.logging.debug('404 | %s', url)
-                        case 429:
-                            self.ratelimit_reached = True
-                        case 430:
-                            self.ratelimit_reached = True
-                            wait_until = datetime.fromtimestamp(data["Retry-At"])
-                            self.retry_after = wait_until
+                async with session.get(url, proxy=self.handler.proxy) as response:
+                    data = await response.json()
+                match response.status:
+                    case 200:
+                        self.results.append(
+                            [data["id"], data["puuid"], data["name"], data["revisionDate"]]
+                        )
+                        task = None
+                        self.logging.debug('200 | %s', url)
+                    case 404:
+                        self.not_found.append(task)
+                        task = None
+                        self.logging.debug('404 | %s', url)
+                    case 429:
+                        self.ratelimit_reached = True
+                    case 430:
+                        self.ratelimit_reached = True
+                        wait_until = datetime.fromtimestamp(data["Retry-At"])
+                        self.retry_after = wait_until
             except aiohttp.ContentTypeError:
                 raise
                 self.logging.error("Response was not a json.")
@@ -109,14 +109,14 @@ class Platform:
         """Insert results from requests into the db."""
         async with self.handler.db.acquire() as connection:
             if self.results:
-                prep = await connection.execute(
+                await connection.execute(
                     queries.update_ranking[self.handler.connection.type].format(
                         platform=self.platform,
                         platform_lower=self.platform.lower(),
                         schema=self.handler.connection.schema
-                    ),
-                    [res[:2] for res in self.results]
-                )
+                    ) % ",".join(
+                        ["('%s', '%s', '%s')" % (res[0], self.platform, res[1]) for res in self.results]
+                    ))
 
                 # update summoner Table
                 converted_results = [
