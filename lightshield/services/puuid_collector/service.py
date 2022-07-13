@@ -3,6 +3,8 @@ import logging
 from datetime import datetime
 
 import aiohttp
+import asyncpg
+
 from lightshield.services.puuid_collector import queries
 
 
@@ -25,6 +27,23 @@ class Platform:
     async def run(self):
         """Main object loop."""
         while not self.handler.is_shutdown:
+            tasks = await self.gather_tasks()
+            if not tasks:
+                await asyncio.sleep(5)
+                continue
+            semaphore = asyncio.Semaphore(20)
+            async with aiohttp.ClientSession() as session:
+                await asyncio.gather(
+                    *[
+                        asyncio.create_task(self.worker(session, semaphore, task))
+                        for task in tasks
+                    ]
+                )
+            await self.flush_tasks()
+
+    async def gather_tasks(self):
+        """Get tasks from db."""
+        while not self.handler.is_shutdown:
             async with self.handler.db.acquire() as connection:
                 self.results = []
                 self.not_found = []
@@ -34,21 +53,11 @@ class Platform:
                     schema=self.handler.connection.schema
                 )
                 try:
-                    tasks = await connection.fetch(query, self.batchsize)
-                except:
-                    raise
-                if not tasks:
-                    await asyncio.sleep(5)
-                    continue
-                semaphore = asyncio.Semaphore(20)
-                async with aiohttp.ClientSession() as session:
-                    await asyncio.gather(
-                        *[
-                            asyncio.create_task(self.worker(session, semaphore, task))
-                            for task in tasks
-                        ]
-                    )
-                await self.flush_tasks(connection=connection)
+                    return await connection.fetch(query, self.batchsize)
+
+                except asyncpg.InternalServerError:
+                    self.logging.info("Internal server error with db.")
+            await asyncio.sleep(1)
 
     async def worker(self, session, semaphore, task):
         """Execute requests."""
@@ -90,42 +99,43 @@ class Platform:
             except aiohttp.ClientOSError:
                 self.logging.error("Connection reset.")
 
-    async def flush_tasks(self, connection):
+    async def flush_tasks(self):
         """Insert results from requests into the db."""
-        if self.results or self.not_found:
-            self.logging.info(
-                "Flushing %s successful and %s unsuccessful finds.",
-                len(self.results),
-                len(self.not_found),
-            )
-        if self.results:
-            prep = await connection.prepare(
-                queries.update_ranking[self.handler.connection.type].format(
-                    platform=self.platform,
-                    platform_lower=self.platform.lower(),
-                    schema=self.handler.connection.schema
+        async with self.handler.db.acquire() as connection:
+            if self.results or self.not_found:
+                self.logging.info(
+                    "Flushing %s successful and %s unsuccessful finds.",
+                    len(self.results),
+                    len(self.not_found),
                 )
-            )
-            await prep.executemany([res[:2] for res in self.results])
-            # update summoner Table
-            converted_results = [
-                [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), self.platform]
-                for res in self.results
-            ]
-            prep = await connection.prepare(
-                queries.insert_summoner[self.handler.connection.type].format(
-                    platform=self.platform,
-                    platform_lower=self.platform.lower(),
-                    schema=self.handler.connection.schema
-                ))
-            await prep.executemany(converted_results)
+            if self.results:
+                prep = await connection.prepare(
+                    queries.update_ranking[self.handler.connection.type].format(
+                        platform=self.platform,
+                        platform_lower=self.platform.lower(),
+                        schema=self.handler.connection.schema
+                    )
+                )
+                await prep.executemany([res[:2] for res in self.results])
+                # update summoner Table
+                converted_results = [
+                    [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), self.platform]
+                    for res in self.results
+                ]
+                prep = await connection.prepare(
+                    queries.insert_summoner[self.handler.connection.type].format(
+                        platform=self.platform,
+                        platform_lower=self.platform.lower(),
+                        schema=self.handler.connection.schema
+                    ))
+                await prep.executemany(converted_results)
 
-        if self.not_found:
-            await connection.execute(
-                queries.missing_summoner[self.handler.connection.type].format(
-                    platform=self.platform,
-                    platform_lower=self.platform.lower(),
-                    schema=self.handler.connection.schema
-                ),
-                self.not_found,
-            )
+            if self.not_found:
+                await connection.execute(
+                    queries.missing_summoner[self.handler.connection.type].format(
+                        platform=self.platform,
+                        platform_lower=self.platform.lower(),
+                        schema=self.handler.connection.schema
+                    ),
+                    self.not_found,
+                )
