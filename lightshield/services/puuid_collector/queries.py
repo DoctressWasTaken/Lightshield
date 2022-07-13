@@ -20,9 +20,11 @@ update_ranking = {
                     SET puuid = $2
                     WHERE summoner_id =  $1
                 """,
-    "crate": """UPDATE "{schema:s}".ranking
-                SET puuid = $2
-                WHERE summoner_id = $1
+    "crate": """
+                INSERT INTO "{schema:s}".ranking (summoner_id, platform, puuid)
+                VALUES($1, '{platform:s}', $2)
+                ON CONFLICT (puuid, platform) DO 
+                UPDATE SET  puuid = EXCLUDED.puuid
     """
 }
 

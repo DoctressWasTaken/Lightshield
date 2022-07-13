@@ -109,14 +109,14 @@ class Platform:
         """Insert results from requests into the db."""
         async with self.handler.db.acquire() as connection:
             if self.results:
-                prep = await connection.prepare(
+                prep = await connection.execute(
                     queries.update_ranking[self.handler.connection.type].format(
                         platform=self.platform,
                         platform_lower=self.platform.lower(),
                         schema=self.handler.connection.schema
-                    )
+                    ),
+                    [res[:2] for res in self.results]
                 )
-                await prep.executemany([res[:2] for res in self.results])
 
                 # update summoner Table
                 converted_results = [
