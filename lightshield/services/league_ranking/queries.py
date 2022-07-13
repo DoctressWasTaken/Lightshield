@@ -1,15 +1,11 @@
 preexisting = {
     "postgres": """SELECT summoner_id,
-                        rank,
-                        division,
                         leaguepoints
                         FROM "ranking_{platform_lower:s}"
                         WHERE rank = $1
                         AND division = $2
                         """,
     "crate": """SELECT summoner_id,
-                        rank,
-                        division,
                         leaguepoints
                         FROM "{schema:s}"."ranking"
                         WHERE rank = $1

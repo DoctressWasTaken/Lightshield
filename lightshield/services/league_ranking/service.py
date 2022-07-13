@@ -42,7 +42,7 @@ class Service:
                             rank = [entry["tier"], entry["rank"], entry["leaguePoints"]]
                             if (
                                 entry["summonerId"] not in self.preset
-                                or self.preset[entry["summonerId"]] != rank
+                                or self.preset[entry["summonerId"]] != entry['leaguePoints']
                             ):
                                 self.to_update[entry["summonerId"]] = rank
                     self.logging.debug(url)
@@ -102,11 +102,7 @@ class Service:
                 )
             if latest:
                 self.preset = {
-                    line["summoner_id"]: [
-                        line["rank"],
-                        line["division"],
-                        line["leaguepoints"],
-                    ]
+                    line["summoner_id"]: line["leaguepoints"]
                     for line in latest
                 }
             del latest
