@@ -23,7 +23,7 @@ update_ranking = {
     "crate": """
                 INSERT INTO "{schema:s}".ranking (summoner_id, platform, puuid)
                 VALUES($1, '{platform:s}', $2)
-                ON CONFLICT (puuid, platform) DO 
+                ON CONFLICT (summoner_id, platform) DO 
                 UPDATE SET  puuid = EXCLUDED.puuid
     """
 }
