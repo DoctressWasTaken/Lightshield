@@ -29,8 +29,9 @@ class Platform:
         """Main object loop."""
         while not self.handler.is_shutdown:
             seconds = (self.retry_after - datetime.now()).total_seconds()
-            seconds = max(0.1, seconds)
-            await asyncio.sleep(seconds)
+            if seconds >= 0.1:
+                await asyncio.sleep(seconds)
+            self.ratelimit_reached = False
             if len(self.tasks) <= 2000:
                 self.tasks += [entry['summoner_id'] for entry in await self.gather_tasks()]
                 self.tasks = list(set(self.tasks))
