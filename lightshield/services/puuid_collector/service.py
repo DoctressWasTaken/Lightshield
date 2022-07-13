@@ -24,11 +24,16 @@ class Platform:
         self.retry_after = datetime.now()
         self.endpoint_url = f"{handler.protocol}://{platform.lower()}.api.riotgames.com/lol/summoner/v4/summoners/%s"
         self.ratelimit_reached = False
+        self.parallel = 25
 
     async def run(self):
         """Main object loop."""
         while not self.handler.is_shutdown:
             seconds = (self.retry_after - datetime.now()).total_seconds()
+            if seconds >= 1:
+                self.parallel = max(10, self.parallel - 1)
+            else:
+                self.parallel = min(self.parallel + 1, 40)
             if seconds >= 0.1:
                 await asyncio.sleep(seconds)
             self.ratelimit_reached = False
