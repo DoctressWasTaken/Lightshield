@@ -8,10 +8,10 @@ tasks = {
     """,
     "crate": """
         SELECT summoner_id
-        FROM lightshield.ranking
+        FROM "{schema:s}".ranking
         WHERE puuid IS NULL
-          AND platform = 'EUW1'
-        LIMIT 4000
+          AND platform = '{platform:s}'
+        LIMIT $1
     """
 }
 
