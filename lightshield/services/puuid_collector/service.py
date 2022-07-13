@@ -32,7 +32,7 @@ class Platform:
             seconds = (self.retry_after - datetime.now()).total_seconds()
             if seconds >= 1:
                 self.parallel = max(10, self.parallel - 1)
-            else:
+            elif seconds < 0.1:
                 self.parallel = min(self.parallel + 1, 40)
             if seconds >= 0.1:
                 await asyncio.sleep(seconds)
