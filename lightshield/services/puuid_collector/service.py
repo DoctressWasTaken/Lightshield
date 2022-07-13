@@ -34,7 +34,7 @@ class Platform:
             if not self.tasks:
                 await asyncio.sleep(5)
                 continue
-            semaphore = asyncio.Semaphore(20)
+            semaphore = asyncio.Semaphore(35)
             async_threads = []
             conn = aiohttp.TCPConnector(limit=0)
             async with aiohttp.ClientSession(connector=conn) as session:
