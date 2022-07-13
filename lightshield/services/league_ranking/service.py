@@ -35,26 +35,26 @@ class Service:
                 data = await response.json()
             except aiohttp.ContentTypeError:
                 return page
-            if not response.status == 200:
-                if response.status == 430:
-                    wait_until = datetime.fromtimestamp(data["Retry-At"])
-                    seconds = (wait_until - datetime.now()).total_seconds()
-                    seconds = max(0.1, seconds)
-                    await asyncio.sleep(seconds)
-                elif response.status == 429:
-                    await asyncio.sleep(0.5)
-                return page
-            self.logging.debug(url)
-            if not data:
-                self.empty_page = True
-                return None
-            for entry in data:
-                rank = [entry["tier"], entry["rank"], entry["leaguePoints"]]
-                if (
-                    entry["summonerId"] not in self.preset
-                    or self.preset[entry["summonerId"]] != rank
-                ):
-                    self.to_update[entry["summonerId"]] = rank
+        if not response.status == 200:
+            if response.status == 430:
+                wait_until = datetime.fromtimestamp(data["Retry-At"])
+                seconds = (wait_until - datetime.now()).total_seconds()
+                seconds = max(0.1, seconds)
+                await asyncio.sleep(seconds)
+            elif response.status == 429:
+                await asyncio.sleep(0.5)
+            return page
+        self.logging.debug(url)
+        if not data:
+            self.empty_page = True
+            return None
+        for entry in data:
+            rank = [entry["tier"], entry["rank"], entry["leaguePoints"]]
+            if (
+                entry["summonerId"] not in self.preset
+                or self.preset[entry["summonerId"]] != rank
+            ):
+                self.to_update[entry["summonerId"]] = rank
 
     async def run(self):
         """Runner."""
@@ -112,6 +112,7 @@ class Service:
         try:
             async with self.handler.db.acquire() as connection:
                 to_update_list = [[key] + val for key, val in self.to_update.items()]
+                del self.to_update
                 updated = len(to_update_list)
                 batch = to_update_list[:5000]
                 while to_update_list and not self.handler.is_shutdown:
