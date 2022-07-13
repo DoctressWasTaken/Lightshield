@@ -15,7 +15,6 @@ from pprint import PrettyPrinter
 
 pp = PrettyPrinter(indent=4, width=160)
 load_dotenv()
-uvloop.install()
 
 default_services = (
     "league_ranking",
