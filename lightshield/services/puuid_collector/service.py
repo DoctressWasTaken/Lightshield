@@ -77,9 +77,11 @@ class Platform:
                         [data["id"], data["puuid"], data["name"], data["revisionDate"]]
                     )
                     task = None
+                    self.logging.debug('200 | %s', url)
                 case 404:
                     self.not_found.append(task["summoner_id"])
                     task = None
+                    self.logging.debug('404 | %s', url)
                 case 429:
                     self.ratelimit_reached = True
                 case 430:
