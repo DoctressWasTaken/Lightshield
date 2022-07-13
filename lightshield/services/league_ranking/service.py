@@ -96,6 +96,7 @@ class Service:
                 latest = await connection.fetch(
                     queries.preexisting[self.database].format(
                         platform_lower=self.name.lower(),
+                        platform=self.name,
                         schema=self.handler.connection.schema,
                     ),
                     *self.active_rank,

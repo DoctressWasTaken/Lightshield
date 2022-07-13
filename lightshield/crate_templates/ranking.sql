@@ -2,7 +2,7 @@ DROP TABLE IF EXISTS "{{schema}}"."ranking";
 CREATE TABLE "{{schema}}"."ranking"
 (
     summoner_id  VARCHAR(63),
-    platform     VARCHAR(4),
+    platform     VARCHAR,
     puuid        VARCHAR(78),
 
     rank         VARCHAR,

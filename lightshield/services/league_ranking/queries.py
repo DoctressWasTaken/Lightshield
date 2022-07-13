@@ -8,7 +8,8 @@ preexisting = {
     "crate": """SELECT summoner_id,
                         leaguepoints
                         FROM "{schema:s}"."ranking"
-                        WHERE rank = $1
+                        WHERE platform = '{platform:s}'
+                        AND rank = $1
                         AND division = $2
                         """,
 }
