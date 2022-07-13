@@ -20,9 +20,12 @@ class Handler:
         self.config = configs.services.puuid_collector
         self.connection = Connection(config=configs)
         self.protocol = configs.connections.proxy.protocol
+        ip = socket.gethostbyname(configs.connections.proxy.location)
+        self.logging.info(ip)
         self.proxy = "%s://%s" % (
             configs.connections.proxy.protocol,
-            socket.gethostbyname(configs.connections.proxy.location))
+            ip
+            )
 
         for platform in configs.statics.enums.platforms:
             self.platforms[platform] = Platform(platform, self)
