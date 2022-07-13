@@ -61,6 +61,7 @@ class Service:
         await self.rankmanager.init()
         while not self.handler.is_shutdown:
             self.active_rank = await self.rankmanager.get_next()
+            self.to_update = {}
             await self.get_preset()
             pages = list(range(1, 6))
             next_page = 6
