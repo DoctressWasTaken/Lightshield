@@ -30,31 +30,36 @@ class Service:
         """Handle request."""
 
         url = self.url % (*self.active_rank, page)
-        async with session.get(url, proxy=self.handler.proxy) as response:
-            try:
+        try:
+            async with session.get(url, proxy=self.handler.proxy) as response:
                 data = await response.json()
-            except aiohttp.ContentTypeError:
-                return page
-        if not response.status == 200:
-            if response.status == 430:
-                wait_until = datetime.fromtimestamp(data["Retry-At"])
-                seconds = (wait_until - datetime.now()).total_seconds()
-                seconds = max(0.1, seconds)
-                await asyncio.sleep(seconds)
-            elif response.status == 429:
-                await asyncio.sleep(0.5)
+            match response.status:
+                case 200:
+                    if not data:
+                        self.empty_page = True
+                    else:
+                        for entry in data:
+                            rank = [entry["tier"], entry["rank"], entry["leaguePoints"]]
+                            if (
+                                entry["summonerId"] not in self.preset
+                                or self.preset[entry["summonerId"]] != rank
+                            ):
+                                self.to_update[entry["summonerId"]] = rank
+                    self.logging.debug(url)
+                    return None
+                case 430:
+                    wait_until = datetime.fromtimestamp(data["Retry-At"])
+                    seconds = (wait_until - datetime.now()).total_seconds()
+                    seconds = max(0.1, seconds)
+                    await asyncio.sleep(seconds)
+                    return page
+                case 429:
+                    await asyncio.sleep(0.5)
+                    return page
+                case _:
+                    return page
+        except aiohttp.ContentTypeError:
             return page
-        self.logging.debug(url)
-        if not data:
-            self.empty_page = True
-            return None
-        for entry in data:
-            rank = [entry["tier"], entry["rank"], entry["leaguePoints"]]
-            if (
-                entry["summonerId"] not in self.preset
-                or self.preset[entry["summonerId"]] != rank
-            ):
-                self.to_update[entry["summonerId"]] = rank
 
     async def run(self):
         """Runner."""
@@ -88,21 +93,23 @@ class Service:
         self.preset = {}
         try:
             async with self.handler.db.acquire() as connection:
-                if latest := await connection.fetch(
+                latest = await connection.fetch(
                     queries.preexisting[self.database].format(
                         platform_lower=self.name.lower(),
                         schema=self.handler.connection.schema,
                     ),
                     *self.active_rank,
-                ):
-                    self.preset = {
-                        line["summoner_id"]: [
-                            line["rank"],
-                            line["division"],
-                            line["leaguepoints"],
-                        ]
-                        for line in latest
-                    }
+                )
+            if latest:
+                self.preset = {
+                    line["summoner_id"]: [
+                        line["rank"],
+                        line["division"],
+                        line["leaguepoints"],
+                    ]
+                    for line in latest
+                }
+            del latest
         except Exception as err:
             self.logging.error(err)
             raise err
@@ -110,11 +117,11 @@ class Service:
     async def update_data(self):
         """Update all changed users in the DB."""
         try:
+            to_update_list = [[key] + val for key, val in self.to_update.items()]
+            del self.to_update
+            updated = len(to_update_list)
+            batch = to_update_list[:5000]
             async with self.handler.db.acquire() as connection:
-                to_update_list = [[key] + val for key, val in self.to_update.items()]
-                del self.to_update
-                updated = len(to_update_list)
-                batch = to_update_list[:5000]
                 while to_update_list and not self.handler.is_shutdown:
                     try:
                         prep = await connection.prepare(
@@ -138,6 +145,7 @@ class Service:
                     updated - len(to_update_list),
                     *self.active_rank,
                 )
+            del to_update_list
         except Exception as err:
             self.logging.error(err)
             raise err
