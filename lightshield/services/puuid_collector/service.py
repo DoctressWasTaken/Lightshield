@@ -93,10 +93,13 @@ class Platform:
                             wait_until = datetime.fromtimestamp(data["Retry-At"])
                             self.retry_after = wait_until
             except aiohttp.ContentTypeError:
+                raise
                 self.logging.error("Response was not a json.")
             except aiohttp.ClientProxyConnectionError:
+                raise
                 self.logging.error("Lost connection to proxy.")
             except aiohttp.ClientOSError:
+                raise
                 self.logging.error("Connection reset.")
             finally:
                 if task:
