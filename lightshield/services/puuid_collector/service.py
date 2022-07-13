@@ -35,14 +35,15 @@ class Platform:
                 continue
             semaphore = asyncio.Semaphore(20)
             async_threads = []
-            async with aiohttp.ClientSession() as session:
+            conn = aiohttp.TCPConnector(limit=0)
+            async with aiohttp.ClientSession(connector=conn) as session:
                 while self.tasks:
                     if self.ratelimit_reached:
                         break
                     async with semaphore:
                         task = self.tasks.pop()
                         async_threads.append(
-                            asyncio.create_task(self.task_handler(session, task)))
+                            asyncio.create_task(self.task_handler(session, semaphore, task)))
                 await asyncio.gather(*async_threads)
             await self.flush_tasks()
             self.batchsize = 4000 - len(self.tasks)
@@ -65,29 +66,30 @@ class Platform:
                     self.logging.info("Internal server error with db.")
             await asyncio.sleep(1)
 
-    async def task_handler(self, session, task):
+    async def task_handler(self, session, semaphore, task):
         """Execute requests."""
         url = self.endpoint_url % task["summoner_id"]
         try:
-            async with session.get(url, proxy=self.handler.proxy) as response:
-                data = await response.json()
-            match response.status:
-                case 200:
-                    self.results.append(
-                        [data["id"], data["puuid"], data["name"], data["revisionDate"]]
-                    )
-                    task = None
-                    self.logging.debug('200 | %s', url)
-                case 404:
-                    self.not_found.append(task["summoner_id"])
-                    task = None
-                    self.logging.debug('404 | %s', url)
-                case 429:
-                    self.ratelimit_reached = True
-                case 430:
-                    self.ratelimit_reached = True
-                    wait_until = datetime.fromtimestamp(data["Retry-At"])
-                    self.retry_after = wait_until
+            async with semaphore:
+                async with session.get(url, proxy=self.handler.proxy) as response:
+                    data = await response.json()
+                match response.status:
+                    case 200:
+                        self.results.append(
+                            [data["id"], data["puuid"], data["name"], data["revisionDate"]]
+                        )
+                        task = None
+                        self.logging.debug('200 | %s', url)
+                    case 404:
+                        self.not_found.append(task["summoner_id"])
+                        task = None
+                        self.logging.debug('404 | %s', url)
+                    case 429:
+                        self.ratelimit_reached = True
+                    case 430:
+                        self.ratelimit_reached = True
+                        wait_until = datetime.fromtimestamp(data["Retry-At"])
+                        self.retry_after = wait_until
         except aiohttp.ContentTypeError:
             self.logging.error("Response was not a json.")
         except aiohttp.ClientProxyConnectionError:
