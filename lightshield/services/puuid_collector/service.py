@@ -56,8 +56,6 @@ class Platform:
         """Get tasks from db."""
         while not self.handler.is_shutdown:
             async with self.handler.db.acquire() as connection:
-                self.results = []
-                self.not_found = []
                 query = queries.tasks[self.handler.connection.type].format(
                     platform=self.platform,
                     platform_lower=self.platform.lower(),
@@ -133,6 +131,7 @@ class Platform:
                     "Updated %s rankings.",
                     len(self.results),
                 )
+                self.results = []
 
             if self.not_found:
                 await connection.execute(
@@ -143,3 +142,4 @@ class Platform:
                     ),
                     self.not_found,
                 )
+                self.not_found = []
