@@ -96,8 +96,7 @@ class Platform:
                 raise
                 self.logging.error("Response was not a json.")
             except aiohttp.ClientProxyConnectionError:
-                raise
-                self.logging.error("Lost connection to proxy.")
+                pass
             except aiohttp.ClientOSError:
                 raise
                 self.logging.error("Connection reset.")
