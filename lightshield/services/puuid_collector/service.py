@@ -73,36 +73,36 @@ class Platform:
     async def task_handler(self, session, semaphore, task):
         """Execute requests."""
         url = self.endpoint_url % task
-        try:
-            async with semaphore:
-                async with session.get(url, proxy=self.handler.proxy) as response:
-                    data = await response.json()
-                match response.status:
-                    case 200:
-                        self.results.append(
-                            [data["id"], data["puuid"], data["name"], data["revisionDate"]]
-                        )
-                        task = None
-                        self.logging.debug('200 | %s', url)
-                    case 404:
-                        self.not_found.append(task)
-                        task = None
-                        self.logging.debug('404 | %s', url)
-                    case 429:
-                        self.ratelimit_reached = True
-                    case 430:
-                        self.ratelimit_reached = True
-                        wait_until = datetime.fromtimestamp(data["Retry-At"])
-                        self.retry_after = wait_until
-        except aiohttp.ContentTypeError:
-            self.logging.error("Response was not a json.")
-        except aiohttp.ClientProxyConnectionError:
-            self.logging.error("Lost connection to proxy.")
-        except aiohttp.ClientOSError:
-            self.logging.error("Connection reset.")
-        finally:
-            if task:
-                self.tasks.append(task)
+        async with semaphore:
+            try:
+                    async with session.get(url, proxy=self.handler.proxy) as response:
+                        data = await response.json()
+                    match response.status:
+                        case 200:
+                            self.results.append(
+                                [data["id"], data["puuid"], data["name"], data["revisionDate"]]
+                            )
+                            task = None
+                            self.logging.debug('200 | %s', url)
+                        case 404:
+                            self.not_found.append(task)
+                            task = None
+                            self.logging.debug('404 | %s', url)
+                        case 429:
+                            self.ratelimit_reached = True
+                        case 430:
+                            self.ratelimit_reached = True
+                            wait_until = datetime.fromtimestamp(data["Retry-At"])
+                            self.retry_after = wait_until
+            except aiohttp.ContentTypeError:
+                self.logging.error("Response was not a json.")
+            except aiohttp.ClientProxyConnectionError:
+                self.logging.error("Lost connection to proxy.")
+            except aiohttp.ClientOSError:
+                self.logging.error("Connection reset.")
+            finally:
+                if task:
+                    self.tasks.append(task)
 
     async def flush_tasks(self):
         """Insert results from requests into the db."""
