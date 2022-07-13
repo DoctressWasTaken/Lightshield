@@ -28,6 +28,9 @@ class Platform:
     async def run(self):
         """Main object loop."""
         while not self.handler.is_shutdown:
+            seconds = (self.retry_after - datetime.now()).total_seconds()
+            seconds = max(0.1, seconds)
+            await asyncio.sleep(seconds)
             if len(self.tasks) <= 2000:
                 self.tasks += [entry['summoner_id'] for entry in await self.gather_tasks()]
                 self.tasks = list(set(self.tasks))
@@ -104,12 +107,6 @@ class Platform:
     async def flush_tasks(self):
         """Insert results from requests into the db."""
         async with self.handler.db.acquire() as connection:
-            if self.results or self.not_found:
-                self.logging.info(
-                    "Flushing %s successful and %s unsuccessful finds.",
-                    len(self.results),
-                    len(self.not_found),
-                )
             if self.results:
                 prep = await connection.prepare(
                     queries.update_ranking[self.handler.connection.type].format(
@@ -119,6 +116,7 @@ class Platform:
                     )
                 )
                 await prep.executemany([res[:2] for res in self.results])
+
                 # update summoner Table
                 converted_results = [
                     [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), self.platform]
@@ -131,6 +129,10 @@ class Platform:
                         schema=self.handler.connection.schema
                     ))
                 await prep.executemany(converted_results)
+                self.logging.info(
+                    "Updated %s rankings.",
+                    len(self.results),
+                )
 
             if self.not_found:
                 await connection.execute(
