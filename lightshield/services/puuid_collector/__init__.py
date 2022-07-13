@@ -20,7 +20,7 @@ class Handler:
         self.config = configs.services.puuid_collector
         self.connection = Connection(config=configs)
         self.protocol = configs.connections.proxy.protocol
-        ip = socket.gethostbyname(configs.connections.proxy.location)
+        ip = socket.gethostbyname(configs.connections.proxy.location.split(':')[0])
         self.logging.info(ip)
         self.proxy = "%s://%s" % (
             configs.connections.proxy.protocol,
