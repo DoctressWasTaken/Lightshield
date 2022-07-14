@@ -13,7 +13,7 @@ services:
       - API_KEY=${API_KEY}
       - INTERNAL_DELAY=2
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"
     depends_on:
       - redis
   rabbitmq:
