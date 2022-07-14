@@ -40,10 +40,7 @@ class Platform:
         await self.channel.declare_queue(
             'puuid_results_not_found_%s' % self.platform, durable=True)
 
-        self.logging.info("Starting consume")
         consumer = await task_queue.consume(self.task_handler)
-        self.logging.info("Consuming")
-
         last_prefetch = self.parallel
         while not self.handler.is_shutdown:
             if last_prefetch != self.parallel:
