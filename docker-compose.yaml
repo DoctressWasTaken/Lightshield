@@ -3,15 +3,15 @@ services:
 
   proxy:
     hostname: proxy
-    image: doctress/spiritmight:latest
+    image: doctress/spiritmight:dev
     environment:
       - ENVIRONMENT=riot_api_proxy
-      - EXTRA_LENGTH=1
+      - EXTRA_LENGTH=1.5
       - DEBUG=False
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - API_KEY=${API_KEY}
-      - INTERNAL_DELAY=1
+      - INTERNAL_DELAY=2
     ports:
       - "8888:8888"
     depends_on:
@@ -104,7 +104,7 @@ services:
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
       - type: bind
-        source: /mnt/g/data
+        source: ./data
         target: /data
     restart: always
 
