@@ -52,6 +52,7 @@ class Handler:
     async def process_results(self, platform):
         queue = 'puuid_results_found_%s' % platform
         channel = await self.pika.channel()
+        logger = logging.getLogger('%s\t| Results' % platform)
         await channel.set_qos(prefetch_count=500)
         await channel.declare_queue(queue, durable=True)
 
@@ -62,7 +63,7 @@ class Handler:
             if queue_size == 0:
                 await asyncio.sleep(10)
                 continue
-            self.logging.info("Found %s rankings to update.", queue_size)
+            logger.info("Found %s rankings to update.", queue_size)
             while queue_size > 0:
                 tasks = []
                 for i in range(min(10000, queue_size)):
@@ -96,7 +97,7 @@ class Handler:
                             schema=self.connection.schema
                         ))
                     await prep.executemany(converted_results)
-                self.logging.info("Inserted %s entries", min(queue_size, 10000))
+                logger.info("Inserted %s entries", min(queue_size, 10000))
                 queue_size = max(0, queue_size - 10000)
             del tasks
 
@@ -107,6 +108,7 @@ class Handler:
 
     async def process_not_found(self, platform):
         queue = 'puuid_results_not_found_%s' % platform
+        logger = logging.getLogger('%s\t| Not Found' % platform)
         channel = await self.pika.channel()
         await channel.set_qos(prefetch_count=100)
         await channel.declare_queue(queue, durable=True)
