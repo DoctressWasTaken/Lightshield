@@ -62,8 +62,10 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector"
     restart: always
+    profiles:
+      - puuid_collector
 
-  puuid_collector_rabbitmq:
+  puuid_collector_tasks:
     hostname: puuid_collector
     build:
       dockerfile: Service_Dockerfile
@@ -74,8 +76,26 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-    entrypoint: "poetry run lightshield run puuid_collector.rabbitmq"
+    entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.tasks"
     restart: always
+    profiles:
+      - puuid_collector
+
+  puuid_collector_results:
+    hostname: puuid_collector
+    build:
+      dockerfile: Service_Dockerfile
+      context: .
+      args:
+        service: puuid_collector
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+    entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.results"
+    restart: always
+    profiles:
+      - puuid_collector
 
   match_history:
     hostname: match_history

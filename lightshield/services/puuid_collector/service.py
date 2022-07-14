@@ -7,7 +7,7 @@ import json
 import aiohttp
 import asyncpg
 import aio_pika
-
+import pickle
 from lightshield.services.puuid_collector import queries
 
 
@@ -66,9 +66,9 @@ class Platform:
                     case 200:
                         await self.channel.default_exchange.publish(
                             aio_pika.Message(
-                                json.dumps([data["id"], data["puuid"], data["name"], data["revisionDate"]]).encode(),
+                                pickle.dumps([data["id"], data["puuid"], data["name"], data["revisionDate"]]),
                                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT
-                            ),
+                                ),
                             routing_key='puuid_results_found_%s' % self.platform
                         )
                         await message.ack()

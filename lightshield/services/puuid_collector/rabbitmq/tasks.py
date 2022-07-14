@@ -2,11 +2,9 @@
 import asyncio
 import logging
 import math
-import os
 import aio_pika
 import asyncpg
-import json
-from datetime import datetime
+
 
 from lightshield.connection_handler import Connection
 from lightshield.services.puuid_collector.rabbitmq import queries
@@ -64,63 +62,8 @@ class Handler:
                     self.logging.info("Internal server error with db.")
             await asyncio.sleep(1)
 
-    async def process_results(self, platform, base_threshold):
-        queue = 'puuid_results_found_%s' % platform
-        channel = await self.pika.channel()
-        await channel.set_qos(prefetch_count=base_threshold)
-        await channel.declare_queue(queue, durable=True)
-
-        threshold = base_threshold
-        while not self.is_shutdown:
-            res = await channel.declare_queue(
-                queue, durable=True, passive=True)
-            if res.declaration_result.message_count < threshold:
-                threshold = max(1, threshold - 1)
-                await asyncio.sleep(2)
-                continue
-            self.logging.info("Found %s tasks to insert" % res.declaration_result.message_count)
-            tasks = []
-            async with res.iterator() as queue_iter:
-                async for message in queue_iter:
-                    async with message.process(ignore_processed=True):
-                        threshold -= 1
-                        msg = message.body.decode('utf-8')
-                        tasks.append(json.loads(msg))
-                        await message.ack()
-                    if threshold <= 0:
-                        break
-            threshold = base_threshold
-            async with self.db.acquire() as connection:
-                await connection.execute(
-                    queries.update_ranking[self.connection.type].format(
-                        platform=platform,
-                        platform_lower=platform.lower(),
-                        schema=self.connection.schema
-                    ) % ",".join(
-                        ["('%s', '%s', '%s')" % (res[0], platform, res[1]) for res in tasks]
-                    ))
-                converted_results = [
-                    [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), platform]
-                    for res in tasks
-                ]
-                prep = await connection.prepare(
-                    queries.insert_summoner[self.connection.type].format(
-                        platform=platform,
-                        platform_lower=platform.lower(),
-                        schema=self.connection.schema
-                    ))
-                await prep.executemany(converted_results)
-                self.logging.info(
-                    "Updated %s rankings.",
-                    len(tasks),
-                )
-                del tasks
-
     async def platform_handler(self, platform):
         # setup
-        processors = [
-            asyncio.create_task(self.process_results(platform, 500))
-        ]
         self.logging.info("Starting handler for %s. Waiting for empty queue.", platform)
         sections = 8
         section_size = 1000
@@ -138,7 +81,6 @@ class Handler:
 
             while not self.is_shutdown:
                 await asyncio.sleep(2)
-
                 queue_size = (await channel.declare_queue('puuid_tasks_%s' % platform, passive=True
                                                           )).declaration_result.message_count
 
@@ -165,16 +107,13 @@ class Handler:
                         )
                         if len(task_backlog) >= sections * section_size:
                             break
-        await asyncio.gather(*processors)
 
     async def run(self):
         """Run."""
         await self.init()
-        # tasks = await self.gather_tasks()
-
         await asyncio.gather(*[
-                                  asyncio.create_task(self.platform_handler(platform))
-                                  for platform in self.platforms
-                              ])
+            asyncio.create_task(self.platform_handler(platform))
+            for platform in self.platforms
+        ])
 
         await self.handle_shutdown()
