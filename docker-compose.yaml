@@ -16,6 +16,21 @@ services:
       - "8888:8888"
     depends_on:
       - redis
+  rabbitmq:
+    hostname: rabbitmq
+    image: docker.io/bitnami/rabbitmq:3.10
+    ports:
+      - '127.0.0.1:4369:4369'
+      - '127.0.0.1:5551:5551'
+      - '127.0.0.1:5552:5552'
+      - '127.0.0.1:5672:5672'
+      - '127.0.0.1:25672:25672'
+      - '127.0.0.1:15672:15672'
+    environment:
+      - RABBITMQ_LOGS=-
+    volumes:
+      - 'rabbitmq_data:/bitnami/rabbitmq/mnesia'
+
 
   redis:
     hostname: redis
@@ -31,7 +46,6 @@ services:
         service: league_ranking
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - "OUTPUT=default"
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run league_ranking"
@@ -44,12 +58,23 @@ services:
       context: .
       args:
         service: puuid_collector
-    environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - "OUTPUT=default"
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector"
+    restart: always
+
+  puuid_collector_rabbitmq:
+    hostname: puuid_collector
+    build:
+      dockerfile: Service_Dockerfile
+      context: .
+      args:
+        service: puuid_collector
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+    entrypoint: "poetry run lightshield run puuid_collector.rabbitmq"
     restart: always
 
   match_history:
@@ -61,7 +86,6 @@ services:
         service: match_history
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - "OUTPUT=default"
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run match_history"
@@ -83,6 +107,10 @@ services:
         source: /mnt/g/data
         target: /data
     restart: always
+
+volumes:
+  rabbitmq_data:
+    driver: local
 
 networks:
   default:

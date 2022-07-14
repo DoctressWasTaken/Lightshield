@@ -1,3 +1,20 @@
+tasks = {
+    "postgres": """SELECT summoner_id 
+                   FROM "ranking_{platform:s}"
+                   WHERE puuid IS NULL
+                   LIMIT $1 
+                   FOR SHARE 
+                   SKIP LOCKED    
+    """,
+    "crate": """
+        SELECT summoner_id
+        FROM "{schema:s}".ranking
+        WHERE puuid IS NULL
+          AND platform = '{platform:s}'
+        LIMIT $1
+    """
+}
+
 update_ranking = {
     "postgres": """UPDATE "ranking_{platform:s}"
                     SET puuid = $2
