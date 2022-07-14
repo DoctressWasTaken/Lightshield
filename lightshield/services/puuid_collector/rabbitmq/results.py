@@ -56,9 +56,9 @@ class Handler:
         await channel.declare_queue(queue, durable=True)
 
         while not self.is_shutdown:
-            res = await channel.declare_queue(
+            q = await channel.declare_queue(
                 queue, durable=True, passive=True)
-            queue_size = res.declaration_result.message_count
+            queue_size = q.declaration_result.message_count
             if queue_size == 0:
                 await asyncio.sleep(10)
                 continue
@@ -66,11 +66,11 @@ class Handler:
             self.logging.info("Found %s rankings to update.", queue_size)
             for i in range(queue_size):
                 try:
-                    if task := await res.get(timeout=5, fail=False):
+                    if task := await q.get(timeout=5, fail=False):
                         tasks.append(pickle.loads(task.body))
                         await task.ack()
                 except Exception as err:
-                    self.logging.info("Failed to retrieve task.")
+                    self.logging.info("Failed to retrieve task. [%s]", err)
                     pass
             tasks = list(set(tasks))
             async with self.db.acquire() as connection:
@@ -105,9 +105,9 @@ class Handler:
         await channel.declare_queue(queue, durable=True)
 
         while not self.is_shutdown:
-            res = await channel.declare_queue(
+            q = await channel.declare_queue(
                 queue, durable=True, passive=True)
-            queue_size = res.declaration_result.message_count
+            queue_size = q.declaration_result.message_count
             if queue_size == 0:
                 await asyncio.sleep(10)
 
@@ -115,7 +115,7 @@ class Handler:
             tasks = []
             for i in range(queue_size):
                 try:
-                    if task := await res.get(timeout=5, fail=False):
+                    if task := await q.get(timeout=5, fail=False):
                         tasks.append(task.body.decode('utf-8'))
                         await task.ack()
                 except Exception as err:
