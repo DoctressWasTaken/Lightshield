@@ -78,7 +78,6 @@ class Handler:
                 threshold = max(1, threshold - 1)
                 await asyncio.sleep(2)
             else:
-                self.logging.info("Inserting %s results", threshold)
                 tasks = []
                 async with res.iterator() as queue_iter:
                     async for message in queue_iter:
@@ -141,17 +140,16 @@ class Handler:
                                                           )).declaration_result.message_count
 
                 if (sections_remaining := math.ceil(queue_size / section_size)) < sections:
-                    self.logging.info("%s\t| Queue found to be missing %s sections", platform,
-                                      sections - sections_remaining)
                     # Drop used up sections
                     task_backlog = task_backlog[-sections_remaining * section_size:]
                     # Try to get new tasks
                     tasks = await self.gather_tasks(platform=platform, count=sections * section_size)
                     # Exit if no tasks
                     if not tasks:
-                        self.logging.info("%s\t| No tasks", platform, )
                         await asyncio.sleep(10)
                         continue
+                    self.logging.info("%s\t| Queue found to be missing %s sections", platform,
+                                      sections - sections_remaining)
                     for task in tasks:
                         if (sId := task['summoner_id']) in task_backlog:
                             continue

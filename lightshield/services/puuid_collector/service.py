@@ -24,8 +24,7 @@ class Platform:
 
         self.retry_after = datetime.now()
         self.endpoint_url = f"{handler.protocol}://{platform.lower()}.api.riotgames.com/lol/summoner/v4/summoners/%s"
-        self.parallel = 5
-        self.parallel_boundaries = [5, 40]
+        self.parallel = 25
         conn = aiohttp.TCPConnector(limit=0)
         self.session = aiohttp.ClientSession(connector=conn)
         self.active = 0
@@ -51,8 +50,6 @@ class Platform:
                 await self.channel.set_qos(prefetch_count=self.parallel)
                 last_prefetch = self.parallel
             await asyncio.sleep(1)
-            if random.random() > 0.9:
-                self.parallel = min(self.parallel_boundaries[1], self.parallel + 1)
         await task_queue.cancel(consumer)
         while self.active > 0:
             await asyncio.sleep(0.1)
@@ -78,7 +75,7 @@ class Platform:
                             routing_key='puuid_results_found_%s' % self.platform
                         )
                         await message.ack()
-                        self.logging.info('200 | %s', url)
+                        self.logging.debug('200 | %s', url)
                     case 404:
                         self.not_found.append(message.body)
                         await self.channel.default_exchange.publish(

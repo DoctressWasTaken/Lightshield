@@ -24,7 +24,7 @@ class Handler:
             configs.connections.rabbitmq.host,
             configs.connections.rabbitmq.port
         )
-        for platform in ['EUW1'] or configs.statics.enums.platforms:
+        for platform in configs.statics.enums.platforms:
             self.platforms[platform] = Platform(platform, self)
 
     async def init(self):
