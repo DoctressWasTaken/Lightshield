@@ -62,40 +62,44 @@ class Handler:
             if queue_size == 0:
                 await asyncio.sleep(10)
                 continue
-            tasks = []
             self.logging.info("Found %s rankings to update.", queue_size)
-            for i in range(queue_size):
-                try:
-                    if task := await q.get(timeout=5, fail=False):
-                        try:
-                            tasks.append(pickle.loads(task.body))
-                        except:
-                            pass
-                        await task.ack()
-                except Exception as err:
-                    self.logging.info("Failed to retrieve task. [%s]", err)
-                    pass
-            tasks = list(set(tasks))
-            async with self.db.acquire() as connection:
-                prep = await connection.prepare(
-                    queries.update_ranking[self.connection.type].format(
-                        platform=platform,
-                        platform_lower=platform.lower(),
-                        schema=self.connection.schema
-                    ))
-                await prep.executemany(tasks)
-                converted_results = [
-                    [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), platform]
-                    for res in tasks
-                ]
-                prep = await connection.prepare(
-                    queries.insert_summoner[self.connection.type].format(
-                        platform=platform,
-                        platform_lower=platform.lower(),
-                        schema=self.connection.schema
-                    ))
-                await prep.executemany(converted_results)
-                del tasks
+            while queue_size > 0:
+                tasks = []
+                for i in range(min(10000, queue_size)):
+                    try:
+                        if task := await q.get(timeout=5, fail=False):
+                            try:
+                                tasks.append(pickle.loads(task.body))
+                            except:
+                                pass
+                            await task.ack()
+                    except Exception as err:
+                        self.logging.info("Failed to retrieve task. [%s]", err)
+                        pass
+                tasks = list(set(tasks))
+                async with self.db.acquire() as connection:
+                    prep = await connection.prepare(
+                        queries.update_ranking[self.connection.type].format(
+                            platform=platform,
+                            platform_lower=platform.lower(),
+                            schema=self.connection.schema
+                        ))
+                    await prep.executemany(tasks)
+                    converted_results = [
+                        [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), platform]
+                        for res in tasks
+                    ]
+                    prep = await connection.prepare(
+                        queries.insert_summoner[self.connection.type].format(
+                            platform=platform,
+                            platform_lower=platform.lower(),
+                            schema=self.connection.schema
+                        ))
+                    await prep.executemany(converted_results)
+                self.logging.info("Inserted %s entries", min(queue_size, 10000))
+                queue_size = max(0, queue_size - 10000)
+            del tasks
+
             for i in range(30):
                 await asyncio.sleep(2)
                 if self.is_shutdown:
