@@ -85,7 +85,7 @@ class Handler:
                             platform_lower=platform.lower(),
                             schema=self.connection.schema
                         ))
-                    await prep.executemany(tasks)
+                    await prep.executemany([task[:2] for task in tasks])
                     converted_results = [
                         [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), platform]
                         for res in tasks
@@ -129,6 +129,8 @@ class Handler:
                         await task.ack()
                 except Exception as err:
                     pass
+            if not tasks:
+                continue
             async with self.db.acquire() as connection:
                 await connection.execute(
                     queries.missing_summoner[self.connection.type].format(
