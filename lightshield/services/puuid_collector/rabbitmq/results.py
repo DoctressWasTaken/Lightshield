@@ -66,7 +66,7 @@ class Handler:
             self.logging.info("Found %s rankings to update.", queue_size)
             for i in range(queue_size):
                 try:
-                    if task := await queue.get(timeout=5, fail=False):
+                    if task := await res.get(timeout=5, fail=False):
                         tasks.append(pickle.loads(task.body))
                         await task.ack()
                 except Exception as err:
@@ -115,7 +115,7 @@ class Handler:
             tasks = []
             for i in range(queue_size):
                 try:
-                    if task := await queue.get(timeout=5, fail=False):
+                    if task := await res.get(timeout=5, fail=False):
                         tasks.append(task.body.decode('utf-8'))
                         await task.ack()
                 except Exception as err:
