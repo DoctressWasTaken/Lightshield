@@ -8,7 +8,6 @@ import aiohttp
 import asyncpg
 import aio_pika
 import pickle
-from lightshield.services.puuid_collector import queries
 
 
 class Platform:
@@ -107,46 +106,3 @@ class Platform:
                 self.logging.error(err)
             finally:
                 self.active -= 1
-
-
-async def flush_tasks(self):
-    """Insert results from requests into the db."""
-    async with self.handler.db.acquire() as connection:
-        if self.results:
-            await connection.execute(
-                queries.update_ranking[self.handler.connection.type].format(
-                    platform=self.platform,
-                    platform_lower=self.platform.lower(),
-                    schema=self.handler.connection.schema
-                ) % ",".join(
-                    ["('%s', '%s', '%s')" % (res[0], self.platform, res[1]) for res in self.results]
-                ))
-
-            # update summoner Table
-            converted_results = [
-                [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), self.platform]
-                for res in self.results
-            ]
-            prep = await connection.prepare(
-                queries.insert_summoner[self.handler.connection.type].format(
-                    platform=self.platform,
-                    platform_lower=self.platform.lower(),
-                    schema=self.handler.connection.schema
-                ))
-            await prep.executemany(converted_results)
-            self.logging.info(
-                "Updated %s rankings.",
-                len(self.results),
-            )
-            self.results = []
-
-        if self.not_found:
-            await connection.execute(
-                queries.missing_summoner[self.handler.connection.type].format(
-                    platform=self.platform,
-                    platform_lower=self.platform.lower(),
-                    schema=self.handler.connection.schema
-                ),
-                self.not_found,
-            )
-            self.not_found = []

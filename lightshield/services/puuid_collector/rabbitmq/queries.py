@@ -14,17 +14,16 @@ tasks = {
         LIMIT $1
     """
 }
-
 update_ranking = {
     "postgres": """UPDATE "ranking_{platform:s}"
                     SET puuid = $2
                     WHERE summoner_id =  $1
                 """,
     "crate": """
-                INSERT INTO "{schema:s}".ranking (summoner_id, platform, puuid)
-                VALUES %s
-                ON CONFLICT (summoner_id, platform) DO 
-                UPDATE SET  puuid = EXCLUDED.puuid
+                UPDATE "{schema:s}".ranking
+                SET puuid = $2
+                WHERE summoner_id = $1
+                AND platform = '{platform:s}'    
     """
 }
 
@@ -48,6 +47,6 @@ missing_summoner = {
                 """,
     "crate": """DELETE FROM "{schema:s}".ranking
                     WHERE platform = '{platform:s}'
-                    AND summoner_id = $1
+                    AND summoner_id = ANY($1)
     """
 }
