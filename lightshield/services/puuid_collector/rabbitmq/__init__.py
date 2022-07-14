@@ -84,6 +84,7 @@ class Handler:
                         threshold -= 1
                         msg = message.body.decode('utf-8')
                         tasks.append(json.loads(msg))
+                        msg.ack()
                         if threshold <= 0:
                             break
                 threshold = base_threshold
@@ -119,7 +120,7 @@ class Handler:
             asyncio.create_task(self.process_results(platform, 500))
         ]
         self.logging.info("Starting handler for %s. Waiting for empty queue.", platform)
-        sections = 4
+        sections = 8
         section_size = 1000
         task_backlog = []
         async with self.pika:
