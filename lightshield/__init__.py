@@ -23,7 +23,8 @@ default_services = (
     "match_history",
     "match_details",
     "match_timeline",
-    "puuid_collector.rabbitmq"
+    "puuid_collector.rabbitmq.tasks"
+    "puuid_collector.rabbitmq.results"
 )
 
 
