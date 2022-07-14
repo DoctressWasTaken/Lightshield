@@ -78,13 +78,15 @@ class Handler:
                 threshold = max(1, threshold - 1)
                 await asyncio.sleep(2)
                 continue
+            self.logging.info("Found %s tasks to insert" % res.declaration_result.message_count)
             tasks = []
             async with res.iterator() as queue_iter:
                 async for message in queue_iter:
-                    async with message.process():
+                    async with message.process(ignore_processed=True):
                         threshold -= 1
                         msg = message.body.decode('utf-8')
                         tasks.append(json.loads(msg))
+                        await message.ack()
                     if threshold <= 0:
                         break
             threshold = base_threshold
