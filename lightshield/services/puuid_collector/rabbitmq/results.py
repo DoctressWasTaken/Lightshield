@@ -56,13 +56,14 @@ class Handler:
         await channel.declare_queue(queue, durable=True)
 
         while not self.is_shutdown:
-            await asyncio.sleep(30)
             res = await channel.declare_queue(
                 queue, durable=True, passive=True)
             queue_size = res.declaration_result.message_count
             if queue_size == 0:
+                await asyncio.sleep(10)
                 continue
             tasks = []
+            self.logging.info("Found %s rankings to update.", queue_size)
             for i in range(queue_size):
                 try:
                     if task := await queue.get(timeout=5, fail=False):
@@ -71,7 +72,7 @@ class Handler:
                 except Exception as err:
                     self.logging.info("Failed to retrieve task.")
                     pass
-
+            tasks = list(set(tasks))
             async with self.db.acquire() as connection:
                 prep = await connection.prepare(
                     queries.update_ranking[self.connection.type].format(
@@ -91,11 +92,11 @@ class Handler:
                         schema=self.connection.schema
                     ))
                 await prep.executemany(converted_results)
-                self.logging.info(
-                    "Updated %s rankings.",
-                    len(tasks),
-                )
                 del tasks
+            for i in range(30):
+                await asyncio.sleep(2)
+                if self.is_shutdown:
+                    continue
 
     async def process_not_found(self, platform):
         queue = 'puuid_results_not_found_%s' % platform
@@ -104,11 +105,12 @@ class Handler:
         await channel.declare_queue(queue, durable=True)
 
         while not self.is_shutdown:
-            await asyncio.sleep(30)
             res = await channel.declare_queue(
                 queue, durable=True, passive=True)
             queue_size = res.declaration_result.message_count
             if queue_size == 0:
+                await asyncio.sleep(10)
+
                 continue
             tasks = []
             for i in range(queue_size):
@@ -128,6 +130,10 @@ class Handler:
                     tasks,
                 )
                 del tasks
+            for i in range(30):
+                await asyncio.sleep(2)
+                if self.is_shutdown:
+                    continue
 
     async def run(self):
         """Run."""

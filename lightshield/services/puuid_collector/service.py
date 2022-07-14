@@ -65,7 +65,7 @@ class Platform:
                     case 200:
                         await self.channel.default_exchange.publish(
                             aio_pika.Message(
-                                pickle.dumps([data["id"], data["puuid"], data["name"], data["revisionDate"]]),
+                                pickle.dumps((data["id"], data["puuid"], data["name"], data["revisionDate"])),
                                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT
                                 ),
                             routing_key='puuid_results_found_%s' % self.platform
