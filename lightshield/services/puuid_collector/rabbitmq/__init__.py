@@ -85,7 +85,6 @@ class Handler:
                         threshold -= 1
                         msg = message.body.decode('utf-8')
                         tasks.append(json.loads(msg))
-                        message.ack()
                     if threshold <= 0:
                         break
             threshold = base_threshold
