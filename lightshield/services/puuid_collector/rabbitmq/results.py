@@ -69,6 +69,7 @@ class Handler:
                         tasks.append(pickle.loads(task.body))
                         await task.ack()
                 except Exception as err:
+                    self.logging.info("Failed to retrieve task.")
                     pass
 
             async with self.db.acquire() as connection:
