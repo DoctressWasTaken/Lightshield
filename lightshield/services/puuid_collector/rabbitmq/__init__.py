@@ -77,42 +77,43 @@ class Handler:
             if res.declaration_result.message_count < threshold:
                 threshold = max(1, threshold - 1)
                 await asyncio.sleep(2)
-            else:
-                tasks = []
-                async with res.iterator() as queue_iter:
-                    async for message in queue_iter:
+                continue
+            tasks = []
+            async with res.iterator() as queue_iter:
+                async for message in queue_iter:
+                    async with message.process():
                         threshold -= 1
                         msg = message.body.decode('utf-8')
                         tasks.append(json.loads(msg))
-                        msg.ack()
-                        if threshold <= 0:
-                            break
-                threshold = base_threshold
-                async with self.db.acquire() as connection:
-                    await connection.execute(
-                        queries.update_ranking[self.connection.type].format(
-                            platform=platform,
-                            platform_lower=platform.lower(),
-                            schema=self.connection.schema
-                        ) % ",".join(
-                            ["('%s', '%s', '%s')" % (res[0], platform, res[1]) for res in tasks]
-                        ))
-                    converted_results = [
-                        [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), platform]
-                        for res in tasks
-                    ]
-                    prep = await connection.prepare(
-                        queries.insert_summoner[self.connection.type].format(
-                            platform=platform,
-                            platform_lower=platform.lower(),
-                            schema=self.connection.schema
-                        ))
-                    await prep.executemany(converted_results)
-                    self.logging.info(
-                        "Updated %s rankings.",
-                        len(tasks),
-                    )
-                    del tasks
+                        message.ack()
+                    if threshold <= 0:
+                        break
+            threshold = base_threshold
+            async with self.db.acquire() as connection:
+                await connection.execute(
+                    queries.update_ranking[self.connection.type].format(
+                        platform=platform,
+                        platform_lower=platform.lower(),
+                        schema=self.connection.schema
+                    ) % ",".join(
+                        ["('%s', '%s', '%s')" % (res[0], platform, res[1]) for res in tasks]
+                    ))
+                converted_results = [
+                    [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), platform]
+                    for res in tasks
+                ]
+                prep = await connection.prepare(
+                    queries.insert_summoner[self.connection.type].format(
+                        platform=platform,
+                        platform_lower=platform.lower(),
+                        schema=self.connection.schema
+                    ))
+                await prep.executemany(converted_results)
+                self.logging.info(
+                    "Updated %s rankings.",
+                    len(tasks),
+                )
+                del tasks
 
     async def platform_handler(self, platform):
         # setup
