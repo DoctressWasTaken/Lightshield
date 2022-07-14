@@ -67,7 +67,10 @@ class Handler:
             for i in range(queue_size):
                 try:
                     if task := await q.get(timeout=5, fail=False):
-                        tasks.append(pickle.loads(task.body))
+                        try:
+                            tasks.append(pickle.loads(task.body))
+                        except:
+                            pass
                         await task.ack()
                 except Exception as err:
                     self.logging.info("Failed to retrieve task. [%s]", err)
