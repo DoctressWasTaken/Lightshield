@@ -63,7 +63,7 @@ class Handler:
         async with self.db.acquire() as connection:
 
             if len(tasks[0]) == 3:
-                prep = connection.prepare(
+                prep = await connection.prepare(
                     queries.insert_queue_known[self.connection.type].format(
                         schema=self.connection.schema,
                         platform_lower=platform.lower()
