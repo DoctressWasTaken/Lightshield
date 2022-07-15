@@ -19,7 +19,7 @@ class QueueHandler:
     def shutdown(self) -> None:
         self.is_shutdown = True
 
-    async def init(self, durable=False, connection=None) -> None:
+    async def init(self, durable=False, prefetch_count=100, connection=None) -> None:
         if not self.connect_string and not connection:
             self.logging.error("No connection was made available.")
             exit()
@@ -28,6 +28,7 @@ class QueueHandler:
         else:
             self.connection = await connect_robust(self.connect_string)
         self.channel = await self.connection.channel()
+        await self.channel.set_qos(prefetch_count=prefetch_count)
         await self.channel.declare_queue(self.queue, durable=durable)
 
     async def wait_threshold(self, threshold) -> int:

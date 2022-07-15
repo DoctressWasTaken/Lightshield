@@ -51,8 +51,9 @@ services:
     entrypoint: "poetry run lightshield run league_ranking"
     restart: always
 
+### PUUID Collector
+
   puuid_collector:
-    hostname: puuid_collector
     build:
       dockerfile: Service_Dockerfile
       context: .
@@ -66,7 +67,6 @@ services:
       - puuid_collector
 
   puuid_collector_tasks:
-    hostname: puuid_collector
     build:
       dockerfile: Service_Dockerfile
       context: .
@@ -82,7 +82,6 @@ services:
       - puuid_collector
 
   puuid_collector_results:
-    hostname: puuid_collector
     build:
       dockerfile: Service_Dockerfile
       context: .
@@ -97,8 +96,23 @@ services:
     profiles:
       - puuid_collector
 
+### Match History
+
   match_history:
     hostname: match_history
+    build:
+      dockerfile: Service_Dockerfile
+      context: .
+      args:
+        service: match_history
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+    entrypoint: "poetry run lightshield run match_history"
+    restart: always
+    profiles:
+      - match_history
+
+  match_history_tasks:
     build:
       dockerfile: Service_Dockerfile
       context: .
@@ -108,8 +122,27 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-    entrypoint: "poetry run lightshield run match_history"
+    entrypoint: "poetry run lightshield run match_history.rabbitmq.tasks"
     restart: always
+    profiles:
+      - match_history
+
+  match_history_results:
+    build:
+      dockerfile: Service_Dockerfile
+      context: .
+      args:
+        service: match_history
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+    entrypoint: "poetry run lightshield run match_history.rabbitmq.results"
+    restart: always
+    profiles:
+      - match_history
+
+### Match Details
 
   match_details:
     hostname: match_details
