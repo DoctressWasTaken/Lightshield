@@ -54,10 +54,10 @@ class Handler:
             message.ack()
 
     async def insert_found(self, platform):
-        if not self.buffered_tasks["platform"]["found"]:
+        if not self.buffered_tasks[platform]["found"]:
             return
-        tasks = self.buffered_tasks["platform"]["found"].copy()
-        self.buffered_tasks["platform"]["found"] = []
+        tasks = self.buffered_tasks[platform]["found"].copy()
+        self.buffered_tasks[platform]["found"] = []
         tasks = [pickle.loads(task) for task in tasks]
 
         async with self.db.acquire() as connection:
@@ -88,10 +88,10 @@ class Handler:
             await prep.executemany(converted_results)
 
     async def insert_not_found(self, platform):
-        if not self.buffered_tasks["platform"]["found"]:
+        if not self.buffered_tasks[platform]["found"]:
             return
-        tasks = self.buffered_tasks["platform"]["found"].copy()
-        self.buffered_tasks["platform"]["found"] = []
+        tasks = self.buffered_tasks[platform]["found"].copy()
+        self.buffered_tasks[platform]["found"] = []
         tasks = [pickle.loads(task) for task in tasks]
 
         async with self.db.acquire() as connection:
