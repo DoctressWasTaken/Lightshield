@@ -47,7 +47,7 @@ class Handler:
         await self.db.close()
         await self.pika.close()
 
-    async def process_results(self, message, platform=None, _type=None):
+    async def process_results(self, message, platform, _type):
         """Put results from queue into list."""
         async with message.process(ignore_processed=True):
             self.buffered_tasks[platform][_type].append(message.body)
@@ -117,10 +117,10 @@ class Handler:
         await not_found_queue.init(durable=True, connection=self.pika)
 
         cancel_consume_found = await found_queue.consume_tasks(
-            self.process_results, arguments={"platform": platform, "_type": "found"}
+            self.process_results, {"platform": platform, "_type": "found"}
         )
         cancel_consume_not_found = await found_queue.consume_tasks(
-            self.process_results, arguments={"platform": platform, "_type": "not_found"}
+            self.process_results, {"platform": platform, "_type": "not_found"}
         )
 
         while not self.is_shutdown:
