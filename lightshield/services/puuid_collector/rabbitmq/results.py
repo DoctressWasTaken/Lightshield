@@ -88,10 +88,10 @@ class Handler:
             await prep.executemany(converted_results)
 
     async def insert_not_found(self, platform):
-        if not self.buffered_tasks[platform]["found"]:
+        if not self.buffered_tasks[platform]["not_found"]:
             return
-        tasks = self.buffered_tasks[platform]["found"].copy()
-        self.buffered_tasks[platform]["found"] = []
+        tasks = self.buffered_tasks[platform]["not_found"].copy()
+        self.buffered_tasks[platform]["not_found"] = []
         tasks = [task.decode('utf-8') for task in tasks]
 
         async with self.db.acquire() as connection:
