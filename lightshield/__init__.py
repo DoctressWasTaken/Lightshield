@@ -21,6 +21,8 @@ default_services = (
     "puuid_collector",
     "summoner_tracker",
     "match_history",
+    "match_history.rabbitmq.tasks",
+    "match_history.rabbitmq.results",
     "match_details",
     "match_timeline",
     "puuid_collector.rabbitmq.tasks",
@@ -46,7 +48,7 @@ def parse_config():
     with open("config.yaml") as configs_file:
         configs = yaml.safe_load(configs_file)
     with open(
-        os.path.join(os.path.dirname(__file__), "templates", "config.yaml")
+            os.path.join(os.path.dirname(__file__), "templates", "config.yaml")
     ) as configs_defaults:
         default = yaml.safe_load(configs_defaults)
     data = merge(configs, default)
@@ -129,7 +131,7 @@ def main():
 
     args = vars(parser.parse_args())
     if ("DEBUG" in os.environ and os.environ.get("DEBUG", None) == "True") or args.get(
-        "d"
+            "d"
     ):
         logging.basicConfig(
             level=logging.DEBUG,
