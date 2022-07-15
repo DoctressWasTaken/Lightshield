@@ -56,7 +56,7 @@ class Handler:
         while not self.is_shutdown:
             async with self.db.acquire() as connection:
                 try:
-                    return connection.fetch(
+                    return await connection.fetch(
                         queries.reserve[self.connection.type].format(
                             schema=self.connection.schema,
                         ),
