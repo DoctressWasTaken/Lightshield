@@ -96,37 +96,39 @@ class Handler:
             await prep.executemany(tasks)
 
     async def platform_thread(self, platform):
+        try:
+            matches_queue = QueueHandler("match_history_results_matches_%s" % platform)
+            await matches_queue.init(durable=True, connection=self.pika)
 
-        matches_queue = QueueHandler("match_history_results_matches_%s" % platform)
-        await matches_queue.init(durable=True, connection=self.pika)
+            summoners_queue = QueueHandler("match_history_results_summoners_%s" % platform)
+            await summoners_queue.init(durable=True, connection=self.pika)
 
-        summoners_queue = QueueHandler("match_history_results_summoners_%s" % platform)
-        await summoners_queue.init(durable=True, connection=self.pika)
+            self.buffered_tasks[platform] = {"matches": [], "summoners": []}
 
-        self.buffered_tasks[platform] = {"matches": [], "summoners": []}
+            cancel_consume_matches = await matches_queue.consume_tasks(
+                self.process_results, {"platform": platform, "_type": "matches"}
+            )
+            cancel_consume_summoners = await summoners_queue.consume_tasks(
+                self.process_results, {"platform": platform, "_type": "summoners"}
+            )
 
-        cancel_consume_matches = await matches_queue.consume_tasks(
-            self.process_results, {"platform": platform, "_type": "matches"}
-        )
-        cancel_consume_summoners = await summoners_queue.consume_tasks(
-            self.process_results, {"platform": platform, "_type": "summoners"}
-        )
+            while not self.is_shutdown:
 
-        while not self.is_shutdown:
+                await self.insert_matches(platform)
+                await self.insert_summoners(platform)
 
+                for _ in range(30):
+                    await asyncio.sleep(1)
+                    if self.is_shutdown:
+                        break
+
+            await cancel_consume_matches()
+            await cancel_consume_summoners()
+            await asyncio.sleep(2)
             await self.insert_matches(platform)
             await self.insert_summoners(platform)
-
-            for _ in range(30):
-                await asyncio.sleep(1)
-                if self.is_shutdown:
-                    break
-
-        await cancel_consume_matches()
-        await cancel_consume_summoners()
-        await asyncio.sleep(2)
-        await self.insert_matches(platform)
-        await self.insert_summoners(platform)
+        except Exception as err:
+            self.logging.info(err)
 
     async def run(self):
         """Run."""
