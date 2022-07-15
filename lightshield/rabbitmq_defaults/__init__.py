@@ -26,7 +26,7 @@ class QueueHandler:
             self.connection = connection
         else:
             self.connection = await connect_robust(self.connect_string)
-        self.channel = self.connection.channel()
+        self.channel = await self.connection.channel()
         await self.channel.declare_queue(self.queue, durable=durable)
 
     async def wait_threshold(self, threshold) -> int:
