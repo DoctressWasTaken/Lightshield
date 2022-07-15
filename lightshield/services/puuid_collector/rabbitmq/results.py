@@ -122,7 +122,7 @@ class Handler:
         cancel_consume_found = await found_queue.consume_tasks(
             self.process_results, {"platform": platform, "_type": "found"}
         )
-        cancel_consume_not_found = await found_queue.consume_tasks(
+        cancel_consume_not_found = await not_found_queue.consume_tasks(
             self.process_results, {"platform": platform, "_type": "not_found"}
         )
 
