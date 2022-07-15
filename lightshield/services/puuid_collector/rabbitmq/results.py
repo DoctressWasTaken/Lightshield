@@ -92,7 +92,7 @@ class Handler:
             return
         tasks = self.buffered_tasks[platform]["found"].copy()
         self.buffered_tasks[platform]["found"] = []
-        tasks = [pickle.loads(task) for task in tasks]
+        tasks = [task.decode('utf-8') for task in tasks]
 
         async with self.db.acquire() as connection:
             await connection.execute(
