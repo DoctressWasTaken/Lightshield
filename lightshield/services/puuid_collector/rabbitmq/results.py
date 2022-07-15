@@ -29,14 +29,13 @@ class Handler:
             self.buffered_tasks[platform] = {}
         self.rabbit = "%s:%s" % (
             configs.connections.rabbitmq.host,
-            configs.connections.rabbitmq.port
+            configs.connections.rabbitmq.port,
         )
 
     async def init(self):
         self.db = await self.connection.init()
         self.pika = await aio_pika.connect_robust(
-            "amqp://user:bitnami@%s/" % self.rabbit,
-            loop=asyncio.get_event_loop()
+            "amqp://user:bitnami@%s/" % self.rabbit, loop=asyncio.get_event_loop()
         )
 
     async def init_shutdown(self, *args, **kwargs):
@@ -50,15 +49,14 @@ class Handler:
         await self.pika.close()
 
     async def process_results(self, platform):
-        queue = 'puuid_results_found_%s' % platform
+        queue = "puuid_results_found_%s" % platform
         channel = await self.pika.channel()
-        logger = logging.getLogger('%s\t| Results' % platform)
+        logger = logging.getLogger("%s\t| Results" % platform)
         await channel.set_qos(prefetch_count=500)
         await channel.declare_queue(queue, durable=True)
 
         while not self.is_shutdown:
-            q = await channel.declare_queue(
-                queue, durable=True, passive=True)
+            q = await channel.declare_queue(queue, durable=True, passive=True)
             queue_size = q.declaration_result.message_count
             if queue_size == 0:
                 await asyncio.sleep(10)
@@ -77,25 +75,34 @@ class Handler:
                     except Exception as err:
                         self.logging.info("Failed to retrieve task. [%s]", err)
                         pass
+                if not tasks:
+                    continue
                 tasks = list(set(tasks))
                 async with self.db.acquire() as connection:
                     prep = await connection.prepare(
                         queries.update_ranking[self.connection.type].format(
                             platform=platform,
                             platform_lower=platform.lower(),
-                            schema=self.connection.schema
-                        ))
+                            schema=self.connection.schema,
+                        )
+                    )
                     await prep.executemany([task[:2] for task in tasks])
                     converted_results = [
-                        [res[1], res[2], datetime.fromtimestamp(res[3] / 1000), platform]
+                        [
+                            res[1],
+                            res[2],
+                            datetime.fromtimestamp(res[3] / 1000),
+                            platform,
+                        ]
                         for res in tasks
                     ]
                     prep = await connection.prepare(
                         queries.insert_summoner[self.connection.type].format(
                             platform=platform,
                             platform_lower=platform.lower(),
-                            schema=self.connection.schema
-                        ))
+                            schema=self.connection.schema,
+                        )
+                    )
                     await prep.executemany(converted_results)
                 logger.info("Inserted %s entries", min(queue_size, 10000))
                 queue_size = max(0, queue_size - 10000)
@@ -107,15 +114,14 @@ class Handler:
                     continue
 
     async def process_not_found(self, platform):
-        queue = 'puuid_results_not_found_%s' % platform
-        logger = logging.getLogger('%s\t| Not Found' % platform)
+        queue = "puuid_results_not_found_%s" % platform
+        logger = logging.getLogger("%s\t| Not Found" % platform)
         channel = await self.pika.channel()
         await channel.set_qos(prefetch_count=100)
         await channel.declare_queue(queue, durable=True)
 
         while not self.is_shutdown:
-            q = await channel.declare_queue(
-                queue, durable=True, passive=True)
+            q = await channel.declare_queue(queue, durable=True, passive=True)
             queue_size = q.declaration_result.message_count
             if queue_size == 0:
                 await asyncio.sleep(10)
@@ -125,7 +131,7 @@ class Handler:
             for i in range(queue_size):
                 try:
                     if task := await q.get(timeout=5, fail=False):
-                        tasks.append(task.body.decode('utf-8'))
+                        tasks.append(task.body.decode("utf-8"))
                         await task.ack()
                 except Exception as err:
                     pass
@@ -136,7 +142,7 @@ class Handler:
                     queries.missing_summoner[self.connection.type].format(
                         platform=platform,
                         platform_lower=platform.lower(),
-                        schema=self.connection.schema
+                        schema=self.connection.schema,
                     ),
                     tasks,
                 )

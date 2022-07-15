@@ -32,7 +32,7 @@ reserve = {
                             LIMIT 200
                             )
                         RETURNING puuid;    
-                    """
+                    """,
 }
 
 insert_queue_known = {
@@ -46,7 +46,6 @@ insert_queue_known = {
                 VALUES ($1, $2, $3)
                 ON CONFLICT DO NOTHING
             """,
-
 }
 
 insert_queue_unknown = {
@@ -74,5 +73,5 @@ update_players = {
                 SET latest_match = $2,
                     last_history_update = $3
                 WHERE puuid = $1
-            """
+            """,
 }

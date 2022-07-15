@@ -24,7 +24,7 @@ default_services = (
     "match_details",
     "match_timeline",
     "puuid_collector.rabbitmq.tasks",
-    "puuid_collector.rabbitmq.results"
+    "puuid_collector.rabbitmq.results",
 )
 
 
@@ -128,7 +128,9 @@ def main():
     _init_crate.set_defaults(func=crate.init_db)
 
     args = vars(parser.parse_args())
-    if ("DEBUG" in os.environ and os.environ.get('DEBUG', None) == 'True') or args.get("d"):
+    if ("DEBUG" in os.environ and os.environ.get("DEBUG", None) == "True") or args.get(
+        "d"
+    ):
         logging.basicConfig(
             level=logging.DEBUG,
             format="%(levelname)8s %(asctime)s %(name)15s| %(message)s",

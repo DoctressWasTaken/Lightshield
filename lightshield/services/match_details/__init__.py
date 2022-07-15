@@ -20,7 +20,8 @@ class Handler:
         self.connection = Connection(config=configs)
         self.proxy = "%s://%s" % (
             configs.connections.proxy.protocol,
-            configs.connections.proxy.location)
+            configs.connections.proxy.location,
+        )
         self.service = configs.services.match_history
         self.configs = configs
         self.output_folder = configs.services.match_details.location or os.getcwd()

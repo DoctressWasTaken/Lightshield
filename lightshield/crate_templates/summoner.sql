@@ -16,6 +16,5 @@ CREATE TABLE "{{schema}}"."summoner"
     -- summoner_tracker update timestamp. So it only updates every x days
     last_updated        TIMESTAMP WITHOUT TIME ZONE,
     -- Updating key
-    lock                TIMESTAMP WITHOUT TIME ZONE,
     PRIMARY KEY (puuid, part)
 ) PARTITIONED BY (part);

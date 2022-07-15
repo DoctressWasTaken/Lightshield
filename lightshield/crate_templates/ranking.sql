@@ -16,6 +16,5 @@ CREATE TABLE "{{schema}}"."ranking"
     -- Last updated value
     last_updated TIMESTAMP WITHOUT TIME ZONE,
     -- Updating key
-    lock         TIMESTAMP WITHOUT TIME ZONE,
     PRIMARY KEY (summoner_id, platform)
 ) PARTITIONED BY (platform);

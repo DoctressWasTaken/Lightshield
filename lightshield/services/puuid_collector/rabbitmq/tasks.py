@@ -5,9 +5,9 @@ import math
 import aio_pika
 import asyncpg
 
-
 from lightshield.connection_handler import Connection
 from lightshield.services.puuid_collector.rabbitmq import queries
+from lightshield.rabbitmq_defaults import QueueHandler
 
 
 class Handler:
@@ -16,6 +16,7 @@ class Handler:
     db = None
     pika = None
     buffered_tasks = {}
+    handlers = []
 
     def __init__(self, configs):
         self.logging = logging.getLogger("Task Selector")
@@ -26,20 +27,21 @@ class Handler:
             self.buffered_tasks[platform] = {}
         self.rabbit = "%s:%s" % (
             configs.connections.rabbitmq.host,
-            configs.connections.rabbitmq.port
+            configs.connections.rabbitmq.port,
         )
 
     async def init(self):
         self.db = await self.connection.init()
         self.pika = await aio_pika.connect_robust(
-            "amqp://user:bitnami@%s/" % self.rabbit,
-            loop=asyncio.get_event_loop()
+            "amqp://user:bitnami@%s/" % self.rabbit, loop=asyncio.get_event_loop()
         )
 
     async def init_shutdown(self, *args, **kwargs):
         """Shutdown handler"""
         self.logging.info("Received shutdown signal.")
         self.is_shutdown = True
+        for handler in self.handlers:
+            handler.shutdown()
 
     async def handle_shutdown(self):
         """Close db connection pool after services have shut down."""
@@ -53,7 +55,7 @@ class Handler:
                 query = queries.tasks[self.connection.type].format(
                     platform=platform,
                     platform_lower=platform.lower(),
-                    schema=self.connection.schema
+                    schema=self.connection.schema,
                 )
                 try:
                     return await connection.fetch(query, count)
@@ -64,56 +66,41 @@ class Handler:
 
     async def platform_handler(self, platform):
         # setup
-        self.logging.info("Starting handler for %s. Waiting for empty queue.", platform)
         sections = 8
         section_size = 1000
         task_backlog = []
-        async with self.pika:
-            channel = await self.pika.channel()
-            await channel.declare_queue(
-                'puuid_tasks_%s' % platform, durable=True)
-            # Wait till the queue is empty before starting (To avoid duplicates)
-            while (await channel.declare_queue('puuid_tasks_%s' % platform, passive=True
-                                               )).declaration_result.message_count > 0:
-                if self.is_shutdown:
-                    return
-                await asyncio.sleep(2)
+        handler = QueueHandler("puuid_tasks_%s" % platform)
+        self.handlers.append(handler)
+        await handler.init(durable=True, connection=self.pika)
 
-            while not self.is_shutdown:
-                await asyncio.sleep(2)
-                queue_size = (await channel.declare_queue('puuid_tasks_%s' % platform, passive=True
-                                                          )).declaration_result.message_count
+        await handler.wait_threshold(0)
 
-                if (sections_remaining := math.ceil(queue_size / section_size)) < sections:
-                    # Drop used up sections
-                    task_backlog = task_backlog[-sections_remaining * section_size:]
-                    # Try to get new tasks
-                    tasks = await self.gather_tasks(platform=platform, count=sections * section_size)
-                    # Exit if no tasks
-                    if not tasks:
-                        await asyncio.sleep(10)
-                        continue
-                    self.logging.info("%s\t| Queue found to be missing %s sections", platform,
-                                      sections - sections_remaining)
-                    for task in tasks:
-                        if (sId := task['summoner_id']) in task_backlog:
-                            continue
-                        task_backlog.append(sId)
-                        await channel.default_exchange.publish(
-                            aio_pika.Message(
-                                sId.encode(), delivery_mode=aio_pika.DeliveryMode.PERSISTENT
-                            ),
-                            routing_key='puuid_tasks_%s' % platform
-                        )
-                        if len(task_backlog) >= sections * section_size:
-                            break
+        while not self.is_shutdown:
+            remaining = await handler.wait_threshold((sections - 1) * section_size)
+            sections_missing = sections - math.ceil(remaining / section_size)
+            # Drop used up sections
+            task_backlog = task_backlog[-remaining * section_size :]
+            # Get tasks
+            tasks = await self.gather_tasks(
+                platform=platform, count=sections * section_size
+            )
+            for task in tasks:
+                if (sId := task["summoner_id"]) not in task_backlog:
+                    task_backlog.append(sId.encode())
+                if len(task_backlog) >= sections * section_size:
+                    break
+            if not tasks:
+                await asyncio.sleep(10)
+                continue
+            await handler.send_tasks(tasks, persistent=True)
 
     async def run(self):
         """Run."""
         await self.init()
-        await asyncio.gather(*[
-            asyncio.create_task(self.platform_handler(platform))
-            for platform in self.platforms
-        ])
-
+        await asyncio.gather(
+            *[
+                asyncio.create_task(self.platform_handler(platform))
+                for platform in self.platforms
+            ]
+        )
         await self.handle_shutdown()

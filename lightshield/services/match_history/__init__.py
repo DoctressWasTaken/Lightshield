@@ -21,7 +21,8 @@ class Handler:
         self.protocol = configs.connections.proxy.protocol
         self.proxy = "%s://%s" % (
             configs.connections.proxy.protocol,
-            configs.connections.proxy.location)
+            configs.connections.proxy.location,
+        )
 
     async def init(self):
         self.db = await self.connection.init()

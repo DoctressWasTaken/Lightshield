@@ -43,26 +43,23 @@ class Platform:
         for platform in by_platform.keys():
             if self.service.queue:
                 data = [
-                    [platform, id, self.service.queue]
-                    for id in by_platform[platform]
+                    [platform, id, self.service.queue] for id in by_platform[platform]
                 ]
                 await connection.executemany(
-                    queries.insert_queue_known[self.handler.connection.type]
-                    .format(
+                    queries.insert_queue_known[self.handler.connection.type].format(
                         platform=self.platform,
                         platform_lower=self.platform.lower(),
-                        schema=self.handler.connection.schema
+                        schema=self.handler.connection.schema,
                     ),
                     data,
                 )
             else:
                 data = [[platform, id] for id in by_platform[platform]]
                 await connection.executemany(
-                    queries.insert_queue_unknown[self.handler.connection.type]
-                    .format(
+                    queries.insert_queue_unknown[self.handler.connection.type].format(
                         platform=self.platform,
                         platform_lower=self.platform.lower(),
-                        schema=self.handler.connection.schema
+                        schema=self.handler.connection.schema,
                     ),
                     data,
                 )
@@ -73,8 +70,9 @@ class Platform:
             queries.update_players[self.handler.connection.type].format(
                 platform=self.platform,
                 platform_lower=self.platform.lower(),
-                schema=self.handler.connection.schema
-            ))
+                schema=self.handler.connection.schema,
+            )
+        )
         await prep.executemany(self.updated_players)
         self.logging.info("Updated %s players.", len(self.updated_players))
 
@@ -88,8 +86,9 @@ class Platform:
                         platform=self.platform,
                         platform_lower=self.platform.lower(),
                         schema=self.handler.connection.schema,
-                        min_wait=self.service.min_wait
-                    ), self.service.min_wait
+                        min_wait=self.service.min_wait,
+                    ),
+                    self.service.min_wait,
                 )
                 if not players:
                     await asyncio.sleep(5)
@@ -116,7 +115,11 @@ class Platform:
         start_index = 0
         is_404 = False
         latest_match = None
-        while start_index < self.service.history.matches and not is_404 and not self.handler.is_shutdown:
+        while (
+            start_index < self.service.history.matches
+            and not is_404
+            and not self.handler.is_shutdown
+        ):
             task_url = url + "&start=%s" % start_index
             async with semaphore:
                 try:
@@ -127,7 +130,7 @@ class Platform:
                                 if not matches:
                                     break
                                 if start_index == 0:
-                                    latest_match = int(matches[0].split('_')[1])
+                                    latest_match = int(matches[0].split("_")[1])
                                 start_index += 100
                                 self.matches += matches
                             case 404:

@@ -21,7 +21,7 @@ lock = {
                             OR "lock_details" < NOW())
                     LIMIT $1)
                 RETURNING match_id
-               """
+               """,
 }
 
 flush_found = {
@@ -55,7 +55,7 @@ flush_missing = {
                                    SET find_fails = find_fails + 1,
                                        lock_details = NULL
                                    WHERE match_id = $1
-                                """
+                                """,
 }
 
 flush_updates = {
@@ -72,5 +72,5 @@ flush_updates = {
                         name = $3
                     WHERE puuid = $4 
                         AND last_activity < $1
-                """
+                """,
 }

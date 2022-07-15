@@ -33,11 +33,14 @@ class Platform:
         self.channel = await self.handler.pika.channel()
         await self.channel.set_qos(prefetch_count=self.parallel)
         task_queue = await self.channel.declare_queue(
-            'puuid_tasks_%s' % self.platform, durable=True, passive=True)
+            "puuid_tasks_%s" % self.platform, durable=True, passive=True
+        )
         await self.channel.declare_queue(
-            'puuid_results_found_%s' % self.platform, durable=True)
+            "puuid_results_found_%s" % self.platform, durable=True
+        )
         await self.channel.declare_queue(
-            'puuid_results_not_found_%s' % self.platform, durable=True)
+            "puuid_results_not_found_%s" % self.platform, durable=True
+        )
 
         consumer = await task_queue.consume(self.task_handler)
         last_prefetch = self.parallel
@@ -57,7 +60,7 @@ class Platform:
         if seconds >= 0.1:
             await asyncio.sleep(seconds)
         async with message.process(ignore_processed=True):
-            url = self.endpoint_url % message.body.decode('utf-8')
+            url = self.endpoint_url % message.body.decode("utf-8")
             try:
                 async with self.session.get(url, proxy=self.handler.proxy) as response:
                     data = await response.json()
@@ -65,24 +68,31 @@ class Platform:
                     case 200:
                         await self.channel.default_exchange.publish(
                             aio_pika.Message(
-                                pickle.dumps((data["id"], data["puuid"], data["name"], data["revisionDate"])),
-                                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+                                pickle.dumps(
+                                    (
+                                        data["id"],
+                                        data["puuid"],
+                                        data["name"],
+                                        data["revisionDate"],
+                                    )
                                 ),
-                            routing_key='puuid_results_found_%s' % self.platform
+                                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                            ),
+                            routing_key="puuid_results_found_%s" % self.platform,
                         )
                         await message.ack()
-                        self.logging.debug('200 | %s', url)
+                        self.logging.debug("200 | %s", url)
                     case 404:
                         self.not_found.append(message.body)
                         await self.channel.default_exchange.publish(
                             aio_pika.Message(
                                 message.body,
-                                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+                                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                             ),
-                            routing_key='puuid_results_not_found_%s' % self.platform
+                            routing_key="puuid_results_not_found_%s" % self.platform,
                         )
                         await message.ack()
-                        self.logging.debug('404 | %s', url)
+                        self.logging.debug("404 | %s", url)
                     case 429:
                         await message.reject(requeue=True)
                         self.retry_after = datetime.now() + timedelta(seconds=0.5)
@@ -92,7 +102,7 @@ class Platform:
                     case _:
                         await message.reject(requeue=True)
             except aiohttp.ContentTypeError:
-                await  message.reject(requeue=True)
+                await message.reject(requeue=True)
                 raise
                 # self.logging.error("Response was not a json.")
             except aiohttp.ClientProxyConnectionError:
