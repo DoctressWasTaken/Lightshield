@@ -33,7 +33,7 @@ reserve = {
 
 insert_queue_known = {
     "postgres": """
-                INSERT INTO "match_{platform:s}" (platform, match_id, queue)
+                INSERT INTO "match_{platform_lower:s}" (platform, match_id, queue)
                 VALUES ($1, $2, $3)
                 ON CONFLICT DO NOTHING
             """,
@@ -46,7 +46,7 @@ insert_queue_known = {
 
 insert_queue_unknown = {
     "postgres": """
-                INSERT INTO "match_{platform:s}" (platform, match_id)
+                INSERT INTO "match_{platform_lower:s}" (platform, match_id)
                 VALUES ($1, $2)
                 ON CONFLICT DO NOTHING
             """,

@@ -65,7 +65,7 @@ class Handler:
             if len(tasks[0]) == 3:
                 prep = connection.prepare(
                     queries.insert_queue_known[self.connection.type].format(
-                        platform=platform,
+                        schema=self.connection.schema,
                         platform_lower=platform.lower()
                     )
                 )
@@ -73,7 +73,7 @@ class Handler:
             else:
                 prep = await connection.prepare(
                     queries.insert_queue_known[self.connection.type].format(
-                        platform=platform,
+                        schema=self.connection.schema,
                         platform_lower=platform.lower()
                     ))
                 await prep.executemany(tasks)
