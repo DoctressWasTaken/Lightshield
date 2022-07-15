@@ -51,7 +51,7 @@ class Handler:
         """Put results from queue into list."""
         async with message.process(ignore_processed=True):
             self.buffered_tasks[platform][_type].append(message.body)
-            message.ack()
+            await message.ack()
 
     async def insert_found(self, platform):
         if not self.buffered_tasks[platform]["found"]:
