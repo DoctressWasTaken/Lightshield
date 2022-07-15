@@ -95,7 +95,7 @@ class Handler:
                     puuid = task['puuid']
                     if puuid not in task_backlog:
                         task_backlog.append(puuid)
-                        to_add.append(pickle.dumps((task['puuid'], task['latest_match'], task['latest_history_update'])))
+                        to_add.append(pickle.dumps((task['puuid'], task['latest_match'], task['last_history_update'])))
                     if len(task_backlog) >= sections * section_size:
                         break
                 if not to_add:
