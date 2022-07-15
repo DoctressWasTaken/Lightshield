@@ -59,6 +59,8 @@ class QueueHandler:
 
     async def consume_tasks(self, func, arguments=None):
         """Start a consumer and return the cancel task."""
+        if arguments is None:
+            arguments = {}
         queue = await self.channel.declare_queue(self.queue, passive=True)
         tag = await queue.consume(partial(func, **arguments))
         return partial(queue.cancel, tag)
