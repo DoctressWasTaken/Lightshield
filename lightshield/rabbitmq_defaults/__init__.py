@@ -6,6 +6,7 @@ import logging
 class QueueHandler:
     connection = channel = None
     is_shutdown = False
+    connect_string = None
 
     def __init__(self, queue_name, user=None, password=None, host=None, port=None):
         self.queue = queue_name
