@@ -1,6 +1,7 @@
 import asyncio
 from aio_pika import connect_robust, Message, DeliveryMode
 import logging
+from functools import partial
 
 
 class QueueHandler:
@@ -31,13 +32,13 @@ class QueueHandler:
 
     async def wait_threshold(self, threshold) -> int:
         """Blocking loop until the queue has reached a lower threshold."""
-        self.logging.info("Blocking till queue is at %s.", threshold)
         while not self.is_shutdown:
             await asyncio.sleep(2)
             count = (
                 await self.channel.declare_queue(self.queue, passive=True)
             ).declaration_result.message_count
             if count <= threshold:
+                self.logging.info("Queue reached threshold of below %s.", threshold)
                 return count
 
     async def send_tasks(self, tasks, persistent=True):
@@ -54,3 +55,9 @@ class QueueHandler:
             await self.channel.default_exchange.publish(
                 Message(task, delivery_mode=delivery_mode), routing_key=self.queue
             )
+
+    async def consume_tasks(self, func, arguments=None):
+        """Start a consumer that"""
+        queue = await self.channel.declare_queue(self.queue, passive=True)
+        tag = await queue.consume(func, arguments=arguments)
+        return partial(queue.cancel, tag)

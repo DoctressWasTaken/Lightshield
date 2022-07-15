@@ -76,25 +76,29 @@ class Handler:
         await handler.wait_threshold(0)
 
         while not self.is_shutdown:
-            remaining_sections = math.ceil((await handler.wait_threshold((sections - 1) * section_size)) / 1000)
+            remaining_sections = math.ceil(
+                (await handler.wait_threshold((sections - 1) * section_size)) / 1000
+            )
             sections_missing = sections - remaining_sections
             # Drop used up sections
-            task_backlog = task_backlog[-remaining_sections * section_size:]
+            task_backlog = task_backlog[-remaining_sections * section_size :]
             # Get tasks
-            tasks = await self.gather_tasks(
-                platform=platform, count=sections * section_size
-            )
-            to_add = []
-            for task in tasks:
-                if (sId := task["summoner_id"]) not in task_backlog:
-                    task_backlog.append(sId)
-                    to_add.append(sId.encode())
-                if len(task_backlog) >= sections * section_size:
-                    break
-            if not to_add:
-                await asyncio.sleep(10)
-                continue
-            await handler.send_tasks(to_add, persistent=True)
+            while not self.is_shutdown:
+                tasks = await self.gather_tasks(
+                    platform=platform, count=sections * section_size
+                )
+                to_add = []
+                for task in tasks:
+                    if (sId := task["summoner_id"]) not in task_backlog:
+                        task_backlog.append(sId)
+                        to_add.append(sId.encode())
+                    if len(task_backlog) >= sections * section_size:
+                        break
+                if not to_add:
+                    await asyncio.sleep(10)
+                    continue
+                await handler.send_tasks(to_add, persistent=True)
+                break
 
     async def run(self):
         """Run."""

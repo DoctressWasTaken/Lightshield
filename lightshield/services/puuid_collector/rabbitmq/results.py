@@ -11,6 +11,7 @@ import pickle
 
 from lightshield.connection_handler import Connection
 from lightshield.services.puuid_collector.rabbitmq import queries
+from lightshield.rabbitmq_defaults import QueueHandler
 
 
 class Handler:
@@ -25,8 +26,6 @@ class Handler:
         self.config = configs.services.puuid_collector
         self.connection = Connection(config=configs)
         self.platforms = configs.statics.enums.platforms
-        for platform in self.platforms:
-            self.buffered_tasks[platform] = {}
         self.rabbit = "%s:%s" % (
             configs.connections.rabbitmq.host,
             configs.connections.rabbitmq.port,
@@ -48,119 +47,107 @@ class Handler:
         await self.db.close()
         await self.pika.close()
 
-    async def process_results(self, platform):
-        queue = "puuid_results_found_%s" % platform
-        channel = await self.pika.channel()
-        logger = logging.getLogger("%s\t| Results" % platform)
-        await channel.set_qos(prefetch_count=500)
-        await channel.declare_queue(queue, durable=True)
+    async def process_results(self, message, platform, type):
+        """Put results from queue into list."""
+        async with message.process(ignore_processed=True):
+            self.buffered_tasks[platform][type].append(message.body)
+            message.ack()
 
-        while not self.is_shutdown:
-            q = await channel.declare_queue(queue, durable=True, passive=True)
-            queue_size = q.declaration_result.message_count
-            if queue_size == 0:
-                await asyncio.sleep(10)
-                continue
-            logger.info("Found %s rankings to update.", queue_size)
-            while queue_size > 0:
-                tasks = []
-                for i in range(min(10000, queue_size)):
-                    try:
-                        if task := await q.get(timeout=5, fail=False):
-                            try:
-                                tasks.append(pickle.loads(task.body))
-                            except:
-                                pass
-                            await task.ack()
-                    except Exception as err:
-                        self.logging.info("Failed to retrieve task. [%s]", err)
-                        pass
-                if not tasks:
-                    continue
-                tasks = list(set(tasks))
-                async with self.db.acquire() as connection:
-                    prep = await connection.prepare(
-                        queries.update_ranking[self.connection.type].format(
-                            platform=platform,
-                            platform_lower=platform.lower(),
-                            schema=self.connection.schema,
-                        )
-                    )
-                    await prep.executemany([task[:2] for task in tasks])
-                    converted_results = [
-                        [
-                            res[1],
-                            res[2],
-                            datetime.fromtimestamp(res[3] / 1000),
-                            platform,
-                        ]
-                        for res in tasks
-                    ]
-                    prep = await connection.prepare(
-                        queries.insert_summoner[self.connection.type].format(
-                            platform=platform,
-                            platform_lower=platform.lower(),
-                            schema=self.connection.schema,
-                        )
-                    )
-                    await prep.executemany(converted_results)
-                logger.info("Inserted %s entries", min(queue_size, 10000))
-                queue_size = max(0, queue_size - 10000)
-            del tasks
+    async def insert_found(self, platform):
+        if not self.buffered_tasks["platform"]["found"]:
+            return
+        tasks = self.buffered_tasks["platform"]["found"].copy()
+        self.buffered_tasks["platform"]["found"] = []
+        tasks = [pickle.loads(task) for task in tasks]
 
-            for i in range(30):
-                await asyncio.sleep(2)
-                if self.is_shutdown:
-                    continue
-
-    async def process_not_found(self, platform):
-        queue = "puuid_results_not_found_%s" % platform
-        logger = logging.getLogger("%s\t| Not Found" % platform)
-        channel = await self.pika.channel()
-        await channel.set_qos(prefetch_count=100)
-        await channel.declare_queue(queue, durable=True)
-
-        while not self.is_shutdown:
-            q = await channel.declare_queue(queue, durable=True, passive=True)
-            queue_size = q.declaration_result.message_count
-            if queue_size == 0:
-                await asyncio.sleep(10)
-
-                continue
-            tasks = []
-            for i in range(queue_size):
-                try:
-                    if task := await q.get(timeout=5, fail=False):
-                        tasks.append(task.body.decode("utf-8"))
-                        await task.ack()
-                except Exception as err:
-                    pass
-            if not tasks:
-                continue
-            async with self.db.acquire() as connection:
-                await connection.execute(
-                    queries.missing_summoner[self.connection.type].format(
-                        platform=platform,
-                        platform_lower=platform.lower(),
-                        schema=self.connection.schema,
-                    ),
-                    tasks,
+        async with self.db.acquire() as connection:
+            prep = await connection.prepare(
+                queries.update_ranking[self.connection.type].format(
+                    platform=platform,
+                    platform_lower=platform.lower(),
+                    schema=self.connection.schema,
                 )
-                del tasks
-            for i in range(30):
-                await asyncio.sleep(2)
+            )
+            await prep.executemany([task[:2] for task in tasks])
+            converted_results = [
+                [
+                    res[1],
+                    res[2],
+                    datetime.fromtimestamp(res[3] / 1000),
+                    platform,
+                ]
+                for res in tasks
+            ]
+            prep = await connection.prepare(
+                queries.insert_summoner[self.connection.type].format(
+                    platform=platform,
+                    platform_lower=platform.lower(),
+                    schema=self.connection.schema,
+                )
+            )
+            await prep.executemany(converted_results)
+
+    async def insert_not_found(self, platform):
+        if not self.buffered_tasks["platform"]["found"]:
+            return
+        tasks = self.buffered_tasks["platform"]["found"].copy()
+        self.buffered_tasks["platform"]["found"] = []
+        tasks = [pickle.loads(task) for task in tasks]
+
+        async with self.db.acquire() as connection:
+            await connection.execute(
+                queries.missing_summoner[self.connection.type].format(
+                    platform=platform,
+                    platform_lower=platform.lower(),
+                    schema=self.connection.schema,
+                ),
+                tasks,
+            )
+            del tasks
+        for i in range(30):
+            await asyncio.sleep(2)
+            if self.is_shutdown:
+                continue
+
+    async def platform_thread(self, platform):
+        self.buffered_tasks[platform] = {"found": [], "not_found": []}
+        found_queue = QueueHandler("puuid_results_found_%s" % platform)
+        await found_queue.init(durable=True, connection=self.pika)
+        not_found_queue = QueueHandler("puuid_results_not_found_%s" % platform)
+        await not_found_queue.init(durable=True, connection=self.pika)
+
+        cancel_consume_found = await found_queue.consume_tasks(
+            self.process_results, arguments={"platform": platform, "type": "found"}
+        )
+        cancel_consume_not_found = await found_queue.consume_tasks(
+            self.process_results, arguments={"platform": platform, "type": "not_found"}
+        )
+
+        while not self.is_shutdown:
+
+            await self.insert_found(platform)
+            await self.insert_not_found(platform)
+
+            for _ in range(30):
+                await asyncio.sleep(1)
                 if self.is_shutdown:
-                    continue
+                    break
+
+        await cancel_consume_found()
+        await cancel_consume_not_found()
+        await asyncio.sleep(2)
+        await self.insert_found(platform)
+        await self.insert_not_found(platform)
 
     async def run(self):
         """Run."""
         await self.init()
 
-        tasks = []
-        for platform in self.platforms:
-            tasks.append(asyncio.create_task(self.process_results(platform)))
-            tasks.append(asyncio.create_task(self.process_not_found(platform)))
-
-        await asyncio.gather(*tasks)
+        await asyncio.gather(
+            *[
+                asyncio.create_task(self.platform_thread(platform=platform))
+                for platform in self.platforms
+            ]
+        )
 
         await self.handle_shutdown()
