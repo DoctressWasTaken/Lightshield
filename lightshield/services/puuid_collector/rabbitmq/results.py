@@ -59,7 +59,7 @@ class Handler:
         tasks = self.buffered_tasks[platform]["found"].copy()
         self.buffered_tasks[platform]["found"] = []
         tasks = [pickle.loads(task) for task in tasks]
-
+        self.logging.info(" %s\t | Inserting %s tasks", platform, len(tasks))
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
                 queries.update_ranking[self.connection.type].format(
@@ -93,6 +93,7 @@ class Handler:
         tasks = self.buffered_tasks[platform]["not_found"].copy()
         self.buffered_tasks[platform]["not_found"] = []
         tasks = [task.decode('utf-8') for task in tasks]
+        self.logging.info(" %s\t | Inserting %s not found", platform, len(tasks))
 
         async with self.db.acquire() as connection:
             await connection.execute(
