@@ -47,7 +47,7 @@ class Handler:
         await self.db.close()
         await self.pika.close()
 
-    async def process_results(self, message, platform, _type):
+    async def process_results(self, platform, _type, message,):
         """Put results from queue into list."""
         async with message.process(ignore_processed=True):
             self.buffered_tasks[platform][_type].append(message.body)
