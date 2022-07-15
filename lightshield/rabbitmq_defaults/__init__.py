@@ -48,7 +48,6 @@ class QueueHandler:
         Tasks have to be prepared as a byte like object.
         This can mean either encoding or pickle.
         """
-        self.logging.info("Adding %s new tasks.", len(tasks))
         delivery_mode = (
             DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT
         )
