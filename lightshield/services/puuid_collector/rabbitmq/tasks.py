@@ -91,7 +91,7 @@ class Handler:
                     to_add.append(sId.encode())
                 if len(task_backlog) >= sections * section_size:
                     break
-            if not tasks:
+            if not to_add:
                 await asyncio.sleep(10)
                 continue
             await handler.send_tasks(to_add, persistent=True)
