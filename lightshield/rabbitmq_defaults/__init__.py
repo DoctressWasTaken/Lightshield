@@ -60,5 +60,5 @@ class QueueHandler:
         """Start a consumer and return the cancel task."""
         queue = await self.channel.declare_queue(self.queue, passive=True)
         self.logging.info(arguments)
-        tag = await queue.consume(func, arguments=arguments)
+        tag = await queue.consume(partial(func, **arguments))
         return partial(queue.cancel, tag)
