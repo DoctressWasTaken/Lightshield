@@ -94,6 +94,7 @@ class Platform:
                 [pickle.dumps((puuid, newest_match, now))]
             )
             self.logging.info("Updated user %s, found %s matches", puuid, len(matches))
+            await message.ack()
 
     async def run(self):
         task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
@@ -119,4 +120,4 @@ class Platform:
             await asyncio.sleep(1)
 
         await cancel_consume()
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
