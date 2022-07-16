@@ -59,6 +59,9 @@ class Platform:
                 task_url = url + "&start=%s" % start_index
                 try:
                     async with self.semaphore:
+                        if self.handler.is_shutdown:
+                            await message.reject(requeue=True)
+                            return
                         async with self.session.get(task_url, proxy=self.proxy) as response:
                                 data = await response.json()
                     match response.status:
@@ -86,9 +89,9 @@ class Platform:
                         case 430:
                             self.retry_after = datetime.fromtimestamp(data["Retry-At"])
                         case _:
-                            await asyncio.sleep(0.1)
+                            await asyncio.sleep(0.01)
                 except aiohttp.ClientProxyConnectionError:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.01)
                     continue
             if not newest_match:
                 newest_match = found_latest
@@ -97,9 +100,9 @@ class Platform:
                 await self.matches_queue.send_tasks(
                     [pickle.dumps(match) for match in matches], persistent=True
                 )
-                self.logging.info("Updated user %s, found %s matches", puuid, len(matches))
+                self.logging.debug("Updated user %s, found %s matches", puuid, len(matches))
             else:
-                self.logging.info("Updated user %s", puuid)
+                self.logging.debug("Updated user %s", puuid)
             await self.summoner_queue.send_tasks(
                 [pickle.dumps((puuid, newest_match, now))]
             )
