@@ -62,7 +62,7 @@ class Handler:
                         ),
                         platform,
                         datetime.now() - timedelta(days=self.service.min_wait),
-                        count
+                        count,
                     )
                 except asyncpg.InternalServerError:
                     self.logging.info("Internal server error with db.")
@@ -92,10 +92,18 @@ class Handler:
                 )
                 to_add = []
                 for task in tasks:
-                    puuid = task['puuid']
+                    puuid = task["puuid"]
                     if puuid not in task_backlog:
                         task_backlog.append(puuid)
-                        to_add.append(pickle.dumps((task['puuid'], task['latest_match'], task['last_history_update'])))
+                        to_add.append(
+                            pickle.dumps(
+                                (
+                                    task["puuid"],
+                                    task["latest_match"],
+                                    task["last_history_update"],
+                                )
+                            )
+                        )
                     if len(task_backlog) >= sections * section_size:
                         break
                 if not to_add:

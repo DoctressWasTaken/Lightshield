@@ -40,12 +40,14 @@ class Platform:
             url += "&startTime=%s" % now_tst
             start_index = 0
             is_404 = False
-            latest_match = None
+            newest_match = None
             matches = []
+            found_latest = False
             while (
-                    start_index < self.service.history.matches
-                    and not is_404
-                    and not self.handler.is_shutdown
+                start_index < self.service.history.matches
+                and not is_404
+                and not self.handler.is_shutdown
+                and not found_latest
             ):
                 task_url = url + "&start=%s" % start_index
                 try:
@@ -56,13 +58,19 @@ class Platform:
                                 if not matches_found:
                                     break
                                 if start_index == 0:
-                                    latest_match = int(matches_found[0].split("_")[1])
+                                    newest_match = int(matches_found[0].split("_")[1])
                                 start_index += 100
                                 for match in matches_found:
-                                    platform, id = match.split('_')
+                                    platform, id = match.split("_")
+                                    if id == latest_match:
+                                        found_latest = True
+                                        break
                                     if self.service.queue:
-                                        matches.append((platform, int(id), self.service.queue))
-                                matches += matches
+                                        matches.append(
+                                            (platform, int(id), self.service.queue)
+                                        )
+                                    else:
+                                        matches.append((platform, int(id)))
                             case 404:
                                 is_404 = True
                             case 429:
@@ -79,17 +87,28 @@ class Platform:
                     await asyncio.sleep(0.1)
                     continue
             matches = list(set(matches))
-            await self.matches_queue.send_tasks([pickle.dumps(match) for match in matches], persistent=True)
-            await self.summoner_queue.send_tasks([pickle.dumps((puuid, latest_match, now))])
+            await self.matches_queue.send_tasks(
+                [pickle.dumps(match) for match in matches], persistent=True
+            )
+            await self.summoner_queue.send_tasks(
+                [pickle.dumps((puuid, newest_match, now))]
+            )
+            self.logging.info("Updated user %s, found %s matches")
 
     async def run(self):
         task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
-        await task_queue.init(durable=True, prefetch_count=20, connection=self.handler.pika)
+        await task_queue.init(
+            durable=True, prefetch_count=20, connection=self.handler.pika
+        )
 
-        self.matches_queue = QueueHandler("match_history_results_matches_%s" % self.platform)
+        self.matches_queue = QueueHandler(
+            "match_history_results_matches_%s" % self.platform
+        )
         await self.matches_queue.init(durable=True, connection=self.handler.pika)
 
-        self.summoner_queue = QueueHandler("match_history_results_summoners_%s" % self.platform)
+        self.summoner_queue = QueueHandler(
+            "match_history_results_summoners_%s" % self.platform
+        )
         await self.summoner_queue.init(durable=True, connection=self.handler.pika)
 
         cancel_consume = await task_queue.consume_tasks(self.process_tasks)

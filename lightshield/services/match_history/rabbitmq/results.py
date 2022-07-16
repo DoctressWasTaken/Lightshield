@@ -65,17 +65,16 @@ class Handler:
             if len(tasks[0]) == 3:
                 prep = await connection.prepare(
                     queries.insert_queue_known[self.connection.type].format(
-                        schema=self.connection.schema,
-                        platform_lower=platform.lower()
+                        schema=self.connection.schema, platform_lower=platform.lower()
                     )
                 )
                 await prep.executemany(tasks)
             else:
                 prep = await connection.prepare(
                     queries.insert_queue_known[self.connection.type].format(
-                        schema=self.connection.schema,
-                        platform_lower=platform.lower()
-                    ))
+                        schema=self.connection.schema, platform_lower=platform.lower()
+                    )
+                )
                 await prep.executemany(tasks)
 
     async def insert_summoners(self, platform):
@@ -100,7 +99,9 @@ class Handler:
             matches_queue = QueueHandler("match_history_results_matches_%s" % platform)
             await matches_queue.init(durable=True, connection=self.pika)
 
-            summoners_queue = QueueHandler("match_history_results_summoners_%s" % platform)
+            summoners_queue = QueueHandler(
+                "match_history_results_summoners_%s" % platform
+            )
             await summoners_queue.init(durable=True, connection=self.pika)
 
             self.buffered_tasks[platform] = {"matches": [], "summoners": []}

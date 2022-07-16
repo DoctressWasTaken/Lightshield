@@ -92,7 +92,7 @@ class Handler:
             return
         tasks = self.buffered_tasks[platform]["not_found"].copy()
         self.buffered_tasks[platform]["not_found"] = []
-        tasks = [task.decode('utf-8') for task in tasks]
+        tasks = [task.decode("utf-8") for task in tasks]
         self.logging.info(" %s\t | Inserting %s not found", platform, len(tasks))
 
         async with self.db.acquire() as connection:

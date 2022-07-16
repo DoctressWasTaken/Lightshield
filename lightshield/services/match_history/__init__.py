@@ -8,6 +8,7 @@ from lightshield.connection_handler import Connection
 
 import aio_pika
 
+
 class Handler:
     platforms = {}
     is_shutdown = False
@@ -27,6 +28,7 @@ class Handler:
             configs.connections.rabbitmq.host,
             configs.connections.rabbitmq.port,
         )
+
     async def init(self):
         self.pika = await aio_pika.connect_robust(
             "amqp://user:bitnami@%s/" % self.rabbit, loop=asyncio.get_event_loop()
