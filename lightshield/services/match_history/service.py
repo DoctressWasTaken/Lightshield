@@ -86,6 +86,8 @@ class Platform:
                 except aiohttp.ClientProxyConnectionError:
                     await asyncio.sleep(0.1)
                     continue
+            if not newest_match:
+                newest_match = found_latest
             matches = list(set(matches))
             await self.matches_queue.send_tasks(
                 [pickle.dumps(match) for match in matches], persistent=True
