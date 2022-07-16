@@ -19,6 +19,7 @@ class Platform:
         self.handler = handler
         self.logging = logging.getLogger("%s" % platform)
         self.service = config.services.match_history
+        self.retry_after = datetime.now()
 
         self.proxy = handler.proxy
         self.endpoint_url = (
@@ -49,6 +50,9 @@ class Platform:
                 and not self.handler.is_shutdown
                 and not found_latest
             ):
+                seconds = (self.retry_after - datetime.now()).total_seconds()
+                if seconds >= 0.1:
+                    await asyncio.sleep(seconds)
                 task_url = url + "&start=%s" % start_index
                 try:
                     async with self.session.get(task_url, proxy=self.proxy) as response:
@@ -77,10 +81,7 @@ class Platform:
                                 await asyncio.sleep(0.5)
                             case 430:
                                 data = await response.json()
-                                wait_until = datetime.fromtimestamp(data["Retry-At"])
-                                seconds = (wait_until - datetime.now()).total_seconds()
-                                seconds = max(0.1, seconds)
-                                await asyncio.sleep(seconds)
+                                self.retry_after = datetime.fromtimestamp(data["Retry-At"])
                             case _:
                                 await asyncio.sleep(0.1)
                 except aiohttp.ClientProxyConnectionError:
@@ -104,7 +105,7 @@ class Platform:
     async def run(self):
         task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
         await task_queue.init(
-            durable=True, prefetch_count=20, connection=self.handler.pika
+            durable=True, prefetch_count=50, connection=self.handler.pika
         )
 
         self.matches_queue = QueueHandler(
