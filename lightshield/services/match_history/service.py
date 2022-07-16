@@ -93,7 +93,7 @@ class Platform:
             await self.summoner_queue.send_tasks(
                 [pickle.dumps((puuid, newest_match, now))]
             )
-            self.logging.info("Updated user %s, found %s matches")
+            self.logging.info("Updated user %s, found %s matches", puuid, len(matches))
 
     async def run(self):
         task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
