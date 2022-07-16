@@ -89,9 +89,10 @@ class Platform:
             if not newest_match:
                 newest_match = found_latest
             matches = list(set(matches))
-            await self.matches_queue.send_tasks(
-                [pickle.dumps(match) for match in matches], persistent=True
-            )
+            if matches:
+                await self.matches_queue.send_tasks(
+                    [pickle.dumps(match) for match in matches], persistent=True
+                )
             await self.summoner_queue.send_tasks(
                 [pickle.dumps((puuid, newest_match, now))]
             )
