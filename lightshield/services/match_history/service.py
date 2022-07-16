@@ -48,10 +48,10 @@ class Platform:
             matches = []
             found_latest = False
             while (
-                start_index < self.service.history.matches
-                and not is_404
-                and not self.handler.is_shutdown
-                and not found_latest
+                    start_index < self.service.history.matches
+                    and not is_404
+                    and not self.handler.is_shutdown
+                    and not found_latest
             ):
                 seconds = (self.retry_after - datetime.now()).total_seconds()
                 if seconds >= 0.1:
@@ -62,8 +62,10 @@ class Platform:
                         if self.handler.is_shutdown:
                             await message.reject(requeue=True)
                             return
+                        sleep = asyncio.create_task(asyncio.sleep(1))
                         async with self.session.get(task_url, proxy=self.proxy) as response:
-                                data = await response.json()
+                            results = await asyncio.gather(response.json(), sleep)
+                            data = results[0]
                     match response.status:
                         case 200:
                             if not data:
