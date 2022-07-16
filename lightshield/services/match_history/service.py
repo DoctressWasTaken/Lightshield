@@ -13,13 +13,16 @@ class Platform:
     _runner = None
     matches_queue = summoner_queue = None
 
-    def __init__(self, region, platform, config, handler):
+    def __init__(self, region, platform, config, handler, semaphore):
         self.region = region
         self.platform = platform
         self.handler = handler
         self.logging = logging.getLogger("%s" % platform)
         self.service = config.services.match_history
         self.retry_after = datetime.now()
+
+        # Region crossing semaphore to limit single service output
+        self.semaphore = semaphore
 
         self.proxy = handler.proxy
         self.endpoint_url = (
@@ -55,35 +58,35 @@ class Platform:
                     await asyncio.sleep(seconds)
                 task_url = url + "&start=%s" % start_index
                 try:
-                    async with self.session.get(task_url, proxy=self.proxy) as response:
-                        match response.status:
-                            case 200:
-                                matches_found = await response.json()
-                                if not matches_found:
-                                    break
-                                if start_index == 0:
-                                    newest_match = int(matches_found[0].split("_")[1])
-                                start_index += 100
-                                for match in matches_found:
-                                    platform, id = match.split("_")
-                                    if id == latest_match:
-                                        found_latest = True
-                                        break
-                                    if self.service.queue:
-                                        matches.append(
-                                            (platform, int(id), self.service.queue)
-                                        )
-                                    else:
-                                        matches.append((platform, int(id)))
-                            case 404:
-                                is_404 = True
-                            case 429:
-                                await asyncio.sleep(0.5)
-                            case 430:
+                    async with self.semaphore:
+                        async with self.session.get(task_url, proxy=self.proxy) as response:
                                 data = await response.json()
-                                self.retry_after = datetime.fromtimestamp(data["Retry-At"])
-                            case _:
-                                await asyncio.sleep(0.1)
+                    match response.status:
+                        case 200:
+                            if not data:
+                                break
+                            if start_index == 0:
+                                newest_match = int(data[0].split("_")[1])
+                            start_index += 100
+                            for match in data:
+                                platform, id = match.split("_")
+                                if id == latest_match:
+                                    found_latest = True
+                                    break
+                                if self.service.queue:
+                                    matches.append(
+                                        (platform, int(id), self.service.queue)
+                                    )
+                                else:
+                                    matches.append((platform, int(id)))
+                        case 404:
+                            is_404 = True
+                        case 429:
+                            await asyncio.sleep(0.5)
+                        case 430:
+                            self.retry_after = datetime.fromtimestamp(data["Retry-At"])
+                        case _:
+                            await asyncio.sleep(0.1)
                 except aiohttp.ClientProxyConnectionError:
                     await asyncio.sleep(0.1)
                     continue
@@ -105,7 +108,7 @@ class Platform:
     async def run(self):
         task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
         await task_queue.init(
-            durable=True, prefetch_count=50, connection=self.handler.pika
+            durable=True, prefetch_count=100, connection=self.handler.pika
         )
 
         self.matches_queue = QueueHandler(

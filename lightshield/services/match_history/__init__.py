@@ -34,9 +34,10 @@ class Handler:
             "amqp://user:bitnami@%s/" % self.rabbit, loop=asyncio.get_event_loop()
         )
         for region, platforms in self.configs.statics.mapping.__dict__.items():
+            region_semaphore = asyncio.Semaphore(10)
             for platform in platforms:
                 self.platforms[platform] = Platform(
-                    region, platform, self.configs, self
+                    region, platform, self.configs, self, region_semaphore
                 )
 
     async def init_shutdown(self, *args, **kwargs):
