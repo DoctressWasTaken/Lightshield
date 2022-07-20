@@ -101,7 +101,7 @@ class Handler:
                 if not to_add:
                     await asyncio.sleep(10)
                     continue
-                self.logging.info("Refilling queue by %s tasks", len(to_add))
+                self.logging.info("%s\t| Refilling queue by %s tasks", platform, len(to_add))
                 await handler.send_tasks(to_add, persistent=True)
                 break
 
