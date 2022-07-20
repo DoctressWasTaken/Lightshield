@@ -88,5 +88,4 @@ summoners_insert = {
                     platform = EXCLUDED.platform                    
                     WHERE last_activity < EXCLUDED.last_activity
                 """,
-
 }

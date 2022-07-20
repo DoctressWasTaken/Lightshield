@@ -64,7 +64,7 @@ class Handler:
                 queries.flush_found[self.connection.type].format(
                     schema=self.connection.schema,
                     platform_lower=platform.lower(),
-                    platform=platform
+                    platform=platform,
                 )
             )
             await prep.executemany(tasks)
@@ -75,13 +75,13 @@ class Handler:
             return
         tasks = self.buffered_tasks[platform]["matches_404"].copy()
         self.buffered_tasks[platform]["matches_404"] = []
-        tasks = [int(task.decode('utf-8')) for task in tasks]
+        tasks = [int(task.decode("utf-8")) for task in tasks]
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
                 queries.flush_missing[self.connection.type].format(
                     schema=self.connection.schema,
                     platform_lower=platform.lower(),
-                    platform=platform
+                    platform=platform,
                 )
             )
             await prep.executemany(tasks)
@@ -119,7 +119,11 @@ class Handler:
             )
             await summoner_queue.init(durable=True, connection=self.pika)
 
-            self.buffered_tasks[platform] = {"matches_200": [], "matches_404": [], "summoners": []}
+            self.buffered_tasks[platform] = {
+                "matches_200": [],
+                "matches_404": [],
+                "summoners": [],
+            }
 
             cancel_consume_matches_200 = await matches_queue_200.consume_tasks(
                 self.process_results, {"platform": platform, "_type": "matches_200"}

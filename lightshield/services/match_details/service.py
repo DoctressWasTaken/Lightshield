@@ -8,6 +8,7 @@ import aiohttp
 from lightshield.rabbitmq_defaults import QueueHandler
 import pickle
 
+
 class Platform:
     task_queue = None
     matches_queue_200 = matches_queue_404 = summoner_queue = None
@@ -78,12 +79,16 @@ class Platform:
                             data, _ = await asyncio.gather(response.json(), sleep)
                     match response.status:
                         case 200:
-                            self.logging.info("Received details for %s_%s", self.platform, matchId)
+                            self.logging.info(
+                                "Received details for %s_%s", self.platform, matchId
+                            )
                             await self.parse_response(data, matchId)
                             await message.ack()
                             return
                         case 404:
-                            await self.matches_queue_404.send_tasks([str(matchId).encode()])
+                            await self.matches_queue_404.send_tasks(
+                                [str(matchId).encode()]
+                            )
                             await message.ack()
                             return
                         case 429:

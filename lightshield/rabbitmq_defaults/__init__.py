@@ -51,10 +51,14 @@ class QueueHandler:
         delivery_mode = (
             DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT
         )
-        for task in tasks:
-            await self.channel.default_exchange.publish(
-                Message(task, delivery_mode=delivery_mode), routing_key=self.queue
-            )
+        await asyncio.gather(
+            *[
+                await self.channel.default_exchange.publish(
+                    Message(task, delivery_mode=delivery_mode), routing_key=self.queue
+                )
+                for task in tasks
+            ]
+        )
 
     async def consume_tasks(self, func, arguments=None):
         """Start a consumer and return the cancel task."""
