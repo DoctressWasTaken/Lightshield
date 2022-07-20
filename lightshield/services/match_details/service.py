@@ -78,6 +78,7 @@ class Platform:
                             data, _ = await asyncio.gather(response.json(), sleep)
                     match response.status:
                         case 200:
+                            self.logging.info("Received details for %s_%s", self.platform, matchId)
                             await self.parse_response(data, matchId)
                             await message.ack()
                             return
