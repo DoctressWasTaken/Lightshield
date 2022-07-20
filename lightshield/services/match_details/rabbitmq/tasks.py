@@ -84,7 +84,7 @@ class Handler:
                 (await handler.wait_threshold((sections - 1) * section_size)) / 1000
             )
             # Drop used up sections
-            task_backlog = task_backlog[-remaining_sections * section_size :]
+            task_backlog = task_backlog[-remaining_sections * section_size:]
             # Get tasks
             while not self.is_shutdown:
                 tasks = await self.gather_tasks(
@@ -101,6 +101,7 @@ class Handler:
                 if not to_add:
                     await asyncio.sleep(10)
                     continue
+                self.logging.info("Refilling queue by %s tasks", len(to_add))
                 await handler.send_tasks(to_add, persistent=True)
                 break
 

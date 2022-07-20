@@ -39,7 +39,7 @@ class QueueHandler:
                 await self.channel.declare_queue(self.queue, passive=True)
             ).declaration_result.message_count
             if count <= threshold:
-                self.logging.info("Queue reached threshold of below %s.", threshold)
+                self.logging.debug("Queue reached threshold of below %s.", threshold)
                 return count
 
     async def send_tasks(self, tasks: list[bin], persistent=True):
