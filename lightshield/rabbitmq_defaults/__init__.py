@@ -42,7 +42,7 @@ class QueueHandler:
                 self.logging.info("Queue reached threshold of below %s.", threshold)
                 return count
 
-    async def send_tasks(self, tasks, persistent=True):
+    async def send_tasks(self, tasks: list[bin], persistent=True):
         """Insert tasks into the queue.
 
         Tasks have to be prepared as a byte like object.

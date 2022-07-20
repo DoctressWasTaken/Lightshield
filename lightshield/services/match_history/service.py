@@ -48,10 +48,10 @@ class Platform:
             matches = []
             found_latest = False
             while (
-                    start_index < self.service.history.matches
-                    and not is_404
-                    and not self.handler.is_shutdown
-                    and not found_latest
+                start_index < self.service.history.matches
+                and not is_404
+                and not self.handler.is_shutdown
+                and not found_latest
             ):
                 seconds = (self.retry_after - datetime.now()).total_seconds()
                 if seconds >= 0.1:
@@ -63,9 +63,10 @@ class Platform:
                             await message.reject(requeue=True)
                             return
                         sleep = asyncio.create_task(asyncio.sleep(1))
-                        async with self.session.get(task_url, proxy=self.proxy) as response:
-                            results = await asyncio.gather(response.json(), sleep)
-                            data = results[0]
+                        async with self.session.get(
+                            task_url, proxy=self.proxy
+                        ) as response:
+                            data, _ = await asyncio.gather(response.json(), sleep)
                     match response.status:
                         case 200:
                             if not data:
@@ -102,7 +103,9 @@ class Platform:
                 await self.matches_queue.send_tasks(
                     [pickle.dumps(match) for match in matches], persistent=True
                 )
-                self.logging.debug("Updated user %s, found %s matches", puuid, len(matches))
+                self.logging.debug(
+                    "Updated user %s, found %s matches", puuid, len(matches)
+                )
             else:
                 self.logging.debug("Updated user %s", puuid)
             await self.summoner_queue.send_tasks(

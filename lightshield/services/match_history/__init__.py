@@ -4,7 +4,6 @@ import logging
 import os
 
 from lightshield.services.match_history.service import Platform
-from lightshield.connection_handler import Connection
 
 import aio_pika
 
@@ -18,7 +17,6 @@ class Handler:
         self.logging = logging.getLogger("Service")
         self.service = configs.services.match_history
         self.configs = configs
-        self.connection = Connection(config=configs)
         self.protocol = configs.connections.proxy.protocol
         self.proxy = "%s://%s" % (
             configs.connections.proxy.protocol,

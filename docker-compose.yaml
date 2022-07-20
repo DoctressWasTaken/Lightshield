@@ -144,8 +144,37 @@ services:
 
 ### Match Details
 
+  match_details_tasks:
+    build:
+      dockerfile: Service_Dockerfile
+      context: .
+      args:
+        service: match_details
+    entrypoint: "poetry run lightshield run match_details.rabbitmq.tasks"
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+    restart: always
+    profiles:
+      - match_details
+
+  match_details_results:
+    build:
+      dockerfile: Service_Dockerfile
+      context: .
+      args:
+        service: match_details
+    entrypoint: "poetry run lightshield run match_details.rabbitmq.results"
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+    restart: always
+    profiles:
+      - match_details
+
   match_details:
-    hostname: match_details
     build:
       dockerfile: Service_Dockerfile
       context: .
@@ -160,6 +189,8 @@ services:
         source: ./data
         target: /data
     restart: always
+    profiles:
+      - match_details
 
 volumes:
   rabbitmq_data:
