@@ -59,7 +59,6 @@ class Handler:
         tasks = self.buffered_tasks[platform]["matches_200"].copy()
         self.buffered_tasks[platform]["matches_200"] = []
         tasks = [pickle.loads(task) for task in tasks]
-        self.logging.info(" %s\t | %s found matches inserted", platform, len(tasks))
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
                 queries.flush_found[self.connection.type].format(
@@ -67,6 +66,7 @@ class Handler:
                 )
             )
             await prep.executemany(tasks)
+        self.logging.info(" %s\t | %s found matches inserted", platform, len(tasks))
 
     async def update_matches_404(self, platform):
         if not self.buffered_tasks[platform]["matches_404"]:
@@ -74,7 +74,6 @@ class Handler:
         tasks = self.buffered_tasks[platform]["matches_404"].copy()
         self.buffered_tasks[platform]["matches_404"] = []
         tasks = [int(task.decode('utf-8')) for task in tasks]
-        self.logging.info(" %s\t | %s missing matches inserted", platform, len(tasks))
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
                 queries.flush_missing[self.connection.type].format(
@@ -84,6 +83,7 @@ class Handler:
                 )
             )
             await prep.executemany(tasks)
+        self.logging.info(" %s\t | %s missing matches inserted", platform, len(tasks))
 
     async def change_summoners(self, platform):
         if not self.buffered_tasks[platform]["summoners"]:
@@ -91,9 +91,6 @@ class Handler:
         tasks = self.buffered_tasks[platform]["summoners"].copy()
         self.buffered_tasks[platform]["summoners"] = []
         tasks = [pickle.loads(task) for task in tasks]
-
-        self.logging.info(" %s\t | Updating %s summoners", platform, len(tasks))
-
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
                 queries.summoners_update_only[self.connection.type].format(
@@ -101,6 +98,7 @@ class Handler:
                 )
             )
             await prep.executemany(tasks)
+        self.logging.info(" %s\t | Updating %s summoners", platform, len(tasks))
 
     async def platform_thread(self, platform):
         try:
