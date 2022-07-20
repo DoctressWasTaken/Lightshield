@@ -62,7 +62,9 @@ class Handler:
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
                 queries.flush_found[self.connection.type].format(
-                    schema=self.connection.schema, platform_lower=platform.lower()
+                    schema=self.connection.schema,
+                    platform_lower=platform.lower(),
+                    platform=platform
                 )
             )
             await prep.executemany(tasks)

@@ -38,6 +38,7 @@ flush_found = {
                     win = $5,
                     details = TRUE
                     WHERE match_id = $6
+                    AND platform = '{platform:s}'
                 """,
 }
 
