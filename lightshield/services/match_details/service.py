@@ -5,17 +5,11 @@ import os
 from datetime import datetime, timedelta
 
 import aiohttp
-from lightshield.services.match_details import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 import pickle
 
-
 class Platform:
-    service_running = False
-    match_updates = None
-    match_updates_faulty = None
     task_queue = None
-    proxy_endpoint = None
     matches_queue_200 = matches_queue_404 = summoner_queue = None
 
     def __init__(self, region, platform, config, handler, semaphore):
@@ -73,64 +67,33 @@ class Platform:
             seconds = (self.retry_after - datetime.now()).total_seconds()
             if seconds >= 0.1:
                 await asyncio.sleep(seconds)
-            try:
-                async with self.semaphore:
-                    if self.handler.is_shutdown:
-                        await message.reject(requeue=True)
-                        return
-                    sleep = asyncio.create_task(asyncio.sleep(1))
-                    async with self.session.get(url, proxy=self.proxy) as response:
-                        data, _ = await asyncio.gather(response.json(), sleep)
-                match response.status:
-                    case 200:
-                        await self.parse_response(data, matchId)
-                        await message.ack()
-                        return
-                    case 404:
-                        await self.matches_queue_404.send_tasks([str(matchId).encode()])
-                        await message.ack()
-                        return
-                    case 429:
-                        await asyncio.sleep(0.5)
-                    case 430:
-                        self.retry_after = datetime.fromtimestamp(data["Retry-At"])
-                    case _:
-                        await asyncio.sleep(0.01)
-            except aiohttp.ClientProxyConnectionError:
-                await asyncio.sleep(0.01)
+            while not self.handler.is_shutdown:
+                try:
+                    async with self.semaphore:
+                        if self.handler.is_shutdown:
+                            await message.reject(requeue=True)
+                            return
+                        sleep = asyncio.create_task(asyncio.sleep(1))
+                        async with self.session.get(url, proxy=self.proxy) as response:
+                            data, _ = await asyncio.gather(response.json(), sleep)
+                    match response.status:
+                        case 200:
+                            await self.parse_response(data, matchId)
+                            await message.ack()
+                            return
+                        case 404:
+                            await self.matches_queue_404.send_tasks([str(matchId).encode()])
+                            await message.ack()
+                            return
+                        case 429:
+                            await asyncio.sleep(0.5)
+                        case 430:
+                            self.retry_after = datetime.fromtimestamp(data["Retry-At"])
+                        case _:
+                            await asyncio.sleep(0.01)
+                except aiohttp.ClientProxyConnectionError:
+                    await asyncio.sleep(0.01)
             await message.reject(requeue=True)
-
-    async def flush(self, connection):
-        """Insert results from requests into the db."""
-        if self.found:
-            query = await connection.prepare(
-                queries.flush_found[self.handler.connection.type].format(
-                    platform=self.platform,
-                    platform_lower=self.platform.lower(),
-                    schema=self.handler.connection.schema,
-                ),
-            )
-            await query.executemany(self.found)
-            self.found = []
-        if self.missing:
-            prep = await connection.prepare(
-                queries.flush_missing[self.handler.connection.type].format(
-                    platform=self.platform,
-                    platform_lower=self.platform.lower(),
-                    schema=self.handler.connection.schema,
-                )
-            )
-            await prep.executemany([(entry["match_id"]) for entry in self.missing])
-            self.missing = []
-
-        if self.summoner_updates:
-            query = await connection.prepare(
-                queries.flush_updates[self.handler.connection.type].format(
-                    schema=self.handler.connection.schema,
-                )
-            )
-            await query.executemany(self.summoner_updates)
-            self.summoner_updates = []
 
     async def parse_response(self, response, matchId):
         if response["info"]["queueId"] == 0:
