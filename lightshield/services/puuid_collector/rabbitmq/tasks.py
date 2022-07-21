@@ -5,9 +5,9 @@ import math
 import aio_pika
 import asyncpg
 
-from lightshield.connection_handler import Connection
 from lightshield.services.puuid_collector.rabbitmq import queries
 from lightshield.rabbitmq_defaults import QueueHandler
+from lightshield.config import Config
 
 
 class Handler:
@@ -18,23 +18,17 @@ class Handler:
     buffered_tasks = {}
     handlers = []
 
-    def __init__(self, configs):
+    def __init__(self):
         self.logging = logging.getLogger("Task Selector")
-        self.config = configs.services.puuid_collector
-        self.connection = Connection(config=configs)
-        self.platforms = configs.statics.enums.platforms
+        self.config = Config()
+        self.connector = self.config.get_db_connection()
+        self.platforms = self.config.platforms
         for platform in self.platforms:
             self.buffered_tasks[platform] = {}
-        self.rabbit = "%s:%s" % (
-            configs.connections.rabbitmq.host,
-            configs.connections.rabbitmq.port,
-        )
 
     async def init(self):
-        self.db = await self.connection.init()
-        self.pika = await aio_pika.connect_robust(
-            "amqp://user:bitnami@%s/" % self.rabbit, loop=asyncio.get_event_loop()
-        )
+        self.db = await self.connector.init()
+        self.pika = await aio_pika.connect_robust(self.config.rabbitmq.string, loop=asyncio.get_event_loop())
 
     async def init_shutdown(self, *args, **kwargs):
         """Shutdown handler"""
@@ -52,10 +46,10 @@ class Handler:
         """Get tasks from db."""
         while not self.is_shutdown:
             async with self.db.acquire() as connection:
-                query = queries.tasks[self.connection.type].format(
+                query = queries.tasks[self.config.database].format(
                     platform=platform,
                     platform_lower=platform.lower(),
-                    schema=self.connection.schema,
+                    schema=self.config.db.schema,
                 )
                 try:
                     return await connection.fetch(query, count)
@@ -65,6 +59,7 @@ class Handler:
             await asyncio.sleep(1)
 
     async def platform_handler(self, platform):
+        self.logging.info("Worker %s up.", platform)
         # setup
         sections = 8
         section_size = 1000
@@ -79,9 +74,8 @@ class Handler:
             remaining_sections = math.ceil(
                 (await handler.wait_threshold((sections - 1) * section_size)) / 1000
             )
-            sections_missing = sections - remaining_sections
             # Drop used up sections
-            task_backlog = task_backlog[-remaining_sections * section_size :]
+            task_backlog = task_backlog[-remaining_sections * section_size:]
             # Get tasks
             while not self.is_shutdown:
                 tasks = await self.gather_tasks(

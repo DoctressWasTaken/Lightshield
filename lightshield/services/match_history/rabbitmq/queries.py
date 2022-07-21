@@ -21,13 +21,20 @@ reserve = {
                         last_history_update
                     FROM "{schema:s}".summoner
                     WHERE platform = $1
-                        AND ("lock" IS NULL OR "lock" < NOW())
-                        AND (last_history_update < $2
-                            OR last_history_update IS NULL)
-                        AND (last_activity > last_history_update
-                            OR last_history_update IS NULL)
+                        AND (
+                            -- No update
+                            last_history_update IS NULL
+                            OR 
+                            -- Update yes but nothing new
+                            last_history_update < $2
+                            OR 
+                            -- Update yes and newer game found
+                            (last_history_update < $3
+                                AND last_activity > last_history_update
+                            )
+                        )
                     ORDER BY last_history_update NULLS FIRST
-                    LIMIT $3
+                    LIMIT $4
                     """,
 }
 

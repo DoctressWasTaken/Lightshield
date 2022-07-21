@@ -53,9 +53,12 @@ class QueueHandler:
         )
         await asyncio.gather(
             *[
-                asyncio.create_task(self.channel.default_exchange.publish(
-                    Message(task, delivery_mode=delivery_mode), routing_key=self.queue
-                ))
+                asyncio.create_task(
+                    self.channel.default_exchange.publish(
+                        Message(task, delivery_mode=delivery_mode),
+                        routing_key=self.queue,
+                    )
+                )
                 for task in tasks
             ]
         )

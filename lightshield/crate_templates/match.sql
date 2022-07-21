@@ -16,8 +16,5 @@ CREATE TABLE "{{schema}}"."match"
     find_fails    SMALLINT DEFAULT 0,
     details       BOOLEAN,
     timeline      BOOLEAN,
-    -- Updating key
-    lock_details  TIMESTAMP WITHOUT TIME ZONE,
-    lock_timeline TIMESTAMP WITHOUT TIME ZONE,
     PRIMARY KEY (match_id, platform)
 ) PARTITIONED BY (platform);

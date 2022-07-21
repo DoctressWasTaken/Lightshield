@@ -1,13 +1,10 @@
 """League Updater Module."""
 import asyncio
 import logging
-import os
-
-import asyncpg
 
 from lightshield.services.league_ranking.rank_manager import RankManager
 from lightshield.services.league_ranking.service import Service
-from lightshield import connection_handler
+from lightshield.config import Config
 
 
 class Handler:
@@ -15,20 +12,13 @@ class Handler:
     platforms = {}
     db = None
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self):
+        self.config = Config()
         self.logging = logging.getLogger("Handler")
-        self.connection = connection_handler.Connection(config=config)
-        self.service = config.services.league_ranking
-        self.protocol = config.connections.proxy.protocol
-        self.proxy = "%s://%s" % (
-            config.connections.proxy.protocol,
-            config.connections.proxy.location,
-        )
-
-        select_platforms = self.service.platforms or config.statics.enums.platforms
-        for platform in select_platforms:
-            self.platforms[platform] = Service(platform, config, self)
+        self.connection = self.config.get_db_connection()
+        self.proxy = self.config.proxy.string
+        for platform in [platform for platform, conf in self.config.platforms.items() if not conf['disabled']]:
+            self.platforms[platform] = Service(platform, self.config, self)
 
     async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""

@@ -9,10 +9,9 @@ import json
 from datetime import datetime
 import pickle
 
-from lightshield.connection_handler import Connection
+from lightshield.config import Config
 from lightshield.services.puuid_collector.rabbitmq import queries
 from lightshield.rabbitmq_defaults import QueueHandler
-
 
 class Handler:
     platforms = {}
@@ -21,20 +20,16 @@ class Handler:
     pika = None
     buffered_tasks = {}
 
-    def __init__(self, configs):
+    def __init__(self):
         self.logging = logging.getLogger("Task Selector")
-        self.config = configs.services.puuid_collector
-        self.connection = Connection(config=configs)
-        self.platforms = configs.statics.enums.platforms
-        self.rabbit = "%s:%s" % (
-            configs.connections.rabbitmq.host,
-            configs.connections.rabbitmq.port,
-        )
+        self.config = Config()
+        self.connector = self.config.get_db_connection()
+        self.platforms = self.config.platforms
 
     async def init(self):
-        self.db = await self.connection.init()
+        self.db = await self.connector.init()
         self.pika = await aio_pika.connect_robust(
-            "amqp://user:bitnami@%s/" % self.rabbit, loop=asyncio.get_event_loop()
+            self.config.rabbitmq.string, loop=asyncio.get_event_loop()
         )
 
     async def init_shutdown(self, *args, **kwargs):
@@ -62,10 +57,10 @@ class Handler:
         self.logging.info(" %s\t | Inserting %s tasks", platform, len(tasks))
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
-                queries.update_ranking[self.connection.type].format(
+                queries.update_ranking[self.config.database].format(
                     platform=platform,
                     platform_lower=platform.lower(),
-                    schema=self.connection.schema,
+                    schema=self.config.db.schema,
                 )
             )
             await prep.executemany([task[:2] for task in tasks])
@@ -79,10 +74,10 @@ class Handler:
                 for res in tasks
             ]
             prep = await connection.prepare(
-                queries.insert_summoner[self.connection.type].format(
+                queries.insert_summoner[self.config.database].format(
                     platform=platform,
                     platform_lower=platform.lower(),
-                    schema=self.connection.schema,
+                    schema=self.config.db.schema,
                 )
             )
             await prep.executemany(converted_results)
@@ -97,10 +92,10 @@ class Handler:
 
         async with self.db.acquire() as connection:
             await connection.execute(
-                queries.missing_summoner[self.connection.type].format(
+                queries.missing_summoner[self.config.database].format(
                     platform=platform,
                     platform_lower=platform.lower(),
-                    schema=self.connection.schema,
+                    schema=self.config.db.schema,
                 ),
                 tasks,
             )

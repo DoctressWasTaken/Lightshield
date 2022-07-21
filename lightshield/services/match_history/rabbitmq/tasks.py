@@ -7,7 +7,7 @@ import asyncpg
 import pickle
 from datetime import datetime, timedelta
 
-from lightshield.connection_handler import Connection
+from lightshield.config import Config
 from lightshield.services.match_history.rabbitmq import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 
@@ -20,23 +20,19 @@ class Handler:
     buffered_tasks = {}
     handlers = []
 
-    def __init__(self, configs):
+    def __init__(self):
         self.logging = logging.getLogger("Task Selector")
-        self.config = configs.services.puuid_collector
-        self.connection = Connection(config=configs)
-        self.platforms = configs.statics.enums.platforms
+        self.config = Config()
+        self.connector = self.config.get_db_connection()
+        self.platforms = self.config.platforms
         for platform in self.platforms:
             self.buffered_tasks[platform] = {}
-        self.rabbit = "%s:%s" % (
-            configs.connections.rabbitmq.host,
-            configs.connections.rabbitmq.port,
-        )
-        self.service = configs.services.match_history
+        self.service = self.config.services['match_history']
 
     async def init(self):
-        self.db = await self.connection.init()
+        self.db = await self.connector.init()
         self.pika = await aio_pika.connect_robust(
-            "amqp://user:bitnami@%s/" % self.rabbit, loop=asyncio.get_event_loop()
+            self.config.rabbitmq.string, loop=asyncio.get_event_loop()
         )
 
     async def init_shutdown(self, *args, **kwargs):
@@ -57,11 +53,12 @@ class Handler:
             async with self.db.acquire() as connection:
                 try:
                     return await connection.fetch(
-                        queries.reserve[self.connection.type].format(
-                            schema=self.connection.schema,
+                        queries.reserve[self.config.database].format(
+                            schema=self.config.db.schema,
                         ),
                         platform,
-                        datetime.now() - timedelta(days=self.service.min_wait),
+                        datetime.now() - timedelta(days=self.service['min_age']['no_activity']),
+                        datetime.now() - timedelta(days=self.service['min_age']['newer_activity']),
                         count,
                     )
                 except asyncpg.InternalServerError:
@@ -84,7 +81,7 @@ class Handler:
                 (await handler.wait_threshold((sections - 1) * section_size)) / 1000
             )
             # Drop used up sections
-            task_backlog = task_backlog[-remaining_sections * section_size :]
+            task_backlog = task_backlog[-remaining_sections * section_size:]
             # Get tasks
             while not self.is_shutdown:
                 tasks = await self.gather_tasks(

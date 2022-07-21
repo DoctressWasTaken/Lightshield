@@ -15,12 +15,12 @@ class Service:
     def __init__(self, name, config, handler):
         self.name = name
         self.logging = logging.getLogger("%s" % name)
+        self.config = config
         self.handler = handler
-        self.database = config.database
         self.rankmanager = RankManager(config, self.logging, handler)
         self.retry_after = datetime.now()
         self.url = (
-            f"{handler.protocol}://{self.name.lower()}.api.riotgames.com/lol/"
+            f"{self.config.proxy.protocol}://{self.name.lower()}.api.riotgames.com/lol/"
             + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
         self.preset = {}
@@ -95,7 +95,7 @@ class Service:
         try:
             async with self.handler.db.acquire() as connection:
                 latest = await connection.fetch(
-                    queries.preexisting[self.database].format(
+                    queries.preexisting[self.config.database].format(
                         platform_lower=self.name.lower(),
                         platform=self.name,
                         schema=self.handler.connection.schema,

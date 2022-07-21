@@ -1,12 +1,7 @@
 """Summoner ID Task Selector."""
 import asyncio
 import logging
-import math
-import os
 import aio_pika
-import asyncpg
-import json
-from datetime import datetime
 import pickle
 
 from lightshield.connection_handler import Connection

@@ -3,51 +3,29 @@ version: 1.0
 database: postgres
 
 connections:
-  postgres:
-    hostname: localhost
-    port: 5432
-    user: postgres
-    database: lightshield
-    password_env: POSTGRES_PASSWORD
   crate:
-    hostname: localhost
+    host: localhost
     port: 5433
     user: crate
     schema: lightshield # Crate doesnt have databases
     password_env: CRATE_PASSWORD
+  postgres:
+    host: localhost
+    port: 5432
+    user: postgres
+    database: lightshield
+    password_env: POSTGRES_PASSWORD
   proxy:
-    location: 'localhost:8888'
     protocol: http
+    host: localhost
+    port: 8888
   rabbitmq:
     host: localhost
     port: 5672
+    user: user
+    password_env: RABBITMQ_PASSWORD
 
-services:
-  league_ranking:
-    cycle_length: 6
-    platforms:
-    ranks:
-
-  puuid_collector:
-
-  summoner_tracker:
-    update_interval: 12
-
-  match_history:
-    min_wait: 1
-    history:
-      days: 14
-      matches: 100
-    type:
-    queue:
-    platforms:
-
-  match_details:
-    location:
-    regions:
-
-  match_timeline:
-    regions:
+platforms:
 
 
 statics: # Don't change unless changes happen to the API

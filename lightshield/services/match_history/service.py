@@ -14,31 +14,31 @@ class Platform:
     matches_queue = summoner_queue = None
 
     def __init__(self, region, platform, config, handler, semaphore):
+        self.config = config
         self.region = region
         self.platform = platform
         self.handler = handler
         self.logging = logging.getLogger("%s" % platform)
-        self.service = config.services.match_history
+        self.service = config.services['match_history']
         self.retry_after = datetime.now()
 
         # Region crossing semaphore to limit single service output
         self.semaphore = semaphore
 
-        self.proxy = handler.proxy
         self.endpoint_url = (
-            f"{config.connections.proxy.protocol}://{self.region.lower()}.api.riotgames.com"
+            f"{config.proxy.protocol}://{self.region.lower()}.api.riotgames.com"
             f"/lol/match/v5/matches/by-puuid/%s/ids"
             f"?count=100"
         )
-        if self.service.type:
-            self.endpoint_url += "&type=%s" % self.service.type
-        if self.service.queue:
-            self.endpoint_url += "&queue=%s" % self.service.queue
+        if self.service['type']:
+            self.endpoint_url += "&type=%s" % self.service['type']
+        if self.service['queue']:
+            self.endpoint_url += "&queue=%s" % self.service['queue']
 
     async def process_tasks(self, message):
         async with message.process(ignore_processed=True):
             puuid, latest_match, latest_history_update = pickle.loads(message.body)
-            now = datetime.now() - timedelta(days=self.service.history.days)
+            now = datetime.now() - timedelta(days=self.service['history']['days'])
             now_tst = int(now.timestamp())
             url = self.endpoint_url % puuid
             url += "&startTime=%s" % now_tst
@@ -48,7 +48,7 @@ class Platform:
             matches = []
             found_latest = False
             while (
-                start_index < self.service.history.matches
+                start_index < self.service['history']['matches']
                 and not is_404
                 and not self.handler.is_shutdown
                 and not found_latest
@@ -64,7 +64,7 @@ class Platform:
                             return
                         sleep = asyncio.create_task(asyncio.sleep(1))
                         async with self.session.get(
-                            task_url, proxy=self.proxy
+                            task_url, proxy=self.config.proxy.string
                         ) as response:
                             data, _ = await asyncio.gather(response.json(), sleep)
                     match response.status:
@@ -79,9 +79,9 @@ class Platform:
                                 if id == latest_match:
                                     found_latest = True
                                     break
-                                if self.service.queue:
+                                if self.service['queue']:
                                     matches.append(
-                                        (platform, int(id), self.service.queue)
+                                        (platform, int(id), self.service['queue'])
                                     )
                                 else:
                                     matches.append((platform, int(id)))

@@ -5,6 +5,7 @@ import logging
 import aio_pika
 
 from lightshield.services.puuid_collector.service import Platform
+from lightshield.config import Config
 
 
 class Handler:
@@ -12,25 +13,16 @@ class Handler:
     is_shutdown = False
     pika = None
 
-    def __init__(self, configs):
+    def __init__(self):
         self.logging = logging.getLogger("Handler")
-        self.config = configs.services.puuid_collector
-        self.protocol = configs.connections.proxy.protocol
-        self.proxy = "%s://%s" % (
-            configs.connections.proxy.protocol,
-            configs.connections.proxy.location,
-        )
-        self.rabbit = "%s:%s" % (
-            configs.connections.rabbitmq.host,
-            configs.connections.rabbitmq.port,
-        )
-        for platform in configs.statics.enums.platforms:
+        self.config = Config()
+        self.protocol = self.config.proxy.protocol
+        self.proxy = self.config.proxy.string
+        for platform in [platform for platform, conf in self.config.platforms.items() if not conf['disabled']]:
             self.platforms[platform] = Platform(platform, self)
 
     async def init(self):
-        self.pika = await aio_pika.connect_robust(
-            "amqp://user:bitnami@%s/" % self.rabbit, loop=asyncio.get_event_loop()
-        )
+        self.pika = await aio_pika.connect_robust(self.config.rabbitmq.string, loop=asyncio.get_event_loop())
 
     async def init_shutdown(self, *args, **kwargs):
         """Shutdown handler"""

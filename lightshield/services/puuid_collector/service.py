@@ -1,17 +1,15 @@
 import asyncio
 import logging
-import random
 from datetime import datetime, timedelta
-import json
 
 import aiohttp
-import asyncpg
 import aio_pika
 import pickle
 
 
 class Platform:
     _runner = None
+    channel = None
 
     def __init__(self, platform, handler):
         self.platform = platform

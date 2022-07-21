@@ -8,7 +8,7 @@ COPY wait-for-it.sh .
 COPY pyproject.toml poetry.lock ./
 RUN poetry install
 COPY lightshield/templates/ lightshield/templates/
-COPY lightshield/*.py lightshield/
-COPY lightshield/services/$service/ lightshield/services/$service/
 COPY lightshield/cli_commands/ lightshield/cli_commands/
 COPY lightshield/rabbitmq_defaults/ lightshield/rabbitmq_defaults/
+COPY lightshield/*.py lightshield/
+COPY lightshield/services/$service/ lightshield/services/$service/

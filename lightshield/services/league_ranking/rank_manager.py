@@ -10,12 +10,11 @@ class RankManager:
 
     def __init__(self, config, logging, handler):
         """Initiate logging."""
-        service = config.services.league_ranking
+        self.ranks = [rank for rank, conf in config.services['league_ranking']['ranks'].items() if not conf['disabled']]
         self.handler = handler
         self.logging = logging
-        self.ranks = service.ranks or config.statics.enums.ranks
-        self.divisions = config.statics.enums.divisions
-        self.cycle_length = service.cycle_length
+        self.divisions = config.divisions
+        self.cycle_length = config.services['league_ranking']['cycle_length']
 
     async def init(self):
         """Open or create the ranking_cooldown tracking sheet."""
