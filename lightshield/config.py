@@ -41,7 +41,7 @@ class Config:
     def __init__(self):
         self.logging = logging.getLogger("Config")
         try:
-            with open("config.yaml") as file:
+            with open(os.path.join(os.getcwd(), "config.yaml")) as file:
                 self.file = yaml.safe_load(file)
         except FileNotFoundError:
             self.logging.error("config.yaml was not found in %s", os.getcwd())
