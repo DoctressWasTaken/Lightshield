@@ -26,16 +26,3 @@ connections:
     password_env: RABBITMQ_PASSWORD
 
 platforms:
-
-
-statics: # Don't change unless changes happen to the API
-  enums:
-    platforms: [ 'EUW1', 'EUN1', 'TR1', 'RU', 'NA1', 'BR1', 'LA1', 'LA2', 'OC1', 'KR', 'JP1' ]
-    regions: [ 'europe', 'americas', 'asia', 'sea' ]
-    ranks: [ 'IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER' ]
-    divisions: [ 'I', 'II', 'III', 'IV' ]
-  mapping:
-    europe: [ "EUW1", "EUN1", "TR1", "RU" ]
-    americas: [ "NA1", "BR1", "LA1", "LA2" ]
-    asia: [ "KR", "JP1" ]
-    sea: [ "OC1" ]
