@@ -19,12 +19,12 @@ class Platform:
         self.handler = handler
         self.logging = logging.getLogger(platform)
         self.semaphore = semaphore
-
-        self.output_folder = config.services.match_details.location or os.getcwd()
+        self.service = config.services['match_details']
+        self.output_folder = self.service['output']
         self.retry_after = datetime.now()
         self.proxy = handler.proxy
         self.endpoint_url = (
-            f"{config.connections.proxy.protocol}://{self.region.lower()}.api.riotgames.com"
+            f"{config.proxy.protocol}://{self.region.lower()}.api.riotgames.com"
             f"/lol/match/v5/matches/%s_%s"
         )
 
@@ -110,12 +110,12 @@ class Platform:
         creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
         patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
         if (
-            "gameStartTimestamp" in response["info"]
-            and "gameEndTimestamp" in response["info"]
+                "gameStartTimestamp" in response["info"]
+                and "gameEndTimestamp" in response["info"]
         ):
             game_duration = (
-                response["info"]["gameEndTimestamp"]
-                - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
             )
         else:
             game_duration = response["info"]["gameDuration"]
@@ -164,7 +164,7 @@ class Platform:
         filename = os.path.join(path, "%s_%s.json" % (self.platform, matchId))
         if not os.path.isfile(filename):
             with open(
-                filename,
-                "w+",
+                    filename,
+                    "w+",
             ) as file:
                 file.write(json.dumps(response))

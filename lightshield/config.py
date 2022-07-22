@@ -231,6 +231,9 @@ class Config:
             "match_details": {
                 "add_users": self._get_deep(
                     services, ["match_details", "add_users"], False
+                ),
+                "output": self._get_deep(
+                    services, ["match_details", "output"], './data'
                 )
             },
             "match_timeline": {

@@ -4,7 +4,7 @@ import logging
 import aio_pika
 import pickle
 
-from lightshield.connection_handler import Connection
+from lightshield.config import Config
 from lightshield.services.match_details.rabbitmq import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 
@@ -16,20 +16,17 @@ class Handler:
     pika = None
     buffered_tasks = {}
 
-    def __init__(self, configs):
+    def __init__(self):
         self.logging = logging.getLogger("Task Selector")
-        self.config = configs.services.puuid_collector
-        self.connection = Connection(config=configs)
-        self.platforms = configs.statics.enums.platforms
-        self.rabbit = "%s:%s" % (
-            configs.connections.rabbitmq.host,
-            configs.connections.rabbitmq.port,
-        )
+        self.config = Config()
+        self.connector = self.config.get_db_connection()
+        self.platforms = self.config.platforms
+
 
     async def init(self):
-        self.db = await self.connection.init()
+        self.db = await self.connector.init()
         self.pika = await aio_pika.connect_robust(
-            "amqp://user:bitnami@%s/" % self.rabbit, loop=asyncio.get_event_loop()
+            self.config.rabbitmq.string, loop=asyncio.get_event_loop()
         )
 
     async def init_shutdown(self, *args, **kwargs):
@@ -56,8 +53,8 @@ class Handler:
         tasks = [pickle.loads(task) for task in tasks]
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
-                queries.flush_found[self.connection.type].format(
-                    schema=self.connection.schema,
+                queries.flush_found[self.config.database].format(
+                    schema=self.config.db.schema,
                     platform_lower=platform.lower(),
                     platform=platform,
                 )
@@ -73,8 +70,8 @@ class Handler:
         tasks = [int(task.decode("utf-8")) for task in tasks]
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
-                queries.flush_missing[self.connection.type].format(
-                    schema=self.connection.schema,
+                queries.flush_missing[self.config.database].format(
+                    schema=self.config.db.schema,
                     platform_lower=platform.lower(),
                     platform=platform,
                 )
@@ -90,8 +87,8 @@ class Handler:
         tasks = [pickle.loads(task) for task in tasks]
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
-                queries.summoners_update_only[self.connection.type].format(
-                    schema=self.connection.schema,
+                queries.summoners_update_only[self.config.database].format(
+                    schema=self.config.db.schema,
                 )
             )
             await prep.executemany(tasks)
