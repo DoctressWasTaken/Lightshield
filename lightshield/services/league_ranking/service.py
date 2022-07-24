@@ -11,6 +11,7 @@ from lightshield.services.league_ranking import queries
 class Service:
     empty_page = False
     active_rank = None
+    is_shutdown = False
 
     def __init__(self, name, config, handler):
         self.name = name
@@ -25,6 +26,9 @@ class Service:
         )
         self.preset = {}
         self.to_update = {}
+
+    async def shutdown(self):
+        self.is_shutdown = True
 
     async def fetch(self, page, session):
         """Handle request."""
@@ -64,8 +68,9 @@ class Service:
 
     async def run(self):
         """Runner."""
+        self.logging.info("Started.")
         await self.rankmanager.init()
-        while not self.handler.is_shutdown:
+        while not self.is_shutdown:
             self.active_rank = await self.rankmanager.get_next()
             self.to_update = {}
             await self.get_preset()
@@ -73,7 +78,7 @@ class Service:
             next_page = 6
             self.empty_page = False
             async with aiohttp.ClientSession() as session:
-                while pages and not self.handler.is_shutdown:
+                while pages and not self.is_shutdown:
                     tasks = [
                         asyncio.create_task(self.fetch(page, session)) for page in pages
                     ]
@@ -119,7 +124,7 @@ class Service:
             updated = len(to_update_list)
             batch = to_update_list[:5000]
             async with self.handler.db.acquire() as connection:
-                while to_update_list and not self.handler.is_shutdown:
+                while to_update_list and not self.is_shutdown:
                     try:
                         prep = await connection.prepare(
                             queries.update[self.handler.connection.type].format(

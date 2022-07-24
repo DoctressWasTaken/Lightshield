@@ -1,23 +1,33 @@
 import logging
 import os
-
 import yaml
+import asyncpg
+from pprint import PrettyPrinter
+
+pp = PrettyPrinter(indent=2, sort_dicts=True)
 
 allowed_versions = [1.0]
-import asyncpg
 
 
 class Object(object):
-    pass
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def print(self):
+        return {
+            **{
+                key: val.print() if type(val) == Object else val
+                for key, val in self.__dict__.items()
+            }
+        }
+
+    def __repr__(self):
+        return pp.pformat(self.__dict__)
 
 
 class Config:
-    version = None
-    database = None
-    proxy = Object()
-    rabbitmq = Object()
-    db = Object()
-    services = None
+    services = version = database = proxy = rabbitmq = db = None
 
     mapping = {
         "europe": ("EUW1", "EUN1", "TR1", "RU"),
@@ -39,12 +49,12 @@ class Config:
     divisions = ("I", "II", "III", "IV")
 
     def __init__(self):
-        self.logging = logging.getLogger("Config")
+        self._logging = logging.getLogger("Config")
         try:
             with open(os.path.join(os.getcwd(), "config.yaml")) as file:
                 self.file = yaml.safe_load(file)
         except FileNotFoundError:
-            self.logging.error("config.yaml was not found in %s", os.getcwd())
+            self._logging.error("config.yaml was not found in %s", os.getcwd())
             exit()
         self._parse_version()
         self._parse_database()
@@ -52,9 +62,20 @@ class Config:
         self.platforms = {}
         self._parse_platforms()
         self._parse_services()
+        del self.file
+
+    def print(self):
+        pp.pprint(
+            {
+                **{
+                    key: val.print() if type(val) == Object else val
+                    for key, val in self.__dict__.items()
+                }
+            }
+        )
 
     def _parse_var(
-            self, parent, key: str, expected_type: type = None, parent_name: str = None
+        self, parent, key: str, expected_type: type = None, parent_name: str = None
     ):
         """Handle the parsing."""
         try:
@@ -63,25 +84,25 @@ class Config:
             return expected_type(parent[key])
         except KeyError:
             if parent_name:
-                self.logging.error(
+                self._logging.error(
                     "%s has no property %s which is required.", parent_name, key
                 )
                 exit()
             else:
-                self.logging.error(
+                self._logging.error(
                     "The top level property %s is missing but required.", key
                 )
                 exit()
         except ValueError:
-            self.logging.error("Expected a %s value for %s.", type, key)
-            self.logging.error(parent)
+            self._logging.error("Expected a %s value for %s.", type, key)
+            self._logging.error(parent)
             exit()
 
     def _parse_version(self):
         """Parse the version element."""
         self.version = self._parse_var(self.file, "version", float)
         if self.version not in allowed_versions:
-            self.logging.error(
+            self._logging.error(
                 "The provided config version %s is not supported %s",
                 self.version,
                 allowed_versions,
@@ -92,7 +113,7 @@ class Config:
         """Parse the database element."""
         self.database = self._parse_var(self.file, "database", str)
         if self.database not in ["crate", "postgres"]:
-            self.logging.error(
+            self._logging.error(
                 "The provided database selection '%s' is not allowed %s",
                 self.database,
                 ["crate", "postgres"],
@@ -103,50 +124,53 @@ class Config:
         """Parse the connections element."""
         connections = self._parse_var(self.file, "connections", dict)
         proxy = self._parse_var(connections, "proxy", dict, "connections")
-        self.proxy.host = self._parse_var(proxy, "host", str, "connections.proxy")
-        self.proxy.port = self._parse_var(proxy, "port", int, "connections.proxy")
-        self.proxy.protocol = self._parse_var(
-            proxy, "protocol", str, "connections.proxy"
+        self.proxy = Object(
+            host=self._parse_var(proxy, "host", str, "connections.proxy"),
+            port=self._parse_var(proxy, "port", int, "connections.proxy"),
+            protocol=self._parse_var(proxy, "protocol", str, "connections.proxy"),
         )
         self.proxy.string = "%s://%s:%s" % (
             self.proxy.protocol,
             self.proxy.host,
-            self.proxy.port
+            self.proxy.port,
         )
         rabbitmq = self._parse_var(connections, "rabbitmq", dict, "connections")
-        self.rabbitmq.host = self._parse_var(
-            rabbitmq, "host", str, "connections.rabbitmq"
-        )
-        self.rabbitmq.port = self._parse_var(
-            rabbitmq, "port", int, "connections.rabbitmq"
-        )
-        self.rabbitmq.user = self._parse_var(
-            rabbitmq, "user", str, "connections.rabbitmq"
-        )
-        self.rabbitmq.password = os.environ.get(
-            self._parse_var(rabbitmq, "password_env", str, "connections.rabbitmq"), None
+        self.rabbitmq = Object(
+            host=self._parse_var(rabbitmq, "host", str, "connections.rabbitmq"),
+            port=self._parse_var(rabbitmq, "port", int, "connections.rabbitmq"),
+            user=self._parse_var(rabbitmq, "user", str, "connections.rabbitmq"),
+            password_env=self._parse_var(
+                rabbitmq, "password_env", str, "connections.rabbitmq"
+            ),
+            _password=os.environ.get(
+                self._parse_var(rabbitmq, "password_env", str, "connections.rabbitmq"),
+                None,
+            ),
         )
         self.rabbitmq.string = "amqp://%s:%s@%s:%s" % (
             self.rabbitmq.user,
-            self.rabbitmq.password,
+            self.rabbitmq._password,
             self.rabbitmq.host,
-            self.rabbitmq.port)
+            self.rabbitmq.port,
+        )
 
         db_connection = self._parse_var(connections, self.database, dict, "connections")
-        self.db.host = self._parse_var(
-            db_connection, "host", str, "connections.%s" % self.database
-        )
-        self.db.port = self._parse_var(
-            db_connection, "port", int, "connections.%s" % self.database
-        )
-        self.db.user = self._parse_var(
-            db_connection, "user", str, "connections.%s" % self.database
-        )
-        self.db.password = os.environ.get(
-            self._parse_var(
-                db_connection, "password_env", str, "connections.%s" % self.database
+        self.db = Object(
+            host=self._parse_var(
+                db_connection, "host", str, "connections.%s" % self.database
             ),
-            None,
+            port=self._parse_var(
+                db_connection, "port", int, "connections.%s" % self.database
+            ),
+            user=self._parse_var(
+                db_connection, "user", str, "connections.%s" % self.database
+            ),
+            password=os.environ.get(
+                self._parse_var(
+                    db_connection, "password_env", str, "connections.%s" % self.database
+                ),
+                None,
+            ),
         )
         if self.database == "crate":
             self.db.schema = self._parse_var(
@@ -172,13 +196,19 @@ class Config:
             "KR",
             "JP1",
         ]
-        for platform in expected:
-            self.platforms[platform] = {"disabled": False}
         platforms = self._parse_var(self.file, "platforms")
-        if platforms:
-            for key, val in platforms.items():
-                if val:
-                    self.platforms[key]["disabled"] = val.get("disabled", False)
+        self.platforms = Object(
+            **{
+                platform: Object(
+                    disabled=self._get_deep(platforms, [platform, "disabled"], False)
+                )
+                for platform in expected
+            }
+        )
+        self.active_platforms = []
+        for platform, conf in self.platforms.__dict__.items():
+            if not conf.disabled:
+                self.active_platforms.append(platform)
 
     def _get_deep(self, parent, path, default):
         cur = parent
@@ -193,55 +223,63 @@ class Config:
     def _parse_services(self):
         """Parse the services."""
         services = self._parse_var(self.file, "services")
-        self.services = {
-            "league_ranking": {
-                "cycle_length": self._get_deep(
+        self.services = Object(
+            league_ranking=Object(
+                cycle_length=self._get_deep(
                     services, ["league_ranking", "cycle_length"], 6
                 ),
-                "ranks": {
-                    rank: {
-                        "disabled": self._get_deep(
-                            services, ["league_ranking", "ranks", "disabled"], False
+                ranks=Object(
+                    **{
+                        rank: Object(
+                            disabled=self._get_deep(
+                                services,
+                                ["league_ranking", "ranks", rank, "disabled"],
+                                False,
+                            )
                         )
+                        for rank in self.ranks
                     }
-                    for rank in self.ranks
-                },
-            },
-            "puuid_collector": {},
-            "match_history": {
-                "queue": self._get_deep(services, ['match_history', 'queue'], None),
-                "type": self._get_deep(services, ['match_history', 'type'], 'ranked'),
-                "min_age": {
-                    "newer_activity": self._get_deep(
+                ),
+            ),
+            puuid_collector=Object(),
+            match_history=Object(
+                queue=self._get_deep(services, ["match_history", "queue"], None),
+                type=self._get_deep(services, ["match_history", "type"], "ranked"),
+                min_age=Object(
+                    newer_activity=self._get_deep(
                         services, ["match_history", "min_age", "newer_activity"], 3
                     ),
-                    "no_activity": self._get_deep(
+                    no_activity=self._get_deep(
                         services, ["match_history", "min_age", "newer_activity"], 10
                     ),
-                },
-                "history": {
-                    "days": self._get_deep(
+                ),
+                history=Object(
+                    days=self._get_deep(
                         services, ["match_history", "history", "days"], 14
                     ),
-                    "matches": self._get_deep(
+                    matches=self._get_deep(
                         services, ["match_history", "history", "matches"], 100
                     ),
-                },
-            },
-            "match_details": {
-                "add_users": self._get_deep(
+                ),
+            ),
+            match_details=Object(
+                add_users=self._get_deep(
                     services, ["match_details", "add_users"], False
                 ),
-                "output": self._get_deep(
-                    services, ["match_details", "output"], './data'
-                )
-            },
-            "match_timeline": {
-                "add_users": self._get_deep(
+                output=self._get_deep(services, ["match_details", "output"], "./data"),
+            ),
+            match_timeline=Object(
+                add_users=self._get_deep(
                     services, ["match_timeline", "add_users"], False
-                )
-            },
-        }
+                ),
+                output=self._get_deep(services, ["match_timeline", "output"], "./data"),
+            ),
+        )
+        self.services.league_ranking.active_ranks = []
+        for ranking, conf in self.services.league_ranking.ranks.__dict__.items():
+            if not conf.disabled:
+                self.services.league_ranking.active_ranks.append(ranking)
+
 
     def get_db_connection(self):
         return Connection(self)
@@ -249,6 +287,7 @@ class Config:
 
 class Connection:
     """Connection handler for postgres/crate."""
+
     db = schema = database = None
 
     def __init__(self, config):

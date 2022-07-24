@@ -22,7 +22,7 @@ class Handler:
         self.logging = logging.getLogger("Task Selector")
         self.config = Config()
         self.connector = self.config.get_db_connection()
-        self.platforms = self.config.platforms
+        self.platforms = self.config.active_platforms
 
     async def init(self):
         self.db = await self.connector.init()

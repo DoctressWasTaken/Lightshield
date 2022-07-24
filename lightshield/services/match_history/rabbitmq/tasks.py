@@ -24,10 +24,10 @@ class Handler:
         self.logging = logging.getLogger("Task Selector")
         self.config = Config()
         self.connector = self.config.get_db_connection()
-        self.platforms = self.config.platforms
+        self.platforms = self.config.active_platforms
         for platform in self.platforms:
             self.buffered_tasks[platform] = {}
-        self.service = self.config.services['match_history']
+        self.service = self.config.services.match_history
 
     async def init(self):
         self.db = await self.connector.init()
@@ -57,8 +57,10 @@ class Handler:
                             schema=self.config.db.schema,
                         ),
                         platform,
-                        datetime.now() - timedelta(days=self.service['min_age']['no_activity']),
-                        datetime.now() - timedelta(days=self.service['min_age']['newer_activity']),
+                        datetime.now()
+                        - timedelta(days=self.service.min_age.no_activity),
+                        datetime.now()
+                        - timedelta(days=self.service.min_age.newer_activity),
                         count,
                     )
                 except asyncpg.InternalServerError:
@@ -81,7 +83,7 @@ class Handler:
                 (await handler.wait_threshold((sections - 1) * section_size)) / 1000
             )
             # Drop used up sections
-            task_backlog = task_backlog[-remaining_sections * section_size:]
+            task_backlog = task_backlog[-remaining_sections * section_size :]
             # Get tasks
             while not self.is_shutdown:
                 tasks = await self.gather_tasks(

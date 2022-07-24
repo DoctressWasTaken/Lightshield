@@ -12,7 +12,7 @@ from lightshield.cli_commands import crate, postgres
 from pprint import PrettyPrinter
 from lightshield.config import Config
 
-pp = PrettyPrinter(indent=4, width=160)
+pp = PrettyPrinter(indent=2, compact=True, sort_dicts=True)
 load_dotenv()
 
 default_services = (
@@ -33,8 +33,15 @@ default_services = (
 
 async def shutdown(services):
     """Init shutdown in all active services."""
+    logging.info("Shutting down.")
     for service in services.values():
         await service.init_shutdown()
+
+
+async def print_config(*args, **kwargs):
+    """Print out the configs."""
+    conf = Config()
+    conf.print()
 
 
 async def run(*args, services=None, **kwargs):
@@ -95,9 +102,7 @@ def main():
     _run.set_defaults(func=run)
     _run.add_argument("services", nargs="+", choices=default_services)
 
-    _init = subparsers.add_parser(
-        "init", help="Generate a config file if none exists."
-    )
+    _init = subparsers.add_parser("init", help="Generate a config file if none exists.")
     _init.set_defaults(func=init_config, init_config=True)
 
     _init_db = subparsers.add_parser(
@@ -105,6 +110,9 @@ def main():
         help="Initialize the database type as selected in the config.yaml.",
     )
     _init_db.set_defaults(func=init_db)
+
+    config = subparsers.add_parser("config", help="Print out the current config.")
+    config.set_defaults(func=print_config, init_config=True)
 
     args = vars(parser.parse_args())
     if ("DEBUG" in os.environ and os.environ.get("DEBUG", None) == "True") or args.get(

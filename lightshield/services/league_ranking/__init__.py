@@ -8,8 +8,6 @@ from lightshield.config import Config
 
 
 class Handler:
-    is_shutdown = False
-    platforms = {}
     db = None
 
     def __init__(self):
@@ -17,13 +15,14 @@ class Handler:
         self.logging = logging.getLogger("Handler")
         self.connection = self.config.get_db_connection()
         self.proxy = self.config.proxy.string
-        for platform in [platform for platform, conf in self.config.platforms.items() if not conf['disabled']]:
-            self.platforms[platform] = Service(platform, self.config, self)
+        self.platforms = {
+            platform: Service(platform, self.config, self)
+            for platform in self.config.active_platforms}
 
     async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
-        self.logging.info("Received shutdown signal.")
-        self.is_shutdown = True
+        for platform in self.platforms.values():
+            await platform.shutdown()
 
     async def handle_shutdown(self):
         await self.db.close()

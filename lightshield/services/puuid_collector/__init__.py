@@ -9,7 +9,6 @@ from lightshield.config import Config
 
 
 class Handler:
-    platforms = {}
     is_shutdown = False
     pika = None
 
@@ -18,15 +17,17 @@ class Handler:
         self.config = Config()
         self.protocol = self.config.proxy.protocol
         self.proxy = self.config.proxy.string
-        for platform in [platform for platform, conf in self.config.platforms.items() if not conf['disabled']]:
-            self.platforms[platform] = Platform(platform, self)
+        self.platforms = {
+            platform: Platform(platform, self)
+            for platform in self.config.active_platforms}
 
     async def init(self):
-        self.pika = await aio_pika.connect_robust(self.config.rabbitmq.string, loop=asyncio.get_event_loop())
+        self.pika = await aio_pika.connect_robust(
+            self.config.rabbitmq.string, loop=asyncio.get_event_loop()
+        )
 
     async def init_shutdown(self, *args, **kwargs):
         """Shutdown handler"""
-        self.logging.info("Received shutdown signal.")
         self.is_shutdown = True
 
     async def handle_shutdown(self):
