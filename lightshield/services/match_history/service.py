@@ -131,7 +131,7 @@ class Platform:
 
         conn = aiohttp.TCPConnector(limit=0)
         if self.service.ratelimit:
-            self.session = aiohttp.ClientSession(connector=conn, headers={'ratelimit': self.service.ratelimit})
+            self.session = aiohttp.ClientSession(connector=conn, headers={'ratelimit': str(self.service.ratelimit)})
         cancel_consume = await task_queue.consume_tasks(self.process_tasks)
 
         while not self.handler.is_shutdown:
