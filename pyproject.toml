@@ -15,7 +15,6 @@ uvloop = "^0.16.0"
 asyncpg = "^0.25.0"
 PyYAML = "^6.0"
 python-dotenv = "^0.20.0"
-rich = "^12.4.4"
 aio-pika = "^8.0.3"
 
 

@@ -14,11 +14,13 @@ class Object(object):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def print(self):
+    def get(self):
+        filtered_dict = {key: val for key, val in self.__dict__.items() if
+                         not key.startswith('_')}
         return {
             **{
-                key: val.print() if type(val) == Object else val
-                for key, val in self.__dict__.items()
+                key: val.get() if type(val) == Object else val
+                for key, val in filtered_dict.items()
             }
         }
 
@@ -52,7 +54,7 @@ class Config:
         self._logging = logging.getLogger("Config")
         try:
             with open(os.path.join(os.getcwd(), "config.yaml")) as file:
-                self.file = yaml.safe_load(file)
+                self.file = yaml.safe_load(file) or {}
         except FileNotFoundError:
             self._logging.error("config.yaml was not found in %s", os.getcwd())
             exit()
@@ -65,17 +67,18 @@ class Config:
         del self.file
 
     def print(self):
+        filtered_dict = {key: val for key, val in self.__dict__.items() if not key.startswith('_') and val}
         pp.pprint(
             {
                 **{
-                    key: val.print() if type(val) == Object else val
-                    for key, val in self.__dict__.items()
+                    key: val.get() if type(val) == Object else val
+                    for key, val in filtered_dict.items()
                 }
             }
         )
 
     def _parse_var(
-        self, parent, key: str, expected_type: type = None, parent_name: str = None
+            self, parent, key: str, expected_type: type = None, parent_name: str = None
     ):
         """Handle the parsing."""
         try:
@@ -147,7 +150,7 @@ class Config:
                 None,
             ),
         )
-        self.rabbitmq.string = "amqp://%s:%s@%s:%s" % (
+        self.rabbitmq._string = "amqp://%s:%s@%s:%s" % (
             self.rabbitmq.user,
             self.rabbitmq._password,
             self.rabbitmq.host,
@@ -225,6 +228,9 @@ class Config:
         services = self._parse_var(self.file, "services")
         self.services = Object(
             league_ranking=Object(
+                ratelimit=self._get_deep(
+                    services, ["league_ranking", "ratelimit"], None
+                ),
                 cycle_length=self._get_deep(
                     services, ["league_ranking", "cycle_length"], 6
                 ),
@@ -241,8 +247,13 @@ class Config:
                     }
                 ),
             ),
-            puuid_collector=Object(),
+            puuid_collector=Object(ratelimit=self._get_deep(
+                services, ["puuid_collector", "ratelimit"], None
+            ), ),
             match_history=Object(
+                ratelimit=self._get_deep(
+                    services, ["match_history", "ratelimit"], None
+                ),
                 queue=self._get_deep(services, ["match_history", "queue"], None),
                 type=self._get_deep(services, ["match_history", "type"], "ranked"),
                 min_age=Object(
@@ -263,12 +274,18 @@ class Config:
                 ),
             ),
             match_details=Object(
+                ratelimit=self._get_deep(
+                    services, ["match_details", "ratelimit"], None
+                ),
                 add_users=self._get_deep(
                     services, ["match_details", "add_users"], False
                 ),
                 output=self._get_deep(services, ["match_details", "output"], "./data"),
             ),
             match_timeline=Object(
+                ratelimit=self._get_deep(
+                    services, ["match_timeline", "ratelimit"], None
+                ),
                 add_users=self._get_deep(
                     services, ["match_timeline", "add_users"], False
                 ),
@@ -279,7 +296,6 @@ class Config:
         for ranking, conf in self.services.league_ranking.ranks.__dict__.items():
             if not conf.disabled:
                 self.services.league_ranking.active_ranks.append(ranking)
-
 
     def get_db_connection(self):
         return Connection(self)

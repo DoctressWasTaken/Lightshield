@@ -27,7 +27,7 @@ class Handler:
     async def init(self):
         self.db = await self.connector.init()
         self.pika = await aio_pika.connect_robust(
-            self.config.rabbitmq.string, loop=asyncio.get_event_loop()
+            self.config.rabbitmq._string, loop=asyncio.get_event_loop()
         )
 
     async def init_shutdown(self, *args, **kwargs):
