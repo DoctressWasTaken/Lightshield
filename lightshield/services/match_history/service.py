@@ -48,10 +48,10 @@ class Platform:
             matches = []
             found_latest = False
             while (
-                start_index < self.service.history.matches
-                and not is_404
-                and not self.handler.is_shutdown
-                and not found_latest
+                    start_index < self.service.history.matches
+                    and not is_404
+                    and not self.handler.is_shutdown
+                    and not found_latest
             ):
                 seconds = (self.retry_after - datetime.now()).total_seconds()
                 if seconds >= 0.1:
@@ -64,7 +64,7 @@ class Platform:
                             return
                         sleep = asyncio.create_task(asyncio.sleep(1))
                         async with self.session.get(
-                            task_url, proxy=self.config.proxy.string
+                                task_url, proxy=self.config.proxy.string
                         ) as response:
                             data, _ = await asyncio.gather(response.json(), sleep)
                     match response.status:
@@ -129,9 +129,10 @@ class Platform:
         )
         await self.summoner_queue.init(durable=True, connection=self.handler.pika)
 
-        cancel_consume = await task_queue.consume_tasks(self.process_tasks)
         conn = aiohttp.TCPConnector(limit=0)
-        self.session = aiohttp.ClientSession(connector=conn)
+        if self.service.ratelimit:
+            self.session = aiohttp.ClientSession(connector=conn, headers={'ratelimit': self.service.ratelimit})
+        cancel_consume = await task_queue.consume_tasks(self.process_tasks)
 
         while not self.handler.is_shutdown:
             await asyncio.sleep(1)
