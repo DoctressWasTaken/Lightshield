@@ -45,11 +45,11 @@ flush_found = {
 flush_missing = {
     "postgres": """UPDATE "match_{platform_lower:s}"
                                    SET find_fails = find_fails + 1
-                                   WHERE match_id = $1
+                                   WHERE match_id = ANY($1::INT[])
                                 """,
     "crate": """UPDATE "{schema:s}"."match"
                                    SET find_fails = find_fails + 1
-                                   WHERE match_id = $1
+                                   WHERE match_id = ANY($1::INT[])
                                     AND platform = '{platform:s}'
                                 """,
 }

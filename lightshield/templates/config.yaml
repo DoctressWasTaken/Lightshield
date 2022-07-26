@@ -26,3 +26,5 @@ connections:
     password_env: RABBITMQ_PASSWORD
 
 platforms:
+
+services:
