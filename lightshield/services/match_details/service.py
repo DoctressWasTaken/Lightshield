@@ -162,7 +162,7 @@ class Platform:
                         matchId,
                     )
                 )
-        await self.matches_queue_200.send_tasks([match])
+        # await self.matches_queue_200.send_tasks([match])
         return  # Test
         # Saving
         path = os.path.join(self.output_folder, "details", patch, day, self.platform)
