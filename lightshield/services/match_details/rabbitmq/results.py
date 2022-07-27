@@ -67,7 +67,6 @@ class Handler:
         tasks = self.buffered_tasks[platform]["matches_404"].copy()
         self.buffered_tasks[platform]["matches_404"] = []
         tasks = [[int(task.decode("utf-8"))] for task in tasks]
-        self.logging.error(tasks)
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
                 queries.flush_missing[self.config.database].format(
