@@ -59,4 +59,4 @@ class Handler:
             for i in range(15):
                 if self.is_shutdown:
                     break
-                await asyncio.sleep(30)
+                await asyncio.sleep(2)
