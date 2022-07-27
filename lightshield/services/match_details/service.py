@@ -28,7 +28,6 @@ class Platform:
             f"/lol/match/v5/matches/%s_%s"
         )
         self.request_counter = {}
-        self.counter = 0
 
     async def add_tracking(self):
         now = datetime.now().timestamp() // 60 * 60
@@ -42,7 +41,6 @@ class Platform:
         self.request_counter[now] += 1
 
     async def run(self):
-        self.logging.info("Running")
         task_queue = QueueHandler("match_details_tasks_%s" % self.platform)
         await task_queue.init(
             durable=True, prefetch_count=100, connection=self.handler.pika
@@ -81,9 +79,7 @@ class Platform:
             if seconds >= 0.1:
                 await asyncio.sleep(seconds)
             while not self.handler.is_shutdown:
-                self.counter += 1
                 sleep = asyncio.create_task(asyncio.sleep(1))
-                self.logging.info(self.counter)
                 async with self.semaphore:
                     try:
                         if self.handler.is_shutdown:
@@ -111,7 +107,6 @@ class Platform:
                     except aiohttp.ClientProxyConnectionError:
                         await asyncio.sleep(0.01)
                     finally:
-                        self.counter -= 1
                         await self.add_tracking()
                         await sleep
             await message.reject(requeue=True)
