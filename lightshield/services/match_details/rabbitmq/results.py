@@ -66,7 +66,7 @@ class Handler:
             return
         tasks = self.buffered_tasks[platform]["matches_404"].copy()
         self.buffered_tasks[platform]["matches_404"] = []
-        tasks = [int(task.decode("utf-8")) for task in tasks]
+        tasks = [int(task.decode("utf-8")) for task in tasks] + [0]
         self.logging.error(tasks)
         async with self.db.acquire() as connection:
             await connection.execute(
