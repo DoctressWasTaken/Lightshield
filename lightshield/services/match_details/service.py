@@ -149,7 +149,6 @@ class Platform:
                 )
             )
         await self.summoner_queue.send_tasks(summoner_updates)
-        return # Test
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
         # Match Update
@@ -168,6 +167,7 @@ class Platform:
             ]
         )
         # Saving
+        return  # Test
         path = os.path.join(self.output_folder, "details", patch, day, self.platform)
         if not os.path.exists(path):
             os.makedirs(path)
