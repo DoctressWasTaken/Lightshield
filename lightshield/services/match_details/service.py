@@ -42,6 +42,12 @@ class Platform:
         self.request_counter[now] += 1
 
     async def run(self):
+        self.tasks = {
+            'match': asyncio.Queue(),
+            'summoner': asyncio.Queue()
+        }
+        insert_tasks = asyncio.create_task(self.push_tasks())
+
         task_queue = QueueHandler("match_details_tasks_%s" % self.platform)
         await task_queue.init(
             durable=True, prefetch_count=100, connection=self.handler.pika
@@ -65,11 +71,6 @@ class Platform:
         cancel_consume = await task_queue.consume_tasks(self.process_tasks)
         conn = aiohttp.TCPConnector(limit=0)
         self.session = aiohttp.ClientSession(connector=conn)
-        self.tasks = {
-            'match': asyncio.Queue(),
-            'summoner': asyncio.Queue()
-        }
-        insert_tasks = asyncio.create_task(self.push_tasks())
         while not self.handler.is_shutdown:
             await asyncio.sleep(1)
         await insert_tasks
@@ -116,28 +117,31 @@ class Platform:
             await message.reject(requeue=True)
 
     async def push_tasks(self):
-        while not self.handler.is_shutdown:
-
-            summoners = []
-            try:
-                while task := self.tasks['summoners'].get_nowait():
-                    summoners.append(pickle.dumps(task))
-            except asyncio.QueueEmpty:
-                if summoners:
-                    self.logging.info("Adding %s summoner tasks.", len(summoners))
-                    await self.summoner_queue.send_tasks(summoners)
-            matches = []
-            try:
-                while task := self.tasks['200'].get_nowait():
-                    matches.append(pickle.dumps(task))
-            except asyncio.QueueEmpty:
-                if matches:
-                    self.logging.info("Adding %s summoner tasks.", len(matches))
-                    await self.matches_queue_200.send_tasks(matches)
-            for i in range(5):
-                if self.handler.is_shutdown:
-                    break
-                await asyncio.sleep(2)
+        self.logging.info("Starting Task pusher")
+        try:
+            while not self.handler.is_shutdown:
+                summoners = []
+                try:
+                    while task := self.tasks['summoners'].get_nowait():
+                        summoners.append(pickle.dumps(task))
+                except asyncio.QueueEmpty:
+                    if summoners:
+                        self.logging.info("Adding %s summoner tasks.", len(summoners))
+                        await self.summoner_queue.send_tasks(summoners)
+                matches = []
+                try:
+                    while task := self.tasks['200'].get_nowait():
+                        matches.append(pickle.dumps(task))
+                except asyncio.QueueEmpty:
+                    if matches:
+                        self.logging.info("Adding %s summoner tasks.", len(matches))
+                        await self.matches_queue_200.send_tasks(matches)
+                for i in range(5):
+                    if self.handler.is_shutdown:
+                        break
+                    await asyncio.sleep(2)
+        except Exception as err:
+            self.logging.info(err)
 
     async def parse_response(self, response, matchId):
         if response["info"]["queueId"] == 0:
