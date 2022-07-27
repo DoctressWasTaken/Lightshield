@@ -73,7 +73,6 @@ class Platform:
         await asyncio.sleep(10)
 
     async def process_tasks(self, message):
-        self.counter += 1
         self.logging.info(self.counter)
         async with message.process(ignore_processed=True):
             matchId = int(message.body.decode("utf-8"))
@@ -82,6 +81,7 @@ class Platform:
             if seconds >= 0.1:
                 await asyncio.sleep(seconds)
             while not self.handler.is_shutdown:
+                self.counter += 1
                 try:
                     async with self.semaphore:
                         if self.handler.is_shutdown:
