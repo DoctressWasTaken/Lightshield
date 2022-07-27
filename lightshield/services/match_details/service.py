@@ -163,7 +163,7 @@ class Platform:
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
         for player in response["info"]["participants"]:
-            await self.platform['summoner'].put(
+            await self.tasks['summoner'].put(
                 (
                     last_activity,
                     self.platform,
