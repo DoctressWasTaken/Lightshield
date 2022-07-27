@@ -66,17 +66,17 @@ class Handler:
             return
         tasks = self.buffered_tasks[platform]["matches_404"].copy()
         self.buffered_tasks[platform]["matches_404"] = []
-        tasks = [int(task.decode("utf-8")) for task in tasks] + [0]
+        tasks = [int(task.decode("utf-8")) for task in tasks]
         self.logging.error(tasks)
         async with self.db.acquire() as connection:
-            await connection.execute(
+            prep = await connection.prepare(
                 queries.flush_missing[self.config.database].format(
                     schema=self.config.db.schema,
                     platform_lower=platform.lower(),
                     platform=platform,
-                ),
-                tasks
+                )
             )
+            await prep.executemany(tasks)
         self.logging.info(" %s\t | %s missing matches inserted", platform, len(tasks))
 
     async def change_summoners(self, platform):
