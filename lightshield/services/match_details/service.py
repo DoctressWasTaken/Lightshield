@@ -110,7 +110,7 @@ class Platform:
                 except aiohttp.ClientProxyConnectionError:
                     await asyncio.sleep(0.01)
                 finally:
-                    self.counter += 1
+                    self.counter -= 1
                     await self.add_tracking()
             await message.reject(requeue=True)
 
