@@ -134,7 +134,7 @@ class Platform:
                         matches.append(pickle.dumps(task))
                 except asyncio.QueueEmpty:
                     if matches:
-                        self.logging.info("Adding %s summoner tasks.", len(matches))
+                        self.logging.info("Adding %s match tasks.", len(matches))
                         await self.matches_queue_200.send_tasks(matches)
                 for i in range(5):
                     if self.handler.is_shutdown:
