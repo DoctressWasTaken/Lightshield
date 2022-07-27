@@ -44,7 +44,7 @@ class Platform:
     async def run(self):
         self.tasks = {
             'match': asyncio.Queue(),
-            'summoner': asyncio.Queue()
+            'summoners': asyncio.Queue()
         }
         insert_tasks = asyncio.create_task(self.push_tasks())
 
@@ -170,7 +170,7 @@ class Platform:
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
         for player in response["info"]["participants"]:
-            await self.tasks['summoner'].put(
+            await self.tasks['summoners'].put(
                 (
                     last_activity,
                     self.platform,
