@@ -28,7 +28,6 @@ class Platform:
             f"/lol/match/v5/matches/%s_%s"
         )
         self.request_counter = {}
-        self.tasks = {}
 
     async def add_tracking(self):
         now = datetime.now().timestamp() // 60 * 60
@@ -42,12 +41,6 @@ class Platform:
         self.request_counter[now] += 1
 
     async def run(self):
-        self.tasks = {
-            'match': asyncio.Queue(),
-            'summoners': asyncio.Queue()
-        }
-        insert_tasks = asyncio.create_task(self.push_tasks())
-
         task_queue = QueueHandler("match_details_tasks_%s" % self.platform)
         await task_queue.init(
             durable=True, prefetch_count=100, connection=self.handler.pika
@@ -73,7 +66,6 @@ class Platform:
         self.session = aiohttp.ClientSession(connector=conn)
         while not self.handler.is_shutdown:
             await asyncio.sleep(1)
-        await insert_tasks
         await cancel_consume()
         await asyncio.sleep(10)
 
@@ -116,33 +108,6 @@ class Platform:
                     await self.add_tracking()
             await message.reject(requeue=True)
 
-    async def push_tasks(self):
-        self.logging.info("Starting Task pusher")
-        try:
-            while not self.handler.is_shutdown:
-                summoners = []
-                try:
-                    while task := self.tasks['summoners'].get_nowait():
-                        summoners.append(pickle.dumps(task))
-                except asyncio.QueueEmpty:
-                    if summoners:
-                        self.logging.info("Adding %s summoner tasks.", len(summoners))
-                        await self.summoner_queue.send_tasks(summoners)
-                matches = []
-                try:
-                    while task := self.tasks['match'].get_nowait():
-                        matches.append(pickle.dumps(task))
-                except asyncio.QueueEmpty:
-                    if matches:
-                        self.logging.info("Adding %s match tasks.", len(matches))
-                        await self.matches_queue_200.send_tasks(matches)
-                for i in range(5):
-                    if self.handler.is_shutdown:
-                        break
-                    await asyncio.sleep(2)
-        except Exception as err:
-            self.logging.info(err)
-
     async def parse_response(self, response, matchId):
         if response["info"]["queueId"] == 0:
             await self.matches_queue_404.send_tasks([str(matchId).encode()])
@@ -169,21 +134,22 @@ class Platform:
 
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
-        summoner_pack = [
-            (
-                last_activity,
-                self.platform,
-                player["summonerName"],
-                player["puuid"],
-            )
-            for player in response["info"]["participants"]
-        ]
-        await self.tasks['summoners'].put(summoner_pack)
+        await self.summoner_queue.send_tasks([
+            pickle.dumps([
+                (
+                    last_activity,
+                    self.platform,
+                    player["summonerName"],
+                    player["puuid"],
+                )
+                for player in response["info"]["participants"]
+            ])
+        ])
 
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
         # Match Update
-        await self.tasks['match'].put(
+        await self.matches_queue_200.send_tasks([pickle.dumps(
             (
                 queue,
                 creation,
@@ -192,7 +158,7 @@ class Platform:
                 win,
                 matchId,
             )
-        )
+        )])
         return  # Test
         # Saving
         path = os.path.join(self.output_folder, "details", patch, day, self.platform)
