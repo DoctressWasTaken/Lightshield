@@ -89,13 +89,13 @@ class Platform:
                             data, _ = await asyncio.gather(response.json(), sleep)
                     match response.status:
                         case 200:
-                            # await self.parse_response(data, matchId)
+                            await self.parse_response(data, matchId)
                             await message.ack()
                             return
                         case 404:
-                            # await self.matches_queue_404.send_tasks(
-                            #   [str(matchId).encode()]
-                            # )
+                            await self.matches_queue_404.send_tasks(
+                              [str(matchId).encode()]
+                            )
                             await message.ack()
                             return
                         case 429:
@@ -134,6 +134,7 @@ class Platform:
             not response["info"]["teams"][0]["win"]
         )
 
+        return  # Test
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
         summoner_updates = []
@@ -170,7 +171,6 @@ class Platform:
         path = os.path.join(self.output_folder, "details", patch, day, self.platform)
         if not os.path.exists(path):
             os.makedirs(path)
-        return  # Test
         filename = os.path.join(path, "%s_%s.json" % (self.platform, matchId))
         #if not os.path.isfile(filename):
         #    with open(
