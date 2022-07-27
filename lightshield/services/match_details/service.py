@@ -30,7 +30,7 @@ class Platform:
         self.request_counter = {}
 
     async def add_tracking(self):
-        now = datetime.now().timestamp() // 60 * 60
+        now = int(datetime.now().timestamp() // 600 * 600)
         if now not in self.request_counter:
             if self.request_counter:
                 for key, val in self.request_counter.items():
