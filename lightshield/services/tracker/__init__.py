@@ -47,14 +47,14 @@ class Handler:
                         api
                     ])
             async with db.acquire() as connection:
-                await connection.executemany(
-                    """INSERT INTO "tracking"."requests" (response_type, request_count, interval_time, platform, endpoint, api_key)
-                        VALUES ($1, $2, $3, $4, $5, $6)
-                        ON CONFLICT (response_type, interval_time, platform, endpoint, api_key)
-                        DO UPDATE SET request_count = EXCLUDED.request_count
-                    """,
-                    tasks
-                )
+                query = """INSERT INTO "tracking"."requests" 
+                    (response_type, request_count, interval_time, platform, endpoint, api_key)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (response_type, interval_time, platform, endpoint, api_key)
+                    DO UPDATE SET request_count = EXCLUDED.request_count
+                """
+                print(query)
+                await connection.executemany(query, tasks)
             last_timestamp = current - 1
             for i in range(15):
                 if self.is_shutdown:
