@@ -49,7 +49,7 @@ flush_missing = {
                                 """,
     "crate": """UPDATE "{schema:s}"."match"
                                    SET find_fails = find_fails + 1
-                                   WHERE match_id = ANY($1::INT[])
+                                   WHERE match_id = ANY($1::BIGINT)
                                     AND platform = '{platform:s}'
                                 """,
 }
