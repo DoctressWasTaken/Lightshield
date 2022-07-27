@@ -136,6 +136,7 @@ class Platform:
 
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
+        return # Test
         summoner_updates = []
         for player in response["info"]["participants"]:
             summoner_updates.append(
