@@ -28,6 +28,11 @@ class Platform:
             f"/lol/match/v5/matches/%s_%s"
         )
         self.request_counter = {}
+        self.tasks = {
+            '200': asyncio.Queue(),
+            '404': asyncio.Queue(),
+            'summoner': asyncio.Queue()
+        }
 
     async def add_tracking(self):
         now = datetime.now().timestamp() // 60 * 60
@@ -94,7 +99,7 @@ class Platform:
                             return
                         case 404:
                             await self.matches_queue_404.send_tasks(
-                              [str(matchId).encode()]
+                                [str(matchId).encode()]
                             )
                             await message.ack()
                             return
@@ -110,6 +115,27 @@ class Platform:
                     await self.add_tracking()
             await message.reject(requeue=True)
 
+    async def push_summoners(self):
+        while not self.handler.is_shutdown:
+
+            self.logging.info("Adding %s summoner tasks.", self.tasks['summoners'].qsize())
+            summoners = []
+            try:
+                while task := self.tasks['summoners'].get_nowait():
+                    summoners.append(pickle.dumps(task))
+            except asyncio.QueueEmpty:
+                if summoners:
+                    await self.summoner_queue.send_tasks(summoners)
+            self.logging.info("Adding %s summoner tasks.", self.tasks['200'].qsize())
+            matches = []
+            try:
+                while task := self.tasks['200'].get_nowait():
+                    matches.append(pickle.dumps(task))
+            except asyncio.QueueEmpty:
+                if matches:
+                    await self.matches_queue_200.send_tasks(matches)
+            await asyncio.sleep(10)
+
     async def parse_response(self, response, matchId):
         if response["info"]["queueId"] == 0:
             await self.matches_queue_404.send_tasks([str(matchId).encode()])
@@ -119,12 +145,12 @@ class Platform:
         creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
         patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
         if (
-            "gameStartTimestamp" in response["info"]
-            and "gameEndTimestamp" in response["info"]
+                "gameStartTimestamp" in response["info"]
+                and "gameEndTimestamp" in response["info"]
         ):
             game_duration = (
-                response["info"]["gameEndTimestamp"]
-                - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
             )
         else:
             game_duration = response["info"]["gameDuration"]
@@ -136,40 +162,36 @@ class Platform:
 
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
-        summoner_updates = []
         for player in response["info"]["participants"]:
-            summoner_updates.append(
-                pickle.dumps(
-                    (
-                        last_activity,
-                        self.platform,
-                        player["summonerName"],
-                        player["puuid"],
-                    )
+            await self.platform['summoner'].put(
+                (
+                    last_activity,
+                    self.platform,
+                    player["summonerName"],
+                    player["puuid"],
                 )
             )
-        await self.summoner_queue.send_tasks(summoner_updates)
+
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
         # Match Update
-        match = pickle.dumps(
-                    (
-                        queue,
-                        creation,
-                        patch_int,
-                        game_duration,
-                        win,
-                        matchId,
-                    )
-                )
-        await self.matches_queue_200.send_tasks([match])
+        await self.tasks['200'].put(
+            (
+                queue,
+                creation,
+                patch_int,
+                game_duration,
+                win,
+                matchId,
+            )
+        )
         return  # Test
         # Saving
         path = os.path.join(self.output_folder, "details", patch, day, self.platform)
         if not os.path.exists(path):
             os.makedirs(path)
         filename = os.path.join(path, "%s_%s.json" % (self.platform, matchId))
-        #if not os.path.isfile(filename):
+        # if not os.path.isfile(filename):
         #    with open(
         #        filename,
         #        "w+",
