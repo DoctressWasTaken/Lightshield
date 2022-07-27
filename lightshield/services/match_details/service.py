@@ -136,7 +136,6 @@ class Platform:
 
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
-        return # Test
         summoner_updates = []
         for player in response["info"]["participants"]:
             summoner_updates.append(
@@ -150,6 +149,7 @@ class Platform:
                 )
             )
         await self.summoner_queue.send_tasks(summoner_updates)
+        return # Test
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
         # Match Update
