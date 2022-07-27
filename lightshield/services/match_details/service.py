@@ -88,7 +88,7 @@ class Platform:
                             await message.reject(requeue=True)
                             return
                         async with self.session.get(url, proxy=self.proxy) as response:
-                            data, _ = await response.json()
+                            data = await response.json()
                         match response.status:
                             case 200:
                                 await self.parse_response(data, matchId)
@@ -106,12 +106,12 @@ class Platform:
                                 self.retry_after = datetime.fromtimestamp(data["Retry-At"])
                             case _:
                                 await asyncio.sleep(0.01)
-                        await sleep
                     except aiohttp.ClientProxyConnectionError:
                         await asyncio.sleep(0.01)
                     finally:
                         self.counter -= 1
                         await self.add_tracking()
+                        await sleep
             await message.reject(requeue=True)
 
     async def parse_response(self, response, matchId):
