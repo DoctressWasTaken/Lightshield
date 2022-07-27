@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS "tracking"."requests";
 CREATE TABLE "tracking"."requests"
 (
-    response_type VARCHAR,
+    response_type SMALLINT,
     request_count SMALLINT,
     interval_time TIMESTAMP WITHOUT TIME ZONE,
     platform      VARCHAR,

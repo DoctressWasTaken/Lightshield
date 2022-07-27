@@ -37,7 +37,7 @@ class Handler:
                 timestamp = int(timestamp)
                 if timestamp <= last_timestamp or timestamp >= current:
                     continue
-                for key, val in await redis.hgetall(key):
+                for key, val in (await redis.hgetall(key)).items():
                     tasks.append([
                         int(key),
                         int(val),
@@ -46,15 +46,15 @@ class Handler:
                         endpoint,
                         api
                     ])
-            async with db.acquire() as connection:
-                query = """INSERT INTO "tracking"."requests" 
-                    (response_type, request_count, interval_time, platform, endpoint, api_key)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (response_type, interval_time, platform, endpoint, api_key)
-                    DO UPDATE SET request_count = EXCLUDED.request_count
-                """
-                print(query)
-                await connection.executemany(query, tasks)
+            if tasks:
+                async with db.acquire() as connection:
+                    query = """INSERT INTO "tracking"."requests" 
+                        (response_type, request_count, interval_time, platform, endpoint, api_key)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (response_type, interval_time, platform, endpoint, api_key)
+                        DO UPDATE SET request_count = EXCLUDED.request_count
+                    """
+                    await connection.executemany(query, tasks)
             last_timestamp = current - 1
             for i in range(15):
                 if self.is_shutdown:
