@@ -36,7 +36,6 @@ class Handler:
             self.config.rabbitmq._string, loop=asyncio.get_event_loop()
         )
 
-
     async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
         self.logging.info("Received shutdown signal.")

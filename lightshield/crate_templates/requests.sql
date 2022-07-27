@@ -1,11 +1,10 @@
-DROP TABLE IF EXISTS "tracking"."requests";
-CREATE TABLE "tracking"."requests"
-(
-    response_type SMALLINT,
-    request_count SMALLINT,
-    interval_time TIMESTAMP WITHOUT TIME ZONE,
-    platform      VARCHAR,
-    endpoint      VARCHAR,
-    api_key       VARCHAR,
-    PRIMARY KEY (response_type, interval_time, platform, endpoint, api_key)
-) PARTITIONED BY (platform);
+SELECT platform,
+       DATE_TRUNC('minute', interval_time)                        AS interval_time,
+       SUM(request_count) / 60.0,
+       SUM(CASE WHEN response_type != 200 THEN request_count END) AS non_200
+FROM tracking.requests
+WHERE endpoint = 'server'
+  AND (LENGTH(platform) > 4 OR platform = 'asia')
+GROUP BY 1, 2
+ORDER BY 1, 2
+LIMIT 500;

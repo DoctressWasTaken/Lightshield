@@ -11,7 +11,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - API_KEY=${API_KEY}
-      - INTERNAL_DELAY=0.5
+      - INTERNAL_DELAY=0
     ports:
       - "127.0.0.1:8888:8888"
     depends_on:
