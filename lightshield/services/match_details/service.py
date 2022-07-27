@@ -172,9 +172,9 @@ class Platform:
         if not os.path.exists(path):
             os.makedirs(path)
         filename = os.path.join(path, "%s_%s.json" % (self.platform, matchId))
-        if not os.path.isfile(filename):
-            with open(
-                filename,
-                "w+",
-            ) as file:
-                file.write(json.dumps(response))
+        #if not os.path.isfile(filename):
+        #    with open(
+        #        filename,
+        #        "w+",
+        #    ) as file:
+        #        file.write(json.dumps(response))
