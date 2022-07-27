@@ -73,7 +73,6 @@ class Platform:
         await asyncio.sleep(10)
 
     async def process_tasks(self, message):
-        self.logging.info(self.counter)
         async with message.process(ignore_processed=True):
             matchId = int(message.body.decode("utf-8"))
             url = self.endpoint_url % (self.platform, matchId)
@@ -81,8 +80,10 @@ class Platform:
             if seconds >= 0.1:
                 await asyncio.sleep(seconds)
             while not self.handler.is_shutdown:
+                self.counter += 1
+                sleep = asyncio.create_task(asyncio.sleep(1))
+                self.logging.info(self.counter)
                 async with self.semaphore:
-                    sleep = asyncio.create_task(asyncio.sleep(1))
                     try:
                         if self.handler.is_shutdown:
                             await message.reject(requeue=True)
