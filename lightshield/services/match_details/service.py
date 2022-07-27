@@ -148,14 +148,11 @@ class Platform:
                     )
                 )
             )
-        return  # Test
-        await self.summoner_queue.send_tasks(summoner_updates)
+        # await self.summoner_queue.send_tasks(summoner_updates)
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
         # Match Update
-        await self.matches_queue_200.send_tasks(
-            [
-                pickle.dumps(
+        match = pickle.dumps(
                     (
                         queue,
                         creation,
@@ -165,8 +162,8 @@ class Platform:
                         matchId,
                     )
                 )
-            ]
-        )
+        await self.matches_queue_200.send_tasks([match])
+        return  # Test
         # Saving
         path = os.path.join(self.output_folder, "details", patch, day, self.platform)
         if not os.path.exists(path):
