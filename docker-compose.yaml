@@ -5,13 +5,13 @@ services:
     hostname: proxy
     image: doctress/spiritmight:dev
     environment:
-      - ENVIRONMENT=riot_api_proxy
-      - EXTRA_LENGTH=1.5
+      - ENVIRONMENT=rgapi
+      - EXTRA_LENGTH=0.5
       - DEBUG=False
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - API_KEY=${API_KEY}
-      - INTERNAL_DELAY=2
+      - INTERNAL_DELAY=0.5
     ports:
       - "127.0.0.1:8888:8888"
     depends_on:
@@ -23,11 +23,7 @@ services:
     hostname: rabbitmq
     image: docker.io/bitnami/rabbitmq:3.10
     ports:
-      - '127.0.0.1:4369:4369'
-      - '127.0.0.1:5551:5551'
-      - '127.0.0.1:5552:5552'
       - '127.0.0.1:5672:5672'
-      - '127.0.0.1:25672:25672'
       - '127.0.0.1:15672:15672'
     environment:
       - RABBITMQ_LOGS=-
