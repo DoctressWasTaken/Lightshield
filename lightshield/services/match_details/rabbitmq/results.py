@@ -81,10 +81,10 @@ class Handler:
     async def change_summoners(self, platform):
         if not self.buffered_tasks[platform]["summoners"]:
             return
-        tasks = self.buffered_tasks[platform]["summoners"].copy()
+        raw_tasks = self.buffered_tasks[platform]["summoners"].copy()
         self.buffered_tasks[platform]["summoners"] = []
         tasks = []
-        for package in [pickle.loads(task) for task in tasks]:
+        for package in [pickle.loads(task) for task in raw_tasks]:
             tasks += package
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
