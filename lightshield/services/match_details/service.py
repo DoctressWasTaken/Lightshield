@@ -28,6 +28,7 @@ class Platform:
             f"/lol/match/v5/matches/%s_%s"
         )
         self.request_counter = {}
+        self.counter = 0
 
     async def add_tracking(self):
         now = datetime.now().timestamp() // 60 * 60
@@ -72,6 +73,8 @@ class Platform:
         await asyncio.sleep(10)
 
     async def process_tasks(self, message):
+        self.counter += 1
+        self.logging.info(self.counter)
         async with message.process(ignore_processed=True):
             matchId = int(message.body.decode("utf-8"))
             url = self.endpoint_url % (self.platform, matchId)
@@ -107,6 +110,7 @@ class Platform:
                 except aiohttp.ClientProxyConnectionError:
                     await asyncio.sleep(0.01)
                 finally:
+                    self.counter += 1
                     await self.add_tracking()
             await message.reject(requeue=True)
 
