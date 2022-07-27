@@ -27,6 +27,18 @@ class Platform:
             f"{config.proxy.protocol}://{self.region.lower()}.api.riotgames.com"
             f"/lol/match/v5/matches/%s_%s"
         )
+        self.request_counter = {}
+
+    async def add_tracking(self):
+        now = datetime.now().timestamp() // 60 * 60
+        if now not in self.request_counter:
+            if self.request_counter:
+                for key, val in self.request_counter.items():
+                    self.logging.info("Interval %s: Made %s requests", key, val)
+                for key in list(self.request_counter.keys()):
+                    del self.request_counter[key]
+            self.request_counter[now] = 0
+        self.request_counter[now] += 1
 
     async def run(self):
         task_queue = QueueHandler("match_details_tasks_%s" % self.platform)
@@ -62,8 +74,6 @@ class Platform:
     async def process_tasks(self, message):
         async with message.process(ignore_processed=True):
             matchId = int(message.body.decode("utf-8"))
-            now = datetime.now()
-            now_tst = int(now.timestamp())
             url = self.endpoint_url % (self.platform, matchId)
             seconds = (self.retry_after - datetime.now()).total_seconds()
             if seconds >= 0.1:
@@ -96,6 +106,8 @@ class Platform:
                             await asyncio.sleep(0.01)
                 except aiohttp.ClientProxyConnectionError:
                     await asyncio.sleep(0.01)
+                finally:
+                    await self.add_tracking()
             await message.reject(requeue=True)
 
     async def parse_response(self, response, matchId):
