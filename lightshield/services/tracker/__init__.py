@@ -56,7 +56,7 @@ class Handler:
                     """
                     await connection.executemany(query, tasks)
             last_timestamp = current - 1
-            for i in range(15):
+            for i in range(5):
                 if self.is_shutdown:
                     break
                 await asyncio.sleep(2)
