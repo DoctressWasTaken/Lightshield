@@ -28,11 +28,7 @@ class Platform:
             f"/lol/match/v5/matches/%s_%s"
         )
         self.request_counter = {}
-        self.tasks = {
-            '200': asyncio.Queue(),
-            '404': asyncio.Queue(),
-            'summoner': asyncio.Queue()
-        }
+        self.tasks = {}
 
     async def add_tracking(self):
         now = datetime.now().timestamp() // 60 * 60
@@ -69,7 +65,10 @@ class Platform:
         cancel_consume = await task_queue.consume_tasks(self.process_tasks)
         conn = aiohttp.TCPConnector(limit=0)
         self.session = aiohttp.ClientSession(connector=conn)
-
+        self.tasks = {
+            'match': asyncio.Queue(),
+            'summoner': asyncio.Queue()
+        }
         insert_tasks = asyncio.create_task(self.push_tasks())
         while not self.handler.is_shutdown:
             await asyncio.sleep(1)
@@ -179,7 +178,7 @@ class Platform:
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
         # Match Update
-        await self.tasks['200'].put(
+        await self.tasks['match'].put(
             (
                 queue,
                 creation,
