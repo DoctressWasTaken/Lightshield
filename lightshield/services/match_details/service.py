@@ -167,9 +167,10 @@ class Platform:
             ]
         )
         # Saving
-        return  # Test
         path = os.path.join(self.output_folder, "details", patch, day, self.platform)
         if not os.path.exists(path):
+            pass
+            return  # Test
             os.makedirs(path)
         filename = os.path.join(path, "%s_%s.json" % (self.platform, matchId))
         #if not os.path.isfile(filename):
