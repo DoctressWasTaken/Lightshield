@@ -169,15 +169,16 @@ class Platform:
 
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
-        for player in response["info"]["participants"]:
-            await self.tasks['summoners'].put(
-                (
-                    last_activity,
-                    self.platform,
-                    player["summonerName"],
-                    player["puuid"],
-                )
+        summoner_pack = [
+            (
+                last_activity,
+                self.platform,
+                player["summonerName"],
+                player["puuid"],
             )
+            for player in response["info"]["participants"]
+        ]
+        await self.tasks['summoners'].put(summoner_pack)
 
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
