@@ -89,13 +89,13 @@ class Platform:
                             data, _ = await asyncio.gather(response.json(), sleep)
                     match response.status:
                         case 200:
-                            await self.parse_response(data, matchId)
+                            # await self.parse_response(data, matchId)
                             await message.ack()
                             return
                         case 404:
-                            await self.matches_queue_404.send_tasks(
-                                [str(matchId).encode()]
-                            )
+                            # await self.matches_queue_404.send_tasks(
+                            #   [str(matchId).encode()]
+                            # )
                             await message.ack()
                             return
                         case 429:
