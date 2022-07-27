@@ -83,7 +83,9 @@ class Handler:
             return
         tasks = self.buffered_tasks[platform]["summoners"].copy()
         self.buffered_tasks[platform]["summoners"] = []
-        tasks = [pickle.loads(task) for task in tasks]
+        tasks = []
+        for package in [pickle.loads(task) for task in tasks]:
+            tasks += package
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
                 queries.summoners_update_only[self.config.database].format(
