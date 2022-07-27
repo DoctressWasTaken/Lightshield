@@ -79,36 +79,35 @@ class Platform:
             if seconds >= 0.1:
                 await asyncio.sleep(seconds)
             while not self.handler.is_shutdown:
-                sleep = asyncio.create_task(asyncio.sleep(1))
-                async with self.semaphore:
-                    try:
-                        if self.handler.is_shutdown:
-                            await message.reject(requeue=True)
-                            return
+                try:
+                    if self.handler.is_shutdown:
+                        await message.reject(requeue=True)
+                        return
+                    async with self.semaphore:
+                        sleep = asyncio.create_task(asyncio.sleep(1))
                         async with self.session.get(url, proxy=self.proxy) as response:
-                            data = await response.json()
-                        match response.status:
-                            case 200:
-                                await self.parse_response(data, matchId)
-                                await message.ack()
-                                return
-                            case 404:
-                                await self.matches_queue_404.send_tasks(
-                                    [str(matchId).encode()]
-                                )
-                                await message.ack()
-                                return
-                            case 429:
-                                await asyncio.sleep(0.5)
-                            case 430:
-                                self.retry_after = datetime.fromtimestamp(data["Retry-At"])
-                            case _:
-                                await asyncio.sleep(0.01)
-                    except aiohttp.ClientProxyConnectionError:
-                        await asyncio.sleep(0.01)
-                    finally:
-                        await self.add_tracking()
-                        await sleep
+                            data, _ = await asyncio.gather(response.json(), sleep)
+                    match response.status:
+                        case 200:
+                            await self.parse_response(data, matchId)
+                            await message.ack()
+                            return
+                        case 404:
+                            await self.matches_queue_404.send_tasks(
+                                [str(matchId).encode()]
+                            )
+                            await message.ack()
+                            return
+                        case 429:
+                            await asyncio.sleep(0.5)
+                        case 430:
+                            self.retry_after = datetime.fromtimestamp(data["Retry-At"])
+                        case _:
+                            await asyncio.sleep(0.01)
+                except aiohttp.ClientProxyConnectionError:
+                    await asyncio.sleep(0.01)
+                finally:
+                    await self.add_tracking()
             await message.reject(requeue=True)
 
     async def parse_response(self, response, matchId):
