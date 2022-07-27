@@ -18,7 +18,7 @@ class Platform:
         self.platform = platform
         self.handler = handler
         self.logging = logging.getLogger(platform)
-        self.semaphore = semaphore
+        self.semaphore = asyncio.Semaphore(10)
         self.service = config.services.match_details
         self.output_folder = self.service.output
         self.retry_after = datetime.now()
