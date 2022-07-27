@@ -8,7 +8,7 @@ logger = logging.getLogger("CrateDB")
 
 
 async def init_db(config, **kwargs):
-    psq_con = config.connections.crate
+    psq_con = config.db
     logger.info("Found the following crate connection details.")
     print(json.dumps(psq_con.__dict__, indent=4))
     if input("\nAre those details correct? [yes/no] ").lower() not in ["y", "yes"]:
@@ -21,10 +21,10 @@ async def init_db(config, **kwargs):
     ).lower() not in ["y", "yes"]:
         exit()
     db = await asyncpg.create_pool(
-        host=psq_con.hostname,
+        host=psq_con.host,
         port=psq_con.port,
         user=psq_con.user,
-        password=os.getenv(psq_con.password_env, None),
+        password=psq_con.password,
     )
     # Generate the tables
     path = os.path.join(os.path.dirname(__file__), "../crate_templates")

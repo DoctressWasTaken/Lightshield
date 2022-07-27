@@ -40,9 +40,31 @@ services:
     hostname: redis
     image: redis:7.0-rc
     restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
     profiles:
       - all
       - peripheral
+
+  tracker:
+    build:
+      dockerfile: Service_Dockerfile
+      context: .
+      args:
+        service: tracker
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - CRATE_PASSWORD=${CRATE_PASSWORD}
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+    entrypoint: "poetry run lightshield run tracker"
+    restart: always
+    profiles:
+      - peripheral
+      - all
+
 
   league_ranking:
     hostname: league_ranking

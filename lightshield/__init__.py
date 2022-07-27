@@ -16,6 +16,8 @@ pp = PrettyPrinter(indent=2, compact=True, sort_dicts=True)
 load_dotenv()
 
 default_services = (
+    "tracker",
+
     "league_ranking",
     "puuid_collector",
     "summoner_tracker",
