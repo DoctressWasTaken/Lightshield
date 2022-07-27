@@ -130,7 +130,7 @@ class Platform:
                         await self.summoner_queue.send_tasks(summoners)
                 matches = []
                 try:
-                    while task := self.tasks['200'].get_nowait():
+                    while task := self.tasks['match'].get_nowait():
                         matches.append(pickle.dumps(task))
                 except asyncio.QueueEmpty:
                     if matches:
