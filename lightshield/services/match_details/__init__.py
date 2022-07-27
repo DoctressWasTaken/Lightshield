@@ -24,9 +24,10 @@ class Handler:
         self.output_folder = self.service.output
         self.logging.info("Output folder: %s", self.output_folder)
         self.semaphores = {}
+        for region in self.config.mapping:
+            self.semaphores[region] = asyncio.Semaphore(10)
 
         for region, platforms in self.config.mapping.items():
-            self.semaphores[region] = asyncio.Semaphore(10)
             for platform in platforms:
                 if platform in self.config.active_platforms:
                     self.platforms[platform] = Platform(

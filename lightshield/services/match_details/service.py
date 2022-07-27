@@ -42,6 +42,7 @@ class Platform:
         self.request_counter[now] += 1
 
     async def run(self):
+        self.logging.info("Running")
         task_queue = QueueHandler("match_details_tasks_%s" % self.platform)
         await task_queue.init(
             durable=True, prefetch_count=100, connection=self.handler.pika
