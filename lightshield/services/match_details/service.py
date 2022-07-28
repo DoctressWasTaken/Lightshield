@@ -18,7 +18,7 @@ class Platform:
         self.platform = platform
         self.handler = handler
         self.logging = logging.getLogger(platform)
-        self.semaphore = asyncio.Semaphore(10)
+        self.semaphore = semaphore
         self.service = config.services.match_details
         self.output_folder = self.service.output
         self.retry_after = datetime.now()
@@ -91,9 +91,7 @@ class Platform:
                             await message.ack()
                             return
                         case 404:
-                            await self.matches_queue_404.send_tasks(
-                                [str(matchId).encode()]
-                            )
+                            await self.matches_queue_404.send_task(str(matchId).encode())
                             await message.ack()
                             return
                         case 429:
@@ -134,7 +132,7 @@ class Platform:
 
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
-        await self.summoner_queue.send_tasks([
+        await self.summoner_queue.send_task(
             pickle.dumps([
                 (
                     last_activity,
@@ -144,7 +142,7 @@ class Platform:
                 )
                 for player in response["info"]["participants"]
             ])
-        ])
+        )
 
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))

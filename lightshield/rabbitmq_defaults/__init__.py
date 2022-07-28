@@ -63,6 +63,20 @@ class QueueHandler:
             ]
         )
 
+    async def send_task(self, task: bin, persistent=True):
+        """Insert task into the queue.
+
+        Tasks have to be prepared as a byte like object.
+        This can mean either encoding or pickle.
+        """
+        delivery_mode = (
+            DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT
+        )
+        await self.channel.default_exchange.publish(
+                        Message(task, delivery_mode=delivery_mode),
+                        routing_key=self.queue,
+                    )
+
     async def consume_tasks(self, func, arguments=None):
         """Start a consumer and return the cancel task."""
         if arguments is None:

@@ -49,9 +49,11 @@ class Handler:
     async def insert_matches(self, platform):
         if not self.buffered_tasks[platform]["matches"]:
             return
-        tasks = self.buffered_tasks[platform]["matches"].copy()
+        raw_tasks = self.buffered_tasks[platform]["matches"].copy()
         self.buffered_tasks[platform]["matches"] = []
-        tasks = [pickle.loads(task) for task in tasks]
+        tasks = []
+        for package in [pickle.loads(task) for task in tasks]:
+            tasks += package
         self.logging.info(" %s\t | %s matches inserted", platform, len(tasks))
         async with self.db.acquire() as connection:
 
