@@ -52,7 +52,7 @@ class Handler:
         raw_tasks = self.buffered_tasks[platform]["matches"].copy()
         self.buffered_tasks[platform]["matches"] = []
         tasks = []
-        for package in [pickle.loads(task) for task in tasks]:
+        for package in [pickle.loads(task) for task in raw_tasks]:
             tasks += package
         self.logging.info(" %s\t | %s matches inserted", platform, len(tasks))
         async with self.db.acquire() as connection:
