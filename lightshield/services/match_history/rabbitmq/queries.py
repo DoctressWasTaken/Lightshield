@@ -33,7 +33,11 @@ reserve = {
                                 AND last_activity > last_history_update
                             )
                         )
-                    ORDER BY last_history_update NULLS FIRST
+                    ORDER BY 
+                        CASE WHEN last_history_update IS NULL THEN 0
+                        WHEN last_history_update < last_activity THEN 1
+                        ELSE 2 END ,
+                        last_history_update NULLS FIRST
                     LIMIT $4
                     """,
 }
