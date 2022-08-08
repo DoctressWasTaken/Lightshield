@@ -158,25 +158,25 @@ class Config:
             self.rabbitmq.port,
         )
 
-        db_connection = self._parse_var(connections, self.database, dict, "connections")
+        db_connection = self._parse_var(connections, 'postgres', dict, "connections")
         self.db = Object(
             host=self._parse_var(
-                db_connection, "host", str, "connections.%s" % self.database
+                db_connection, "host", str, "connections.postgres"
             ),
             port=self._parse_var(
-                db_connection, "port", int, "connections.%s" % self.database
+                db_connection, "port", int, "connections.postgres"
             ),
             user=self._parse_var(
-                db_connection, "user", str, "connections.%s" % self.database
+                db_connection, "user", str, "connections.postgres"
             ),
             password=os.environ.get(
                 self._parse_var(
-                    db_connection, "password_env", str, "connections.%s" % self.database
+                    db_connection, "password_env", str, "connections.postgres"
                 ),
                 None,
             ),
             database=self._parse_var(
-                db_connection, "database", str, "connections.%s" % self.database
+                db_connection, "database", str, "connections.postgres"
             )
         )
 
