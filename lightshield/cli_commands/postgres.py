@@ -12,9 +12,9 @@ logger = logging.getLogger("Postgres")
 
 
 async def init_db(config, **kwargs):
-    psq_con = config.connections.postgres
+    psq_con = config.db
     logger.info("Found the following postgres connection details.")
-    print(json.dumps(psq_con.__dict__, indent=4))
+    print(json.dumps(psq_con.get(), indent=4))
     if input("\nAre those details correct? [yes/no] ").lower() not in ["y", "yes"]:
         logger.info("Exiting...")
         exit()
