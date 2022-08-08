@@ -291,22 +291,12 @@ class Connection:
     db = schema = database = None
 
     def __init__(self, config):
-        self.type = config.database
         self.con = config.db
         self.logging = logging.getLogger("Connection Handler")
-        self.logging.info("Setting up a connection to a %s db.", self.type)
+        self.logging.info("Setting up a connection to the postgres db.")
 
     async def init(self):
         """Initiate the pool."""
-        if self.type == "crate":
-            self.schema = self.con.schema
-            return await asyncpg.create_pool(
-                host=self.con.host,
-                port=self.con.port,
-                user=self.con.user,
-                password=self.con.password,
-            )
-        self.database = self.con.database
         return await asyncpg.create_pool(
             host=self.con.host,
             port=self.con.port,
