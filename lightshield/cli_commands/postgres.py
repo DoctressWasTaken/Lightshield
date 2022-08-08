@@ -66,23 +66,14 @@ async def init_db(config, **kwargs):
         await connection.execute(query)
         await connection.execute("""
             DROP TYPE IF EXISTS division CASCADE;
-            CREATE TYPE division AS ENUM %s
-            """ % (config.division)
+            CREATE TYPE division AS ENUM {values}
+            """.format(values=config.divisions)
         )
         await connection.execute("""
             DROP TYPE IF EXISTS platform CASCADE;
-            CREATE TYPE platform AS ENUM %s
-            """ % (config.platforms)
+            CREATE TYPE platform AS ENUM {values}
+            """.format(values=config.platform_templates)
         )
-
-    enums = config.statics.enums
-    for enum, values in enums.__dict__.items():
-            query = "DROP TYPE IF EXISTS %s CASCADE; CREATE TYPE %s AS ENUM %s" % (
-                enum,
-                enum,
-                tuple(values),
-            )
-            await connection.execute(query)
 
     path = os.path.join(os.path.dirname(__file__), "../postgres_templates")
     files = os.listdir(path)
