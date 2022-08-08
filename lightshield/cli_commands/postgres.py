@@ -61,18 +61,18 @@ async def init_db(config, **kwargs):
         query = """
             DROP TYPE IF EXISTS rank CASCADE;
             CREATE TYPE rank AS ENUM (%s)
-            """ % tuple(config.ranks)
+            """ % (config.ranks)
         logger.info(query)
         await connection.execute(query)
         await connection.execute("""
             DROP TYPE IF EXISTS division CASCADE;
             CREATE TYPE division AS ENUM %s
-            """ % tuple(config.division)
+            """ % (config.division)
         )
         await connection.execute("""
             DROP TYPE IF EXISTS platform CASCADE;
             CREATE TYPE platform AS ENUM %s
-            """ % tuple(config.platforms)
+            """ % (config.platforms)
         )
 
     enums = config.statics.enums
