@@ -60,8 +60,8 @@ async def init_db(config, **kwargs):
     async with db.acquire() as connection:
         query = """
             DROP TYPE IF EXISTS rank CASCADE;
-            CREATE TYPE rank AS ENUM (%s)
-            """ % (config.ranks)
+            CREATE TYPE rank AS ENUM {values}
+            """.format(values=config.ranks)
         logger.info(query)
         await connection.execute(query)
         await connection.execute("""
