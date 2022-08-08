@@ -1,4 +1,5 @@
 CREATE SCHEMA IF NOT EXISTS tracking;
+DROP TABLE IF EXISTS tracking.requests;
 CREATE TABLE tracking.requests
 (
     response_type SMALLINT,
