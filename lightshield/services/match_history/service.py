@@ -107,11 +107,11 @@ class Platform:
             matches = list(set(matches))
             if matches:
                 await self.matches_queue.send_task(pickle.dumps(matches), persistent=True)
-                self.logging.debug(
+                self.logging.info(
                     "Updated user %s, found %s matches", puuid, len(matches)
                 )
             else:
-                self.logging.debug("Updated user %s", puuid)
+                self.logging.info("Updated user %s", puuid)
             await self.summoner_queue.send_task(pickle.dumps((puuid, newest_match, now)))
             await message.ack()
 
