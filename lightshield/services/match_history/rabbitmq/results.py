@@ -51,26 +51,30 @@ class Handler:
             return
         raw_tasks = self.buffered_tasks[platform]["matches"].copy()
         self.buffered_tasks[platform]["matches"] = []
-        tasks = []
+        tasks_3 = []
+        tasks_2 = []
         for package in [pickle.loads(task) for task in raw_tasks]:
-            tasks += package
-        self.logging.info(" %s\t | %s matches inserted", platform, len(tasks))
+            if len(package) == 3:
+                tasks_3 += package
+            else:
+                tasks_2 += package
+        self.logging.info(" %s\t | %s matches inserted", platform, len(tasks_3) + len(tasks_2))
         async with self.db.acquire() as connection:
 
-            if len(tasks[0]) == 3:
+            if tasks_3:
                 prep = await connection.prepare(
                     queries.insert_queue_known.format(
                         platform_lower=platform.lower()
                     )
                 )
-                await prep.executemany(tasks)
-            else:
+                await prep.executemany(tasks_3)
+            if tasks_2:
                 prep = await connection.prepare(
                     queries.insert_queue_known.format(
                         platform_lower=platform.lower()
                     )
                 )
-                await prep.executemany(tasks)
+                await prep.executemany(tasks_2)
 
     async def insert_summoners(self, platform):
         if not self.buffered_tasks[platform]["summoners"]:
