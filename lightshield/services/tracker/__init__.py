@@ -42,7 +42,7 @@ class Handler:
                         int(key),
                         int(val),
                         datetime.fromtimestamp(timestamp),
-                        platform,
+                        platform.upper(),
                         endpoint,
                         api
                     ])
