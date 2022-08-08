@@ -26,7 +26,7 @@ async def init_db(config, **kwargs):
     ).lower() not in ["y", "yes"]:
         logger.info("Attempting to generate the database")
         db_creator = await asyncpg.create_pool(
-            host=psq_con.hostname,
+            host=psq_con.host,
             port=psq_con.port,
             user=psq_con.user,
             password=os.getenv(psq_con.password_env),
@@ -49,7 +49,7 @@ async def init_db(config, **kwargs):
     ).lower() not in ["y", "yes"]:
         exit()
     db = await asyncpg.create_pool(
-        host=psq_con.hostname,
+        host=psq_con.host,
         port=psq_con.port,
         user=psq_con.user,
         database=psq_con.database,
