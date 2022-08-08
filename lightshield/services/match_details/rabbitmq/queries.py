@@ -6,8 +6,6 @@ tasks = {
                     AND find_fails < 10
                 ORDER BY find_fails 
                LIMIT $1
-               FOR SHARE 
-               SKIP LOCKED
                """,
     "crate": """
                 SELECT match_id

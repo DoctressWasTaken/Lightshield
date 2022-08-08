@@ -2,9 +2,7 @@ tasks = {
     "postgres": """SELECT summoner_id 
                    FROM "ranking_{platform_lower:s}"
                    WHERE puuid IS NULL
-                   LIMIT $1 
-                   FOR SHARE 
-                   SKIP LOCKED    
+                   LIMIT $1   
     """,
     "crate": """
         SELECT summoner_id

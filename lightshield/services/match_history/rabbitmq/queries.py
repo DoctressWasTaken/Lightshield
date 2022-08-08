@@ -1,19 +1,28 @@
 reserve = {
     "postgres": """
-                        SELECT  puuid, 
-                                latest_match, 
-                                last_history_update
-                        FROM summoner
-                        WHERE platform = $1
-                            AND (
-                                last_activity > last_history_update
-                                OR last_history_update IS NULL)
-                            AND (last_history_update < $2
-                                OR last_history_update IS NULL)
-                        ORDER BY last_history_update NULLS FIRST
-                        LIMIT $3
-                        FOR SHARE 
-                        SKIP LOCKED
+                        SELECT  puuid,
+                        latest_match,
+                        last_history_update
+                    FROM summoner
+                    WHERE platform = $1
+                        AND (
+                            -- No update
+                            last_history_update IS NULL
+                            OR 
+                            -- Update yes but nothing new
+                            last_history_update < $2
+                            OR 
+                            -- Update yes and newer game found
+                            (last_history_update < $3
+                                AND last_activity > last_history_update
+                            )
+                        )
+                    ORDER BY 
+                        CASE WHEN last_history_update IS NULL THEN 0
+                        WHEN last_history_update < last_activity THEN 1
+                        ELSE 2 END ,
+                        last_history_update NULLS FIRST
+                    LIMIT $4
                     """,
     "crate": """
                 SELECT  puuid,
