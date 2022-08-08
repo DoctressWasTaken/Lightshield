@@ -72,7 +72,6 @@ services:
         service: league_ranking
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - CRATE_PASSWORD=${CRATE_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run league_ranking"
@@ -110,7 +109,6 @@ services:
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - CRATE_PASSWORD=${CRATE_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.tasks"
@@ -129,7 +127,6 @@ services:
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - CRATE_PASSWORD=${CRATE_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.results"
@@ -168,7 +165,6 @@ services:
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - CRATE_PASSWORD=${CRATE_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run match_history.rabbitmq.tasks"
@@ -187,7 +183,6 @@ services:
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - CRATE_PASSWORD=${CRATE_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run match_history.rabbitmq.results"
@@ -229,7 +224,6 @@ services:
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - CRATE_PASSWORD=${CRATE_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     restart: always
@@ -248,7 +242,6 @@ services:
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - CRATE_PASSWORD=${CRATE_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     restart: always

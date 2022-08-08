@@ -35,6 +35,12 @@ class Platform:
         if self.service.queue:
             self.endpoint_url += "&queue=%s" % self.service.queue
 
+        conn = aiohttp.TCPConnector(limit=0)
+        if self.service.ratelimit:
+            self.session = aiohttp.ClientSession(connector=conn, headers={'ratelimit': str(self.service.ratelimit)})
+        else:
+            self.session = aiohttp.ClientSession(connector=conn)
+
     async def process_tasks(self, message):
         async with message.process(ignore_processed=True):
             puuid, latest_match, latest_history_update = pickle.loads(message.body)
@@ -125,9 +131,6 @@ class Platform:
         )
         await self.summoner_queue.init(durable=True, connection=self.handler.pika)
 
-        conn = aiohttp.TCPConnector(limit=0)
-        if self.service.ratelimit:
-            self.session = aiohttp.ClientSession(connector=conn, headers={'ratelimit': str(self.service.ratelimit)})
         cancel_consume = await task_queue.consume_tasks(self.process_tasks)
 
         while not self.handler.is_shutdown:
