@@ -103,7 +103,7 @@ class Platform:
                     await asyncio.sleep(0.01)
                     continue
             if not newest_match:
-                newest_match = found_latest
+                newest_match = latest_match
             matches = list(set(matches))
             if matches:
                 await self.matches_queue.send_task(pickle.dumps(matches), persistent=True)
