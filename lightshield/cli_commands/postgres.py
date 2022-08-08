@@ -29,7 +29,7 @@ async def init_db(config, **kwargs):
             host=psq_con.host,
             port=psq_con.port,
             user=psq_con.user,
-            password=os.getenv(psq_con.password_env),
+            password=psq_con.password,
         )
         async with db_creator.acquire() as connection:
             try:
@@ -53,7 +53,7 @@ async def init_db(config, **kwargs):
         port=psq_con.port,
         user=psq_con.user,
         database=psq_con.database,
-        password=os.getenv(psq_con.password_env),
+        password=psq_con.password,
     )
     # Generate the database
     logger.info("Generating enums")
