@@ -72,7 +72,6 @@ class Config:
             self._logging.error("config.yaml was not found in %s", os.getcwd())
             exit()
         self._parse_version()
-        self._parse_database()
         self._parse_connections()
         self.platforms = {}
         self._parse_platforms()
@@ -122,17 +121,6 @@ class Config:
                 "The provided config version %s is not supported %s",
                 self.version,
                 allowed_versions,
-            )
-            exit()
-
-    def _parse_database(self):
-        """Parse the database element."""
-        self.database = self._parse_var(self.file, "database", str)
-        if self.database not in ["crate", "postgres"]:
-            self._logging.error(
-                "The provided database selection '%s' is not allowed %s",
-                self.database,
-                ["crate", "postgres"],
             )
             exit()
 
@@ -187,17 +175,10 @@ class Config:
                 ),
                 None,
             ),
-        )
-        self.db.schema = None
-        self.db.database = None
-        if self.database == "crate":
-            self.db.schema = self._parse_var(
-                db_connection, "schema", str, "connections.%s" % self.database
-            )
-        else:
-            self.db.database = self._parse_var(
+            database=self._parse_var(
                 db_connection, "database", str, "connections.%s" % self.database
             )
+        )
 
     def _parse_platforms(self):
         """Parse the platforms."""

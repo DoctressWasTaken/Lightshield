@@ -8,7 +8,7 @@ import signal
 
 from dotenv import load_dotenv
 
-from lightshield.cli_commands import crate, postgres
+from lightshield.cli_commands import postgres
 from pprint import PrettyPrinter
 from lightshield.config import Config
 
@@ -67,15 +67,7 @@ async def run(*args, services=None, **kwargs):
 async def init_db(**kwargs):
     """Selector for which database to init."""
     config = Config()
-    if config.database == "postgres":
-        await postgres.init_db(config, **kwargs)
-    elif config.database == "crate":
-        await crate.init_db(config, **kwargs)
-    else:
-        logging.error(
-            "The provided database value `%s` does not match a legal value [postgres, crate].",
-            config.database,
-        )
+    await postgres.init_db(config, **kwargs)
 
 
 async def init_config(**kwargs):
