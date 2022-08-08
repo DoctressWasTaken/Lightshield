@@ -92,7 +92,7 @@ async def init_db(config, **kwargs):
                         encoding="utf-8",
                     ) as partition_sql:
                         sql_string = partition_sql.read()
-                        for platform in config.statics.enums.platforms:
+                        for platform in config.platform_templates:
                             sql = sql_string.format(
                                 platform=platform.lower(), platform_caps=platform
                             )
