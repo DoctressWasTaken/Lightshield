@@ -18,7 +18,7 @@ class Service:
         self.logging = logging.getLogger("%s" % name)
         self.config = config
         self.handler = handler
-        self.rankmanager = RankManager(config, self.logging, handler)
+        self.rankmanager = RankManager(config, self.logging, handler, self)
         self.retry_after = datetime.now()
         self.url = (
             f"{self.config.proxy.protocol}://{self.name.lower()}.api.riotgames.com/lol/"

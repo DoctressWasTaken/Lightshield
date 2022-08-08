@@ -8,8 +8,9 @@ class RankManager:
 
     tasks = None
 
-    def __init__(self, config, logging, handler):
+    def __init__(self, config, logging, handler, service):
         """Initiate logging."""
+        self.service = service
         self.ranks = config.services.league_ranking.active_ranks
         self.handler = handler
         self.logging = logging
@@ -37,7 +38,7 @@ class RankManager:
                 oldest_timestamp = entry[2]
         if oldest_timestamp > datetime.now():
             self.logging.info("Not ready yet, continuing at %s", oldest_timestamp)
-        while oldest_timestamp > datetime.now() and not self.handler.is_shutdown:
+        while oldest_timestamp > datetime.now() and not self.service.is_shutdown:
             await asyncio.sleep(5)
         return oldest_key
 
