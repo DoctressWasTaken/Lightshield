@@ -58,10 +58,9 @@ class Handler:
         self.logging.info(" %s\t | Inserting %s tasks", platform, len(tasks))
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
-                queries.update_ranking[self.config.database].format(
+                queries.update_ranking.format(
                     platform=platform,
                     platform_lower=platform.lower(),
-                    schema=self.config.db.schema,
                 )
             )
             await prep.executemany([task[:2] for task in tasks])
@@ -75,10 +74,9 @@ class Handler:
                 for res in tasks
             ]
             prep = await connection.prepare(
-                queries.insert_summoner[self.config.database].format(
+                queries.insert_summoner.format(
                     platform=platform,
                     platform_lower=platform.lower(),
-                    schema=self.config.db.schema,
                 )
             )
             await prep.executemany(converted_results)
@@ -93,10 +91,9 @@ class Handler:
 
         async with self.db.acquire() as connection:
             await connection.execute(
-                queries.missing_summoner[self.config.database].format(
+                queries.missing_summoner.format(
                     platform=platform,
                     platform_lower=platform.lower(),
-                    schema=self.config.db.schema,
                 ),
                 tasks,
             )

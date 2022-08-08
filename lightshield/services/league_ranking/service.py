@@ -100,10 +100,9 @@ class Service:
         try:
             async with self.handler.db.acquire() as connection:
                 latest = await connection.fetch(
-                    queries.preexisting[self.config.database].format(
+                    queries.preexisting.format(
                         platform_lower=self.name.lower(),
                         platform=self.name,
-                        schema=self.handler.connection.schema,
                     ),
                     *self.active_rank,
                 )
@@ -127,10 +126,9 @@ class Service:
                 while to_update_list and not self.is_shutdown:
                     try:
                         prep = await connection.prepare(
-                            queries.update[self.handler.connection.type].format(
+                            queries.update.format(
                                 platform=self.name,
                                 platform_lower=self.name.lower(),
-                                schema=self.handler.connection.schema,
                             )
                         )
                         await prep.executemany(batch)

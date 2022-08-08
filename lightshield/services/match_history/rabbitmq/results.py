@@ -59,15 +59,15 @@ class Handler:
 
             if len(tasks[0]) == 3:
                 prep = await connection.prepare(
-                    queries.insert_queue_known[self.config.database].format(
-                        schema=self.config.db.schema, platform_lower=platform.lower()
+                    queries.insert_queue_known.format(
+                        platform_lower=platform.lower()
                     )
                 )
                 await prep.executemany(tasks)
             else:
                 prep = await connection.prepare(
-                    queries.insert_queue_known[self.config.database].format(
-                        schema=self.config.db.schema, platform_lower=platform.lower()
+                    queries.insert_queue_known.format(
+                        platform_lower=platform.lower()
                     )
                 )
                 await prep.executemany(tasks)
@@ -82,11 +82,7 @@ class Handler:
         self.logging.info(" %s\t | Updating %s summoners", platform, len(tasks))
 
         async with self.db.acquire() as connection:
-            prep = await connection.prepare(
-                queries.update_players[self.config.database].format(
-                    schema=self.config.db.schema,
-                )
-            )
+            prep = await connection.prepare(queries.update_players)
             await prep.executemany(tasks)
 
     async def platform_thread(self, platform):

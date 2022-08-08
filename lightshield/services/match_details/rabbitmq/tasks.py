@@ -50,10 +50,9 @@ class Handler:
             async with self.db.acquire() as connection:
                 try:
                     return await connection.fetch(
-                        queries.tasks[self.config.database].format(
+                        queries.tasks.format(
                             platform=platform,
                             platform_lower=platform.lower(),
-                            schema=self.config.db.schema,
                         ),
                         count,
                     )

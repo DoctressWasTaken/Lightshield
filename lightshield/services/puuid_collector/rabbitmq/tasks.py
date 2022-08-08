@@ -48,10 +48,9 @@ class Handler:
         """Get tasks from db."""
         while not self.is_shutdown:
             async with self.db.acquire() as connection:
-                query = queries.tasks[self.config.database].format(
+                query = queries.tasks.format(
                     platform=platform,
                     platform_lower=platform.lower(),
-                    schema=self.config.db.schema,
                 )
                 try:
                     return await connection.fetch(query, count)

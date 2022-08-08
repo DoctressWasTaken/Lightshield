@@ -53,9 +53,7 @@ class Handler:
             async with self.db.acquire() as connection:
                 try:
                     return await connection.fetch(
-                        queries.reserve[self.config.database].format(
-                            schema=self.config.db.schema,
-                        ),
+                        queries.reserve,
                         platform,
                         datetime.now()
                         - timedelta(days=self.service.min_age.no_activity),

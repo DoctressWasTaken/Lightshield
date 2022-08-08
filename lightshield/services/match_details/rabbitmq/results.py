@@ -52,8 +52,7 @@ class Handler:
         tasks = [pickle.loads(task) for task in tasks]
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
-                queries.flush_found[self.config.database].format(
-                    schema=self.config.db.schema,
+                queries.flush_found.format(
                     platform_lower=platform.lower(),
                     platform=platform,
                 )
@@ -69,8 +68,7 @@ class Handler:
         tasks = [[int(task.decode("utf-8"))] for task in tasks]
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
-                queries.flush_missing[self.config.database].format(
-                    schema=self.config.db.schema,
+                queries.flush_missing.format(
                     platform_lower=platform.lower(),
                     platform=platform,
                 )
@@ -88,9 +86,7 @@ class Handler:
             tasks += package
         async with self.db.acquire() as connection:
             prep = await connection.prepare(
-                queries.summoners_update_only[self.config.database].format(
-                    schema=self.config.db.schema,
-                )
+                queries.summoners_update_only
             )
             await prep.executemany(tasks)
         self.logging.info(" %s\t | Updating %s summoners", platform, len(tasks))
