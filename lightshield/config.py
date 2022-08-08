@@ -188,6 +188,8 @@ class Config:
                 None,
             ),
         )
+        self.db.schema = None
+        self.db.database = None
         if self.database == "crate":
             self.db.schema = self._parse_var(
                 db_connection, "schema", str, "connections.%s" % self.database
