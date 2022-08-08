@@ -57,9 +57,25 @@ async def init_db(config, **kwargs):
     )
     # Generate the database
     logger.info("Generating enums")
+    async with db.acquire() as connection:
+        await connection.execute("""
+            DROP TYPE IF EXISTS rank CASCADE;
+            CREATE TYPE rank AS ENUM %s
+            """ % config.ranks
+        )
+        await connection.execute("""
+            DROP TYPE IF EXISTS division CASCADE;
+            CREATE TYPE division AS ENUM %s
+            """ % config.division
+        )
+        await connection.execute("""
+            DROP TYPE IF EXISTS platform CASCADE;
+            CREATE TYPE platform AS ENUM %s
+            """ % config.platforms
+        )
+
     enums = config.statics.enums
     for enum, values in enums.__dict__.items():
-        async with db.acquire() as connection:
             query = "DROP TYPE IF EXISTS %s CASCADE; CREATE TYPE %s AS ENUM %s" % (
                 enum,
                 enum,

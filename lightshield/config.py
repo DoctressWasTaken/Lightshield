@@ -48,6 +48,19 @@ class Config:
         "GRANDMASTER",
         "CHALLENGER",
     )
+    platform_templates = (
+        "EUW1",
+        "EUN1",
+        "TR1",
+        "RU",
+        "NA1",
+        "BR1",
+        "LA1",
+        "LA2",
+        "OC1",
+        "KR",
+        "JP1",
+    )
     divisions = ("I", "II", "III", "IV")
 
     def __init__(self):
@@ -186,26 +199,14 @@ class Config:
 
     def _parse_platforms(self):
         """Parse the platforms."""
-        expected = [
-            "EUW1",
-            "EUN1",
-            "TR1",
-            "RU",
-            "NA1",
-            "BR1",
-            "LA1",
-            "LA2",
-            "OC1",
-            "KR",
-            "JP1",
-        ]
+
         platforms = self._parse_var(self.file, "platforms")
         self.platforms = Object(
             **{
                 platform: Object(
                     disabled=self._get_deep(platforms, [platform, "disabled"], False)
                 )
-                for platform in expected
+                for platform in self.platform_templates
             }
         )
         self.active_platforms = []
