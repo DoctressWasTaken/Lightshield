@@ -1,6 +1,6 @@
 tasks = {
     "postgres": """SELECT summoner_id 
-                   FROM "ranking_{platform:s}"
+                   FROM "ranking_{platform_lower:s}"
                    WHERE puuid IS NULL
                    LIMIT $1 
                    FOR SHARE 
@@ -15,7 +15,7 @@ tasks = {
     """,
 }
 update_ranking = {
-    "postgres": """UPDATE "ranking_{platform:s}"
+    "postgres": """UPDATE "ranking_{platform_lower:s}"
                     SET puuid = $2
                     WHERE summoner_id =  $1
                 """,
