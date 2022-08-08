@@ -38,7 +38,7 @@ class Platform:
     async def process_tasks(self, message):
         async with message.process(ignore_processed=True):
             puuid, latest_match, latest_history_update = pickle.loads(message.body)
-            now = datetime.now() - timedelta(days=self.service.history.days)
+            now = datetime.now()
             now_tst = int(now.timestamp())
             url = self.endpoint_url % puuid
             url += "&startTime=%s" % now_tst

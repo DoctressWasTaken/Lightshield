@@ -81,7 +81,7 @@ update_players = {
     "postgres": """
                 UPDATE summoner
                 SET latest_match = $2,
-                    last_history_update = NOW()
+                    last_history_update = $3
                 WHERE puuid = $1
             """,
     "crate": """
