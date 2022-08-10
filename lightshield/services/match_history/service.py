@@ -44,7 +44,6 @@ class Platform:
     async def process_tasks(self, message):
         async with message.process(ignore_processed=True):
             puuid, latest_match, latest_history_update = pickle.loads(message.body)
-            self.logging.info(pickle.loads(message.body))
             now = datetime.now()
             newer_than = now - timedelta(days=self.service.history.days)
             newer_than_tst = int(newer_than.timestamp())
@@ -112,11 +111,11 @@ class Platform:
             matches = list(set(matches))
             if matches:
                 await self.matches_queue.send_task(pickle.dumps(matches), persistent=True)
-                self.logging.info(
+                self.logging.debug(
                     "Updated user %s, found %s matches", puuid, len(matches)
                 )
             else:
-                self.logging.info("Updated user %s, found no matches.", puuid)
+                self.logging.debug("Updated user %s, found no matches.", puuid)
             await self.summoner_queue.send_task(pickle.dumps((puuid, newest_match, now)))
             await message.ack()
 
