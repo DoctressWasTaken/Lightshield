@@ -55,23 +55,24 @@ class Handler:
         tasks_2 = {}
         counter = 0
         for package in [pickle.loads(task) for task in raw_tasks]:
-            try:
-                match_platform = package[1]
-            except Exception as err:
-                self.logging.error(err)
-                self.logging.info(package)
-                raise err
+            for match in package:
+                try:
+                    match_platform = match[0]
+                except Exception as err:
+                    self.logging.error(err)
+                    self.logging.info(match)
+                    raise err
 
-            if len(package) == 3:
-                if match_platform not in tasks_3:
-                    tasks_3[match_platform] = []
-                tasks_3[match_platform] += package
-            else:
-                if match_platform not in tasks_2:
-                    tasks_2[match_platform] = []
-                tasks_2[match_platform] += package
+                if len(match) == 3:
+                    if match_platform not in tasks_3:
+                        tasks_3[match_platform] = []
+                    tasks_3[match_platform].append(match)
+                else:
+                    if match_platform not in tasks_2:
+                        tasks_2[match_platform] = []
+                    tasks_2[match_platform].append(match)
             counter += 1
-        self.logging.info(" %s\t | %s matches inserted", platform,counter)
+        self.logging.info(" %s\t | %s matches inserted", platform, counter)
         async with self.db.acquire() as connection:
 
             if tasks_3:
