@@ -6,7 +6,7 @@ import aio_pika
 import asyncpg
 
 from lightshield.services.match_details.rabbitmq import queries
-from lightshield.rabbitmq_defaults import QueueHandler
+from lightshield.rabbitmq_defaults import QueueHandler, Buffer
 from lightshield.config import Config
 
 
@@ -62,8 +62,8 @@ class Handler:
 
     async def platform_handler(self, platform):
         # setup
-        sections = 8
-        section_size = 1000
+        buffer = Buffer(block_size=500, blocks=16)
+
         task_backlog = []
         handler = QueueHandler("match_details_tasks_%s" % platform)
         self.handlers.append(handler)
@@ -72,24 +72,20 @@ class Handler:
         await handler.wait_threshold(0)
 
         while not self.is_shutdown:
-            remaining_sections = math.ceil(
-                (await handler.wait_threshold((sections - 1) * section_size)) / 1000
-            )
-            # Drop used up sections
-            task_backlog = task_backlog[-remaining_sections * section_size :]
-            # Get tasks
+            remaining_tasks = await handler.wait_threshold(buffer.get_refill_count())
+
+            if not buffer.needs_refill(remaining_tasks):
+                continue
+
             while not self.is_shutdown:
                 tasks = await self.gather_tasks(
-                    platform=platform, count=sections * section_size
+                    platform=platform, count=buffer.buffer_size
                 )
-                to_add = []
-                for task in tasks:
-                    matchId = task["match_id"]
-                    if matchId not in task_backlog:
-                        task_backlog.append(matchId)
-                        to_add.append(str(matchId).encode())
-                    if len(task_backlog) >= sections * section_size:
-                        break
+                # convert to list
+
+                task_list = [task["match_id"] for task in tasks]
+                to_add = [str(_id).encode() for _id in buffer.verify_tasks(task_list)]
+
                 if not to_add:
                     await asyncio.sleep(10)
                     continue

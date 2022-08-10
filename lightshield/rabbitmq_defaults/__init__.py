@@ -3,6 +3,8 @@ from aio_pika import connect_robust, Message, DeliveryMode
 import logging
 from functools import partial
 
+from lightshield.rabbitmq_defaults.local_buffer import Buffer
+
 
 class QueueHandler:
     connection = channel = None
