@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from lightshield.config import Config
 from lightshield.services.match_history.rabbitmq import queries
-from lightshield.rabbitmq_defaults import QueueHandler
+from lightshield.rabbitmq_defaults import QueueHandler, Buffer
 
 
 class Handler:
@@ -67,8 +67,8 @@ class Handler:
 
     async def platform_handler(self, platform):
         # setup
-        sections = 8
-        section_size = 1000
+        buffer = Buffer(platform)
+
         task_backlog = []
         handler = QueueHandler("match_history_tasks_%s" % platform)
         self.handlers.append(handler)
@@ -77,32 +77,22 @@ class Handler:
         await handler.wait_threshold(0)
 
         while not self.is_shutdown:
-            remaining_sections = math.ceil(
-                (await handler.wait_threshold((sections - 1) * section_size)) / 1000
-            )
-            # Drop used up sections
-            task_backlog = task_backlog[-remaining_sections * section_size :]
-            # Get tasks
+            remaining_tasks = await handler.wait_threshold(buffer.get_refill_count())
+
+            if not buffer.needs_refill(remaining_tasks):
+                continue
+
             while not self.is_shutdown:
                 tasks = await self.gather_tasks(
-                    platform=platform, count=sections * section_size
+                    platform=platform, count=buffer.buffer_size
                 )
-                to_add = []
-                for task in tasks:
-                    puuid = task["puuid"]
-                    if puuid not in task_backlog:
-                        task_backlog.append(puuid)
-                        to_add.append(
-                            pickle.dumps(
-                                (
-                                    task["puuid"],
-                                    task["latest_match"],
-                                    task["last_history_update"],
-                                )
-                            )
-                        )
-                    if len(task_backlog) >= sections * section_size:
-                        break
+
+                task_list = [(
+                    task["puuid"],
+                    task["latest_match"],
+                    task["last_history_update"],
+                ) for task in tasks]
+                to_add = [pickle.dumps(entry) for entry in buffer.verify_tasks(task_list)]
                 if not to_add:
                     await asyncio.sleep(10)
                     continue
