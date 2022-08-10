@@ -58,7 +58,7 @@ class Handler:
                 )
             )
             await prep.executemany(tasks)
-        self.logging.info(" %s\t | %s found matches inserted", platform, len(tasks))
+        self.logging.debug(" %s\t | %s found matches inserted", platform, len(tasks))
 
     async def update_matches_404(self, platform):
         if not self.buffered_tasks[platform]["matches_404"]:
@@ -74,7 +74,7 @@ class Handler:
                 )
             )
             await prep.executemany(tasks)
-        self.logging.info(" %s\t | %s missing matches inserted", platform, len(tasks))
+        self.logging.debug(" %s\t | %s missing matches inserted", platform, len(tasks))
 
     async def change_summoners(self, platform):
         if not self.buffered_tasks[platform]["summoners"]:
@@ -89,7 +89,7 @@ class Handler:
                 queries.summoners_update_only
             )
             await prep.executemany(tasks)
-        self.logging.info(" %s\t | Updating %s summoners", platform, len(tasks))
+        self.logging.debug(" %s\t | Updating %s summoners", platform, len(tasks))
 
     async def platform_thread(self, platform):
         try:
@@ -143,7 +143,7 @@ class Handler:
             await self.update_matches_404(platform)
             await self.change_summoners(platform)
         except Exception as err:
-            self.logging.info(err)
+            self.logging.error(err)
 
     async def run(self):
         """Run."""
