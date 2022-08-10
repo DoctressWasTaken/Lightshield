@@ -44,17 +44,22 @@ class Platform:
     async def process_tasks(self, message):
         async with message.process(ignore_processed=True):
             puuid, latest_match, latest_history_update = pickle.loads(message.body)
+            self.logging.info(pickle.loads(message.body))
             now = datetime.now()
-            now_tst = int(now.timestamp())
+            newer_than = now - timedelta(days=self.service.history.days)
+            newer_than_tst = int(newer_than.timestamp())
             url = self.endpoint_url % puuid
-            url += "&startTime=%s" % now_tst
-            start_index = 0
+            url += "&startTime=%s" % newer_than_tst
+
+            calls_to_make = [url + "&start=%s" % start_index
+                             for start_index in range(0, self.service.history.matches, 100)
+                             ]
             is_404 = False
             newest_match = None
             matches = []
             found_latest = False
             while (
-                    start_index < self.service.history.matches
+                    calls_to_make
                     and not is_404
                     and not self.handler.is_shutdown
                     and not found_latest
@@ -62,7 +67,6 @@ class Platform:
                 seconds = (self.retry_after - datetime.now()).total_seconds()
                 if seconds >= 0.1:
                     await asyncio.sleep(seconds)
-                task_url = url + "&start=%s" % start_index
                 try:
                     async with self.semaphore:
                         if self.handler.is_shutdown:
@@ -70,16 +74,17 @@ class Platform:
                             return
                         sleep = asyncio.create_task(asyncio.sleep(1))
                         async with self.session.get(
-                                task_url, proxy=self.config.proxy.string
+                                calls_to_make[0], proxy=self.config.proxy.string
                         ) as response:
-                            data, _ = await asyncio.gather(response.json(), sleep)
+                            data = await response.json()
+                            await sleep
                     match response.status:
                         case 200:
                             if not data:
                                 break
-                            if start_index == 0:
+                            if not newest_match:
                                 newest_match = int(data[0].split("_")[1])
-                            start_index += 100
+                            calls_to_make.pop(0)
                             for match in data:
                                 platform, id = match.split("_")
                                 if id == latest_match:
@@ -111,30 +116,31 @@ class Platform:
                     "Updated user %s, found %s matches", puuid, len(matches)
                 )
             else:
-                self.logging.info("Updated user %s", puuid)
+                self.logging.info("Updated user %s, found no matches.", puuid)
             await self.summoner_queue.send_task(pickle.dumps((puuid, newest_match, now)))
             await message.ack()
 
-    async def run(self):
-        task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
-        await task_queue.init(
-            durable=True, prefetch_count=100, connection=self.handler.pika
-        )
 
-        self.matches_queue = QueueHandler(
-            "match_history_results_matches_%s" % self.platform
-        )
-        await self.matches_queue.init(durable=True, connection=self.handler.pika)
+async def run(self):
+    task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
+    await task_queue.init(
+        durable=True, prefetch_count=100, connection=self.handler.pika
+    )
 
-        self.summoner_queue = QueueHandler(
-            "match_history_results_summoners_%s" % self.platform
-        )
-        await self.summoner_queue.init(durable=True, connection=self.handler.pika)
+    self.matches_queue = QueueHandler(
+        "match_history_results_matches_%s" % self.platform
+    )
+    await self.matches_queue.init(durable=True, connection=self.handler.pika)
 
-        cancel_consume = await task_queue.consume_tasks(self.process_tasks)
+    self.summoner_queue = QueueHandler(
+        "match_history_results_summoners_%s" % self.platform
+    )
+    await self.summoner_queue.init(durable=True, connection=self.handler.pika)
 
-        while not self.handler.is_shutdown:
-            await asyncio.sleep(1)
+    cancel_consume = await task_queue.consume_tasks(self.process_tasks)
 
-        await cancel_consume()
-        await asyncio.sleep(10)
+    while not self.handler.is_shutdown:
+        await asyncio.sleep(1)
+
+    await cancel_consume()
+    await asyncio.sleep(10)
