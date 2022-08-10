@@ -121,26 +121,26 @@ class Platform:
             await message.ack()
 
 
-async def run(self):
-    task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
-    await task_queue.init(
-        durable=True, prefetch_count=100, connection=self.handler.pika
-    )
+    async def run(self):
+        task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
+        await task_queue.init(
+            durable=True, prefetch_count=100, connection=self.handler.pika
+        )
 
-    self.matches_queue = QueueHandler(
-        "match_history_results_matches_%s" % self.platform
-    )
-    await self.matches_queue.init(durable=True, connection=self.handler.pika)
+        self.matches_queue = QueueHandler(
+            "match_history_results_matches_%s" % self.platform
+        )
+        await self.matches_queue.init(durable=True, connection=self.handler.pika)
 
-    self.summoner_queue = QueueHandler(
-        "match_history_results_summoners_%s" % self.platform
-    )
-    await self.summoner_queue.init(durable=True, connection=self.handler.pika)
+        self.summoner_queue = QueueHandler(
+            "match_history_results_summoners_%s" % self.platform
+        )
+        await self.summoner_queue.init(durable=True, connection=self.handler.pika)
 
-    cancel_consume = await task_queue.consume_tasks(self.process_tasks)
+        cancel_consume = await task_queue.consume_tasks(self.process_tasks)
 
-    while not self.handler.is_shutdown:
-        await asyncio.sleep(1)
+        while not self.handler.is_shutdown:
+            await asyncio.sleep(1)
 
-    await cancel_consume()
-    await asyncio.sleep(10)
+        await cancel_consume()
+        await asyncio.sleep(10)
