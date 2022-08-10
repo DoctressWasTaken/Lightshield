@@ -30,7 +30,7 @@ class Buffer:
         self.logging.debug("Refilling %s tasks.", len(added_tasks))
         return added_tasks
 
-    def needs_refill(self, task_count):
+    def needs_refill(self, task_count=0):
         """Update the in_queue list depending on how many remaining tasks are still found, returns True if a full block is missing."""
         blocks_missing = self.blocks - math.ceil(task_count // self.block_size)
 
