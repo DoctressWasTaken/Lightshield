@@ -51,30 +51,39 @@ class Handler:
             return
         raw_tasks = self.buffered_tasks[platform]["matches"].copy()
         self.buffered_tasks[platform]["matches"] = []
-        tasks_3 = []
-        tasks_2 = []
+        tasks_3 = {}
+        tasks_2 = {}
+        counter = 0
         for package in [pickle.loads(task) for task in raw_tasks]:
+            match_platform = package[1]
             if len(package) == 3:
-                tasks_3 += package
+                if match_platform not in tasks_3:
+                    tasks_3[match_platform] = []
+                tasks_3[match_platform] += package
             else:
+                if match_platform not in tasks_2:
+                    tasks_2[match_platform] = []
                 tasks_2 += package
-        self.logging.info(" %s\t | %s matches inserted", platform, len(tasks_3) + len(tasks_2))
+            counter += 1
+        self.logging.info(" %s\t | %s matches inserted", platform,counter)
         async with self.db.acquire() as connection:
 
             if tasks_3:
-                prep = await connection.prepare(
-                    queries.insert_queue_known.format(
-                        platform_lower=platform.lower()
+                for match_platform, tasks in tasks_3.items():
+                    prep = await connection.prepare(
+                        queries.insert_queue_known.format(
+                            platform_lower=match_platform.lower()
+                        )
                     )
-                )
-                await prep.executemany(tasks_3)
+                    await prep.executemany(tasks)
             if tasks_2:
-                prep = await connection.prepare(
-                    queries.insert_queue_known.format(
-                        platform_lower=platform.lower()
+                for match_platform, tasks in tasks_2.items():
+                    prep = await connection.prepare(
+                        queries.insert_queue_known.format(
+                            platform_lower=match_platform.lower()
+                        )
                     )
-                )
-                await prep.executemany(tasks_2)
+                    await prep.executemany(tasks)
 
     async def insert_summoners(self, platform):
         if not self.buffered_tasks[platform]["summoners"]:
