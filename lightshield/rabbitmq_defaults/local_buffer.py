@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 
 
@@ -11,6 +12,7 @@ class Buffer:
         self.blocks = blocks
         self.queue_size = self.block_size * self.blocks
         self.buffer_size = self.queue_size
+        self.logging = logging.getLogger("Buffer")
 
     def verify_tasks(self, tasks):
         """Verify a list of tasks and add only tasks that are not included in the buffer to the queue.
@@ -23,8 +25,9 @@ class Buffer:
             if task not in self.recent_tasks and task not in self.in_queue:
                 self.in_queue.append(task)
                 added_tasks.append(task)
-            if len(self.in_queue) <= self.queue_size:
+            if len(self.in_queue) >= self.queue_size:
                 break
+        self.logging.info("Refilling %s tasks.", len(added_tasks))
         return added_tasks
 
     def needs_refill(self, task_count):
@@ -32,6 +35,7 @@ class Buffer:
         blocks_missing = self.blocks - math.ceil(task_count // self.block_size)
 
         if blocks_missing > 0:
+            self.logging.info("Found %s blocks to be missing", blocks_missing)
             self.recent_tasks = self.in_queue[:blocks_missing * self.block_size]
             self.buffer_size = self.queue_size + len(self.recent_tasks)
             self.in_queue = self.in_queue[blocks_missing * self.block_size:]
