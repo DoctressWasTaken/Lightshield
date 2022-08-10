@@ -1,9 +1,10 @@
-tasks =  """
+tasks = """
                SELECT  match_id
                FROM "match_{platform_lower:s}"
                    WHERE details IS NULL
                     AND find_fails < 10
-                ORDER BY find_fails 
+                ORDER BY find_fails NULLS FIRST,
+                        match_id DESC 
                LIMIT $1
                """
 
