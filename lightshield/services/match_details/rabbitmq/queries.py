@@ -19,7 +19,7 @@ flush_found = """UPDATE "match_{platform_lower:s}"
 
 flush_missing = """UPDATE "match_{platform_lower:s}"
                                    SET find_fails = find_fails + 1
-                                   WHERE match_id = ANY($1::INT[])
+                                   WHERE match_id = $1
                                 """
 
 summoners_update_only = """UPDATE summoner
