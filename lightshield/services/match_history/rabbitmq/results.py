@@ -63,7 +63,7 @@ class Handler:
             else:
                 if match_platform not in tasks_2:
                     tasks_2[match_platform] = []
-                tasks_2 += package
+                tasks_2[match_platform] += package
             counter += 1
         self.logging.info(" %s\t | %s matches inserted", platform,counter)
         async with self.db.acquire() as connection:
