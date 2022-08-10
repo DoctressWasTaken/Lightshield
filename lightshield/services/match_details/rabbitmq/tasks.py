@@ -62,7 +62,7 @@ class Handler:
 
     async def platform_handler(self, platform):
         # setup
-        buffer = Buffer(block_size=500, blocks=16)
+        buffer = Buffer(platform, block_size=500, blocks=16)
 
         task_backlog = []
         handler = QueueHandler("match_details_tasks_%s" % platform)

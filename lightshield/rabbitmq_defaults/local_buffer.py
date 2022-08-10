@@ -5,14 +5,14 @@ import math
 
 class Buffer:
 
-    def __init__(self, block_size=500, blocks=16):
+    def __init__(self, identifier, block_size=500, blocks=16):
         self.recent_tasks = []
         self.in_queue = []
         self.block_size = block_size
         self.blocks = blocks
         self.queue_size = self.block_size * self.blocks
         self.buffer_size = self.queue_size
-        self.logging = logging.getLogger("Buffer")
+        self.logging = logging.getLogger("%s | Buffer" % identifier.ljust(5))
 
     def verify_tasks(self, tasks):
         """Verify a list of tasks and add only tasks that are not included in the buffer to the queue.
@@ -27,7 +27,7 @@ class Buffer:
                 added_tasks.append(task)
             if len(self.in_queue) >= self.queue_size:
                 break
-        self.logging.info("Refilling %s tasks.", len(added_tasks))
+        self.logging.debug("Refilling %s tasks.", len(added_tasks))
         return added_tasks
 
     def needs_refill(self, task_count):
@@ -35,7 +35,7 @@ class Buffer:
         blocks_missing = self.blocks - math.ceil(task_count // self.block_size)
 
         if blocks_missing > 0:
-            self.logging.info("Found %s blocks to be missing", blocks_missing)
+            self.logging.debug("Found %s blocks to be missing", blocks_missing)
             self.recent_tasks = self.in_queue[:blocks_missing * self.block_size]
             self.buffer_size = self.queue_size + len(self.recent_tasks)
             self.in_queue = self.in_queue[blocks_missing * self.block_size:]

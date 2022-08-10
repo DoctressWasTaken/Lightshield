@@ -61,7 +61,7 @@ class Handler:
 
     async def platform_handler(self, platform):
         self.logging.info("Worker %s up.", platform)
-        buffer = Buffer()
+        buffer = Buffer(platform)
         # setup
         task_backlog = []
         handler = QueueHandler("puuid_tasks_%s" % platform)
