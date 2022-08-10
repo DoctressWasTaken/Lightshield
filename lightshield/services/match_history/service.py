@@ -119,8 +119,8 @@ class Platform:
             await self.summoner_queue.send_task(pickle.dumps((puuid, newest_match, now)))
             await message.ack()
 
-
     async def run(self):
+        self.logging.info("Started worker")
         try:
             task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
             await task_queue.init(
