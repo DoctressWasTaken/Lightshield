@@ -60,6 +60,8 @@ class Handler:
             except Exception as err:
                 self.logging.error(err)
                 self.logging.info(package)
+                raise err
+
             if len(package) == 3:
                 if match_platform not in tasks_3:
                     tasks_3[match_platform] = []
