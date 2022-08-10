@@ -55,7 +55,11 @@ class Handler:
         tasks_2 = {}
         counter = 0
         for package in [pickle.loads(task) for task in raw_tasks]:
-            match_platform = package[1]
+            try:
+                match_platform = package[1]
+            except Exception as err:
+                self.logging.error(err)
+                self.logging.info(package)
             if len(package) == 3:
                 if match_platform not in tasks_3:
                     tasks_3[match_platform] = []
