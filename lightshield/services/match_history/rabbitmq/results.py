@@ -73,7 +73,7 @@ class Handler:
                     tasks_2[match_platform].append(match)
                 counter += 1
 
-        self.logging.info(" %s\t | %s matches inserted", platform, counter)
+        self.logging.debug(" %s\t | %s matches inserted", platform, counter)
         async with self.db.acquire() as connection:
 
             if tasks_3:
@@ -100,7 +100,7 @@ class Handler:
         self.buffered_tasks[platform]["summoners"] = []
         tasks = [pickle.loads(task) for task in tasks]
 
-        self.logging.info(" %s\t | Updating %s summoners", platform, len(tasks))
+        self.logging.debug(" %s\t | Updating %s summoners", platform, len(tasks))
 
         async with self.db.acquire() as connection:
             prep = await connection.prepare(queries.update_players)
