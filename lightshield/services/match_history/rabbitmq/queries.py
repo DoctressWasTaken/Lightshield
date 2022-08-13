@@ -17,7 +17,7 @@ reserve = """
                        last_history_update
                 FROM base
                 WHERE category IS NOT NULL
-                ORDER BY category DESC
+                ORDER BY category ASC
                 LIMIT $4
                     """
 
