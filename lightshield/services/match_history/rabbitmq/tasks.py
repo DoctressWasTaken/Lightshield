@@ -55,8 +55,8 @@ class Handler:
                     return await connection.fetch(
                         queries.reserve,
                         platform,
-                        self.service.min_age.no_activity,
                         self.service.min_age.newer_activity,
+                        self.service.min_age.no_activity,
                         count,
                     )
                 except asyncpg.InternalServerError:
