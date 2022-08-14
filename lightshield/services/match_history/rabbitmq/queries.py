@@ -7,8 +7,10 @@ reserve = """
                                WHEN last_history_update IS NULL THEN 1
                                WHEN last_history_update < last_activity AND last_history_update < (NOW() - '1 day'::INTERVAL * $2)
                                    THEN 2
+                                WHEN last_history_update < last_activity THEN 12
                                WHEN (last_history_update >= last_activity)
                                    AND last_history_update < (NOW() - '1 day'::INTERVAL * $3) THEN 3
+                                WHEN last_history_update >= last_activity THEN 13
                                END AS category
                     FROM summoner
                     WHERE platform = $1)
@@ -16,7 +18,7 @@ reserve = """
                        latest_match,
                        last_history_update
                 FROM base
-                WHERE category IS NOT NULL
+                WHERE category < 10
                 ORDER BY category, last_history_update
                 LIMIT $4
                     """
