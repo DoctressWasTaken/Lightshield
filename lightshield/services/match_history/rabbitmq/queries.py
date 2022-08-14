@@ -7,7 +7,7 @@ reserve = """
                                WHEN last_history_update IS NULL THEN 1
                                WHEN last_history_update < last_activity AND last_history_update < (NOW() - '1 day'::INTERVAL * $2)
                                    THEN 2
-                               WHEN (last_history_update > last_activity OR last_activity IS NULL)
+                               WHEN (last_history_update >= last_activity)
                                    AND last_history_update < (NOW() - '1 day'::INTERVAL * $3) THEN 3
                                END AS category
                     FROM summoner
@@ -36,6 +36,7 @@ insert_queue_unknown = """
 update_players = """
                 UPDATE summoner
                 SET latest_match = $2,
-                    last_history_update = $3
+                    last_history_update = $3,
+                    last_activity = GREATEST(last_activity, $3)
                 WHERE puuid = $1
             """
