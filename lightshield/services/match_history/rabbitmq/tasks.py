@@ -57,6 +57,7 @@ class Handler:
                         platform,
                         self.service.min_age.newer_activity,
                         self.service.min_age.no_activity,
+                        self.service.min_age.activity_min_age,
                         count,
                     )
                 except asyncpg.InternalServerError:

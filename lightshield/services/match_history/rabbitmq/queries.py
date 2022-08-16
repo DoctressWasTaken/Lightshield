@@ -5,12 +5,12 @@ reserve = """
                            last_history_update,
                            CASE
                                WHEN last_history_update IS NULL THEN 1
-                               WHEN last_history_update < last_activity AND last_history_update < (NOW() - '1 day'::INTERVAL * $2)
+                               WHEN (last_history_update + '1 hour'::INTERVAL * $4) < last_activity AND last_history_update < (NOW() - '1 day'::INTERVAL * $2)
                                    THEN 2
-                                WHEN last_history_update < last_activity THEN 12
-                               WHEN (last_history_update >= last_activity)
+                                WHEN (last_history_update + '1 hour'::INTERVAL * $4) < last_activity THEN 12
+                               WHEN ((last_history_update + '1 hour'::INTERVAL * $4) >= last_activity)
                                    AND last_history_update < (NOW() - '1 day'::INTERVAL * $3) THEN 3
-                                WHEN last_history_update >= last_activity THEN 13
+                                WHEN (last_history_update + '1 hour'::INTERVAL * $4) >= last_activity THEN 13
                                END AS category
                     FROM summoner
                     WHERE platform = $1)
@@ -20,7 +20,7 @@ reserve = """
                 FROM base
                 WHERE category < 10
                 ORDER BY category, last_history_update
-                LIMIT $4
+                LIMIT $5
                     """
 
 insert_queue_known = """
