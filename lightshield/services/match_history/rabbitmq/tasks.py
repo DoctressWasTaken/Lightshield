@@ -53,7 +53,7 @@ class Handler:
             async with self.db.acquire() as connection:
                 try:
                     return await connection.fetch(
-                        queries.reserve,
+                        queries.get_tasks,
                         platform,
                         self.service.min_age.newer_activity,
                         self.service.min_age.no_activity,
@@ -66,7 +66,7 @@ class Handler:
 
     async def platform_handler(self, platform):
         # setup
-        buffer = Buffer(platform)
+        buffer = Buffer(platform, block_size=1000, blocks=4)
 
         task_backlog = []
         handler = QueueHandler("match_history_tasks_%s" % platform)
