@@ -99,12 +99,14 @@ class Handler:
         tasks = self.buffered_tasks[platform]["summoners"].copy()
         self.buffered_tasks[platform]["summoners"] = []
         tasks = [pickle.loads(task) for task in tasks]
-
+        puuids = list(set([task[0] for task in tasks]))
         self.logging.debug(" %s\t | Updating %s summoners", platform, len(tasks))
 
         async with self.db.acquire() as connection:
-            prep = await connection.prepare(queries.update_players)
-            await prep.executemany(tasks)
+            async with connection.transaction():
+                prep = await connection.prepare(queries.update_players)
+                await prep.executemany(tasks)
+                await connection.execute(queries.drop_from_queue, puuids)
 
     async def platform_thread(self, platform):
         try:

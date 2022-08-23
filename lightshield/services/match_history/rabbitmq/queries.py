@@ -1,8 +1,10 @@
 get_tasks = """
+            INSERT INTO match_history_queue (puuid, latest_match, last_history_update, platform) (
                 WITH base AS (
                     SELECT puuid,
                            latest_match,
                            last_history_update,
+                           platform,
                            CASE
                                WHEN last_history_update IS NULL THEN 1
                                WHEN (last_history_update + '1 hour'::INTERVAL * $4) < last_activity AND last_history_update < (NOW() - '1 day'::INTERVAL * $2)
@@ -16,11 +18,15 @@ get_tasks = """
                     WHERE platform = $1)
                 SELECT puuid,
                        latest_match,
-                       last_history_update
+                       last_history_update,
+                       platform
                 FROM base
                 WHERE category < 10
                 ORDER BY category, last_history_update
                 LIMIT $5
+            )
+            ON CONFLICT DO NOTHING
+            RETURNING puuid, latest_match, last_history_update
                     """
 
 insert_queue_known = """
@@ -41,4 +47,9 @@ update_players = """
                     last_history_update = $3,
                     last_activity = GREATEST(last_activity, $3)
                 WHERE puuid = $1
+            """
+
+drop_from_queue = """
+            DELETE FROM summoner
+            WHERE puuid = ANY($1::varchar[])
             """

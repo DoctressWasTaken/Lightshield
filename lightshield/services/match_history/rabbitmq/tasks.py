@@ -67,8 +67,8 @@ class Handler:
     async def platform_handler(self, platform):
         # setup
         buffer = Buffer(platform, block_size=1000, blocks=4)
+        expected_size = 4000
 
-        task_backlog = []
         handler = QueueHandler("match_history_tasks_%s" % platform)
         self.handlers.append(handler)
         await handler.init(durable=True, connection=self.pika)
@@ -76,14 +76,15 @@ class Handler:
         await handler.wait_threshold(0)
 
         while not self.is_shutdown:
-            remaining_tasks = await handler.wait_threshold(buffer.get_refill_count())
-
-            if not buffer.needs_refill(remaining_tasks):
+            async with self.db.acquire() as connection:
+                remaining_tasks = connection.fetchval("""SELECT COUNT(DISTINCT puuid) FROM match_history_queue WHERE platform  = $1 """, platform)
+            tasks_to_pull = expected_size - remaining_tasks
+            if tasks_to_pull < 500:  # Queue full enough to skip
                 continue
 
             while not self.is_shutdown:
                 tasks = await self.gather_tasks(
-                    platform=platform, count=buffer.buffer_size
+                    platform=platform, count=tasks_to_pull
                 )
 
                 task_list = [(
@@ -91,7 +92,7 @@ class Handler:
                     task["latest_match"],
                     task["last_history_update"],
                 ) for task in tasks]
-                to_add = [pickle.dumps(entry) for entry in buffer.verify_tasks(task_list)]
+                to_add = [pickle.dumps(entry) for entry in task_list]
                 if not to_add:
                     await asyncio.sleep(10)
                     continue

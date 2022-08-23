@@ -16,3 +16,11 @@ CREATE TABLE summoner
     last_updated DATE
 );
 
+CREATE TABLE IF NOT EXISTS match_history_queue AS (
+    SELECT puuid,
+           latest_match,
+           last_history_update,
+           platform
+    FROM summoner
+    LIMIT 0
+);
