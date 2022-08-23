@@ -73,8 +73,6 @@ class Handler:
         self.handlers.append(handler)
         await handler.init(durable=True, connection=self.pika)
 
-        await handler.wait_threshold(0)
-
         while not self.is_shutdown:
             async with self.db.acquire() as connection:
                 await connection.execute("""
