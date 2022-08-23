@@ -66,7 +66,6 @@ class Handler:
 
     async def platform_handler(self, platform):
         # setup
-        buffer = Buffer(platform, block_size=1000, blocks=4)
         expected_size = 4000
 
         handler = QueueHandler("match_history_tasks_%s" % platform)

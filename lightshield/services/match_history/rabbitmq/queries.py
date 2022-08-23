@@ -25,6 +25,7 @@ get_tasks = """
                        NOW() AS added
                 FROM base
                 WHERE category < 10
+                AND puuid NOT IN (SELECT puuid FROM match_history_queue)
                 ORDER BY category, last_history_update
                 LIMIT $5
             )
