@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS match_history_queue AS (
     SELECT puuid,
            latest_match,
            last_history_update,
+           last_activity,
            platform,
            NOW() AS added
     FROM summoner

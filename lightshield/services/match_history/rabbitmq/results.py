@@ -111,7 +111,6 @@ class Handler:
                 except Exception as err:
                     self.logging.error(err)
 
-
     async def platform_thread(self, platform):
         try:
             matches_queue = QueueHandler("match_history_results_matches_%s" % platform)
