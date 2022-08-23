@@ -1,5 +1,5 @@
 get_tasks = """
-            INSERT INTO match_history_queue (puuid, latest_match, last_history_update, platform) (
+            INSERT INTO match_history_queue (puuid, latest_match, last_history_update, platform, added) (
                 WITH base AS (
                     SELECT puuid,
                            latest_match,
@@ -19,7 +19,8 @@ get_tasks = """
                 SELECT puuid,
                        latest_match,
                        last_history_update,
-                       platform
+                       platform,
+                       NOW() AS added
                 FROM base
                 WHERE category < 10
                 ORDER BY category, last_history_update

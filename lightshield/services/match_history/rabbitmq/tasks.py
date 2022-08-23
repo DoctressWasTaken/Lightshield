@@ -77,6 +77,11 @@ class Handler:
 
         while not self.is_shutdown:
             async with self.db.acquire() as connection:
+                await connection.execute("""
+                    DELETE FROM match_history_queue
+                    WHERE platform = $1
+                    AND added < NOW() - '30 minutes'::INTERVAL
+                """, platform)  # Cleanup query for tasks left in the table by accident
                 remaining_tasks = await connection.fetchval(
                     """SELECT COUNT(DISTINCT puuid) FROM match_history_queue WHERE platform  = $1 """,
                     platform,
