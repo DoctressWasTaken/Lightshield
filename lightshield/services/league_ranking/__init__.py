@@ -17,7 +17,8 @@ class Handler:
         self.proxy = self.config.proxy.string
         self.platforms = {
             platform: Service(platform, self.config, self)
-            for platform in self.config.active_platforms}
+            for platform in self.config.active_platforms
+        }
 
     async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""

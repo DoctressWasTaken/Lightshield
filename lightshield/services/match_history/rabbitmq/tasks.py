@@ -77,27 +77,33 @@ class Handler:
 
         while not self.is_shutdown:
             async with self.db.acquire() as connection:
-                remaining_tasks = connection.fetchval("""SELECT COUNT(DISTINCT puuid) FROM match_history_queue WHERE platform  = $1 """, platform)
+                remaining_tasks = await connection.fetchval(
+                    """SELECT COUNT(DISTINCT puuid) FROM match_history_queue WHERE platform  = $1 """,
+                    platform,
+                )
             tasks_to_pull = expected_size - remaining_tasks
             if tasks_to_pull < 500:  # Queue full enough to skip
+                await asyncio.sleep(10)
                 continue
+            self.logging.info(
+                "Queue too empty, attempting to find %s new tasks", tasks_to_pull
+            )
 
-            while not self.is_shutdown:
-                tasks = await self.gather_tasks(
-                    platform=platform, count=tasks_to_pull
-                )
-
-                task_list = [(
+            task_list = [
+                (
                     task["puuid"],
                     task["latest_match"],
                     task["last_history_update"],
-                ) for task in tasks]
-                to_add = [pickle.dumps(entry) for entry in task_list]
-                if not to_add:
-                    await asyncio.sleep(10)
-                    continue
-                await handler.send_tasks(to_add, persistent=True)
-                break
+                )
+                for task in await self.gather_tasks(
+                    platform=platform, count=tasks_to_pull
+                )
+            ]
+            to_add = [pickle.dumps(entry) for entry in task_list]
+            if not to_add:
+                await asyncio.sleep(10)
+                continue
+            await handler.send_tasks(to_add, persistent=True)
 
     async def run(self):
         """Run."""

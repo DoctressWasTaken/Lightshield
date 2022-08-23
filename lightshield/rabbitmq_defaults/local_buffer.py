@@ -4,7 +4,6 @@ import math
 
 
 class Buffer:
-
     def __init__(self, identifier, block_size=500, blocks=16):
         self.recent_tasks = []
         self.in_queue = []
@@ -36,9 +35,9 @@ class Buffer:
 
         if blocks_missing > 0:
             self.logging.debug("Found %s blocks to be missing", blocks_missing)
-            self.recent_tasks = self.in_queue[:blocks_missing * self.block_size]
+            self.recent_tasks = self.in_queue[: blocks_missing * self.block_size]
             self.buffer_size = self.queue_size + len(self.recent_tasks)
-            self.in_queue = self.in_queue[blocks_missing * self.block_size:]
+            self.in_queue = self.in_queue[blocks_missing * self.block_size :]
             return True
         return False
 

@@ -19,7 +19,8 @@ class Handler:
         self.proxy = self.config.proxy.string
         self.platforms = {
             platform: Platform(platform, self)
-            for platform in self.config.active_platforms}
+            for platform in self.config.active_platforms
+        }
 
     async def init(self):
         self.pika = await aio_pika.connect_robust(

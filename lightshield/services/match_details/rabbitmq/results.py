@@ -85,9 +85,7 @@ class Handler:
         for package in [pickle.loads(task) for task in raw_tasks]:
             tasks += package
         async with self.db.acquire() as connection:
-            prep = await connection.prepare(
-                queries.summoners_update_only
-            )
+            prep = await connection.prepare(queries.summoners_update_only)
             await prep.executemany(tasks)
         self.logging.debug(" %s\t | Updating %s summoners", platform, len(tasks))
 

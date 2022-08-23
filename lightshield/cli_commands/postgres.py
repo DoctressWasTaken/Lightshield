@@ -61,18 +61,26 @@ async def init_db(config, **kwargs):
         query = """
             DROP TYPE IF EXISTS rank CASCADE;
             CREATE TYPE rank AS ENUM {values}
-            """.format(values=config.ranks)
+            """.format(
+            values=config.ranks
+        )
         logger.info(query)
         await connection.execute(query)
-        await connection.execute("""
+        await connection.execute(
+            """
             DROP TYPE IF EXISTS division CASCADE;
             CREATE TYPE division AS ENUM {values}
-            """.format(values=config.divisions)
+            """.format(
+                values=config.divisions
+            )
         )
-        await connection.execute("""
+        await connection.execute(
+            """
             DROP TYPE IF EXISTS platform CASCADE;
             CREATE TYPE platform AS ENUM {values}
-            """.format(values=config.platform_templates)
+            """.format(
+                values=config.platform_templates
+            )
         )
 
     path = os.path.join(os.path.dirname(__file__), "../postgres_templates")

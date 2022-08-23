@@ -37,7 +37,9 @@ class Platform:
 
         conn = aiohttp.TCPConnector(limit=0)
         if self.service.ratelimit:
-            self.session = aiohttp.ClientSession(connector=conn, headers={'ratelimit': str(self.service.ratelimit)})
+            self.session = aiohttp.ClientSession(
+                connector=conn, headers={"ratelimit": str(self.service.ratelimit)}
+            )
         else:
             self.session = aiohttp.ClientSession(connector=conn)
 
@@ -50,18 +52,19 @@ class Platform:
             url = self.endpoint_url % puuid
             url += "&startTime=%s" % newer_than_tst
 
-            calls_to_make = [url + "&start=%s" % start_index
-                             for start_index in range(0, self.service.history.matches, 100)
-                             ]
+            calls_to_make = [
+                url + "&start=%s" % start_index
+                for start_index in range(0, self.service.history.matches, 100)
+            ]
             is_404 = False
             newest_match = None
             matches = []
             found_latest = False
             while (
-                    calls_to_make
-                    and not is_404
-                    and not self.handler.is_shutdown
-                    and not found_latest
+                calls_to_make
+                and not is_404
+                and not self.handler.is_shutdown
+                and not found_latest
             ):
                 seconds = (self.retry_after - datetime.now()).total_seconds()
                 if seconds >= 0.1:
@@ -73,7 +76,7 @@ class Platform:
                             return
                         sleep = asyncio.create_task(asyncio.sleep(1))
                         async with self.session.get(
-                                calls_to_make[0], proxy=self.config.proxy.string
+                            calls_to_make[0], proxy=self.config.proxy.string
                         ) as response:
                             data = await response.json()
                             await sleep
@@ -110,13 +113,17 @@ class Platform:
                 newest_match = latest_match
             matches = list(set(matches))
             if matches:
-                await self.matches_queue.send_task(pickle.dumps(matches), persistent=True)
+                await self.matches_queue.send_task(
+                    pickle.dumps(matches), persistent=True
+                )
                 self.logging.debug(
                     "Updated user %s, found %s matches", puuid, len(matches)
                 )
             else:
                 self.logging.debug("Updated user %s, found no matches.", puuid)
-            await self.summoner_queue.send_task(pickle.dumps((puuid, newest_match, now)))
+            await self.summoner_queue.send_task(
+                pickle.dumps((puuid, newest_match, now))
+            )
             await message.ack()
 
     async def run(self):

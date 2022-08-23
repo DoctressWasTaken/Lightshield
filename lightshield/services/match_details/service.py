@@ -91,7 +91,9 @@ class Platform:
                             await message.ack()
                             return
                         case 404:
-                            await self.matches_queue_404.send_task(str(matchId).encode())
+                            await self.matches_queue_404.send_task(
+                                str(matchId).encode()
+                            )
                             await message.ack()
                             return
                         case 429:
@@ -115,12 +117,12 @@ class Platform:
         creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
         patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
         if (
-                "gameStartTimestamp" in response["info"]
-                and "gameEndTimestamp" in response["info"]
+            "gameStartTimestamp" in response["info"]
+            and "gameEndTimestamp" in response["info"]
         ):
             game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                response["info"]["gameEndTimestamp"]
+                - response["info"]["gameStartTimestamp"]
             )
         else:
             game_duration = response["info"]["gameDuration"]
@@ -133,30 +135,36 @@ class Platform:
         # Summoner updates
         last_activity = creation + timedelta(seconds=game_duration)
         await self.summoner_queue.send_task(
-            pickle.dumps([
-                (
-                    last_activity,
-                    self.platform,
-                    player["summonerName"],
-                    player["puuid"],
-                )
-                for player in response["info"]["participants"]
-            ])
+            pickle.dumps(
+                [
+                    (
+                        last_activity,
+                        self.platform,
+                        player["summonerName"],
+                        player["puuid"],
+                    )
+                    for player in response["info"]["participants"]
+                ]
+            )
         )
 
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
         # Match Update
-        await self.matches_queue_200.send_tasks([pickle.dumps(
-            (
-                queue,
-                creation,
-                patch_int,
-                game_duration,
-                win,
-                matchId,
-            )
-        )])
+        await self.matches_queue_200.send_tasks(
+            [
+                pickle.dumps(
+                    (
+                        queue,
+                        creation,
+                        patch_int,
+                        game_duration,
+                        win,
+                        matchId,
+                    )
+                )
+            ]
+        )
         # Saving
         path = os.path.join(self.output_folder, "details", patch, day, self.platform)
         if not os.path.exists(path):
@@ -164,7 +172,7 @@ class Platform:
         filename = os.path.join(path, "%s_%s.json" % (self.platform, matchId))
         if not os.path.isfile(filename):
             with open(
-                    filename,
-                    "w+",
+                filename,
+                "w+",
             ) as file:
                 file.write(json.dumps(response))

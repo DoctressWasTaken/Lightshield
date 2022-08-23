@@ -75,9 +75,9 @@ class QueueHandler:
             DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT
         )
         await self.channel.default_exchange.publish(
-                        Message(task, delivery_mode=delivery_mode),
-                        routing_key=self.queue,
-                    )
+            Message(task, delivery_mode=delivery_mode),
+            routing_key=self.queue,
+        )
 
     async def consume_tasks(self, func, arguments=None):
         """Start a consumer and return the cancel task."""

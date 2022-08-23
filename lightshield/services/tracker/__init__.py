@@ -21,8 +21,8 @@ class Handler:
         self.is_shutdown = True
 
     async def run(self):
-        host = os.getenv('REDIS_HOST', 'localhost')
-        port = os.getenv('REDIS_PORT', 6379)
+        host = os.getenv("REDIS_HOST", "localhost")
+        port = os.getenv("REDIS_PORT", 6379)
         redis = aioredis.from_url(
             "redis://%s:%s" % (host, port), encoding="utf-8", decode_responses=True
         )
@@ -31,21 +31,23 @@ class Handler:
         while not self.is_shutdown:
             tasks = []
             current = int(datetime.now().timestamp())
-            keys = await redis.keys('tracking:*')
-            splits = [key.split(':')[1:] + [key] for key in keys]
+            keys = await redis.keys("tracking:*")
+            splits = [key.split(":")[1:] + [key] for key in keys]
             for timestamp, env, api, platform, endpoint, key in splits:
                 timestamp = int(timestamp)
                 if timestamp <= last_timestamp or timestamp >= current:
                     continue
                 for key, val in (await redis.hgetall(key)).items():
-                    tasks.append([
-                        int(key),
-                        int(val),
-                        datetime.fromtimestamp(timestamp),
-                        platform.upper(),
-                        endpoint,
-                        api
-                    ])
+                    tasks.append(
+                        [
+                            int(key),
+                            int(val),
+                            datetime.fromtimestamp(timestamp),
+                            platform.upper(),
+                            endpoint,
+                            api,
+                        ]
+                    )
             if tasks:
                 async with db.acquire() as connection:
                     query = """INSERT INTO "tracking"."requests" 

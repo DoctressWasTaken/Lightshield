@@ -15,8 +15,9 @@ class Object(object):
             setattr(self, key, value)
 
     def get(self):
-        filtered_dict = {key: val for key, val in self.__dict__.items() if
-                         not key.startswith('_')}
+        filtered_dict = {
+            key: val for key, val in self.__dict__.items() if not key.startswith("_")
+        }
         return {
             **{
                 key: val.get() if type(val) == Object else val
@@ -79,7 +80,11 @@ class Config:
         del self.file
 
     def print(self):
-        filtered_dict = {key: val for key, val in self.__dict__.items() if not key.startswith('_') and val}
+        filtered_dict = {
+            key: val
+            for key, val in self.__dict__.items()
+            if not key.startswith("_") and val
+        }
         pp.pprint(
             {
                 **{
@@ -90,7 +95,7 @@ class Config:
         )
 
     def _parse_var(
-            self, parent, key: str, expected_type: type = None, parent_name: str = None
+        self, parent, key: str, expected_type: type = None, parent_name: str = None
     ):
         """Handle the parsing."""
         try:
@@ -158,17 +163,11 @@ class Config:
             self.rabbitmq.port,
         )
 
-        db_connection = self._parse_var(connections, 'postgres', dict, "connections")
+        db_connection = self._parse_var(connections, "postgres", dict, "connections")
         self.db = Object(
-            host=self._parse_var(
-                db_connection, "host", str, "connections.postgres"
-            ),
-            port=self._parse_var(
-                db_connection, "port", int, "connections.postgres"
-            ),
-            user=self._parse_var(
-                db_connection, "user", str, "connections.postgres"
-            ),
+            host=self._parse_var(db_connection, "host", str, "connections.postgres"),
+            port=self._parse_var(db_connection, "port", int, "connections.postgres"),
+            user=self._parse_var(db_connection, "user", str, "connections.postgres"),
             password=os.environ.get(
                 self._parse_var(
                     db_connection, "password_env", str, "connections.postgres"
@@ -177,7 +176,7 @@ class Config:
             ),
             database=self._parse_var(
                 db_connection, "database", str, "connections.postgres"
-            )
+            ),
         )
 
     def _parse_platforms(self):
@@ -231,9 +230,11 @@ class Config:
                     }
                 ),
             ),
-            puuid_collector=Object(ratelimit=self._get_deep(
-                services, ["puuid_collector", "ratelimit"], None
-            ), ),
+            puuid_collector=Object(
+                ratelimit=self._get_deep(
+                    services, ["puuid_collector", "ratelimit"], None
+                ),
+            ),
             match_history=Object(
                 ratelimit=self._get_deep(
                     services, ["match_history", "ratelimit"], None

@@ -17,7 +17,6 @@ load_dotenv()
 
 default_services = (
     "tracker",
-
     "league_ranking",
     "puuid_collector",
     "summoner_tracker",
