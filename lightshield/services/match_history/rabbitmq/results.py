@@ -106,8 +106,6 @@ class Handler:
             async with connection.transaction():
                 prep = await connection.prepare(queries.update_players)
                 await prep.executemany(tasks)
-                self.logging.info("Removing %s summoners", len(puuids))
-                self.logging.info(puuids)
                 try:
                     await connection.execute(queries.drop_from_queue, puuids)
                 except Exception as err:
