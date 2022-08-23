@@ -51,6 +51,6 @@ update_players = """
             """
 
 drop_from_queue = """
-            DELETE FROM summoner
+            DELETE FROM match_history_queue
             WHERE puuid = ANY($1::VARCHAR[])
             """
