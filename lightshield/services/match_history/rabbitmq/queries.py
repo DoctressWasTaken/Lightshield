@@ -52,5 +52,5 @@ update_players = """
 
 drop_from_queue = """
             DELETE FROM summoner
-            WHERE puuid = ANY($1::varchar[])
+            WHERE puuid = ANY($1::VARCHAR[])
             """
