@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS match_history_queue AS (
            last_history_update,
            last_activity,
            platform,
+           NULL::INT AS category,
            NOW() AS added
     FROM summoner
     LIMIT 0
