@@ -308,7 +308,3 @@ class Connection:
             database=self.con.database,
             password=self.con.password,
         )
-
-    async def close(self):
-        """Close the pool."""
-        await self.database.close()

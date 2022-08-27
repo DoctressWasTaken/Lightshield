@@ -41,7 +41,7 @@ class Handler:
 
     async def handle_shutdown(self):
         """Close db connection pool after services have shut down."""
-        await self.connector.close()
+        await self.db.close()
         await self.pika.close()
 
     async def gather_tasks(self, platform, count):
