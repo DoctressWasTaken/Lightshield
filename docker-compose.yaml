@@ -28,9 +28,6 @@ services:
       - RABBITMQ_LOGS=-
     volumes:
       - 'rabbitmq_data:/var/lib/rabbitmq'
-    profiles:
-      - all
-      - peripheral
   redis:
     hostname: redis
     image: redis:7.0-rc
