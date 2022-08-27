@@ -31,7 +31,7 @@ class QueueHandler:
             self.connection = await connect_robust(self.connect_string)
         self.channel = await self.connection.channel()
         await self.channel.set_qos(prefetch_count=prefetch_count)
-        await self.channel.declare_queue(self.queue, durable=durable)
+        await self.channel.declare_queue(self.queue, durable=durable, arguments={'x-message-deduplication': True})
 
     async def wait_threshold(self, threshold) -> int:
         """Blocking loop until the queue has reached a lower threshold."""

@@ -21,14 +21,16 @@ services:
       - peripheral
   rabbitmq:
     hostname: rabbitmq
-    image: docker.io/bitnami/rabbitmq:3.10
+    build:
+      dockerfile: Dockerfile_RabbitMQ
+      context: .
     ports:
       - '127.0.0.1:5672:5672'
       - '127.0.0.1:15672:15672'
     environment:
       - RABBITMQ_LOGS=-
     volumes:
-      - 'rabbitmq_data:/bitnami/rabbitmq/mnesia'
+      - 'rabbitmq_data:/var/lib/rabbitmq'
     profiles:
       - all
       - peripheral
@@ -44,7 +46,7 @@ services:
 
   tracker:
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: tracker
@@ -65,7 +67,7 @@ services:
     hostname: league_ranking
     image: doctress/lightshield/league_ranking:${TAG}
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: league_ranking
@@ -84,7 +86,7 @@ services:
   puuid_collector:
     image: doctress/lightshield/puuid_collector:${TAG}
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: puuid_collector
@@ -101,7 +103,7 @@ services:
   puuid_collector_tasks:
     image: doctress/lightshield/puuid_collector_tasks:${TAG}
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: puuid_collector
@@ -119,7 +121,7 @@ services:
   puuid_collector_results:
     image: doctress/lightshield/puuid_collector_results:${TAG}
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: puuid_collector
@@ -140,7 +142,7 @@ services:
     image: doctress/lightshield/match_history:${TAG}
     hostname: match_history
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: match_history
@@ -157,7 +159,7 @@ services:
   match_history_tasks:
     image: doctress/lightshield/match_history_tasks:${TAG}
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: match_history
@@ -175,7 +177,7 @@ services:
   match_history_results:
     image: doctress/lightshield/match_history_results:${TAG}
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: match_history
@@ -195,7 +197,7 @@ services:
   match_details:
     image: doctress/lightshield/match_details:${TAG}
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: match_details
@@ -215,7 +217,7 @@ services:
   match_details_tasks:
     image: doctress/lightshield/match_details_tasks:${TAG}
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: match_details
@@ -233,7 +235,7 @@ services:
   match_details_results:
     image: doctress/lightshield/match_details_results:${TAG}
     build:
-      dockerfile: Service_Dockerfile
+      dockerfile: Dockerfile_Service
       context: .
       args:
         service: match_details
