@@ -61,7 +61,8 @@ services:
     profiles:
       - peripheral
       - all
-
+    depends_on:
+      - redis
 
   league_ranking:
     hostname: league_ranking
@@ -80,6 +81,9 @@ services:
     profiles:
       - league_ranking
       - all
+    depends_on:
+      - rabbitmq
+      - proxy
 
 ### PUUID Collector
 
@@ -99,6 +103,9 @@ services:
     profiles:
       - puuid_collector
       - all
+    depends_on:
+      - rabbitmq
+      - proxy
 
   puuid_collector_tasks:
     image: doctress/lightshield/puuid_collector_tasks:${TAG}
@@ -117,6 +124,8 @@ services:
     profiles:
       - puuid_collector
       - all
+    depends_on:
+      - rabbitmq
 
   puuid_collector_results:
     image: doctress/lightshield/puuid_collector_results:${TAG}
@@ -135,6 +144,8 @@ services:
     profiles:
       - puuid_collector
       - all
+    depends_on:
+      - rabbitmq
 
 ### Match History
 
@@ -155,6 +166,9 @@ services:
     profiles:
       - match_history
       - all
+    depends_on:
+      - rabbitmq
+      - proxy
 
   match_history_tasks:
     image: doctress/lightshield/match_history_tasks:${TAG}
@@ -173,6 +187,8 @@ services:
     profiles:
       - match_history
       - all
+    depends_on:
+      - rabbitmq
 
   match_history_results:
     image: doctress/lightshield/match_history_results:${TAG}
@@ -191,6 +207,8 @@ services:
     profiles:
       - match_history
       - all
+    depends_on:
+      - rabbitmq
 
 ### Match Details
 
@@ -213,6 +231,9 @@ services:
     profiles:
       - match_details
       - all
+    depends_on:
+      - rabbitmq
+      - proxy
 
   match_details_tasks:
     image: doctress/lightshield/match_details_tasks:${TAG}
@@ -231,6 +252,8 @@ services:
     profiles:
       - match_details
       - all
+    depends_on:
+      - rabbitmq
 
   match_details_results:
     image: doctress/lightshield/match_details_results:${TAG}
@@ -249,6 +272,8 @@ services:
     profiles:
       - match_details
       - all
+    depends_on:
+      - rabbitmq
 
 
 volumes:
