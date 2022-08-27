@@ -54,7 +54,3 @@ update_players = """
                 WHERE puuid = $1
             """
 
-drop_from_queue = """
-            DELETE FROM match_history_queue
-            WHERE puuid = ANY($1::VARCHAR[])
-            """
