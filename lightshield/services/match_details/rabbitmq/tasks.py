@@ -89,13 +89,13 @@ class Handler:
             break
 
 
-async def run(self):
-    """Run."""
-    await self.init()
-    await asyncio.gather(
-        *[
-            asyncio.create_task(self.platform_handler(platform))
-            for platform in self.platforms
-        ]
-    )
-    await self.handle_shutdown()
+    async def run(self):
+        """Run."""
+        await self.init()
+        await asyncio.gather(
+            *[
+                asyncio.create_task(self.platform_handler(platform))
+                for platform in self.platforms
+            ]
+        )
+        await self.handle_shutdown()
