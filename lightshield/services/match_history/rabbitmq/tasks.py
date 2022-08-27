@@ -73,39 +73,32 @@ class Handler:
         await handler.init(durable=True, connection=self.pika)
 
         while not self.is_shutdown:
-            async with self.db.acquire() as connection:
-                await connection.execute("""
-                    DELETE FROM match_history_queue
-                    WHERE platform = $1
-                    AND added < NOW() - '30 minutes'::INTERVAL
-                """, platform)  # Cleanup query for tasks left in the table by accident
-                remaining_tasks = await connection.fetchval(
-                    """SELECT COUNT(DISTINCT puuid) FROM match_history_queue WHERE platform  = $1 """,
-                    platform,
-                )
-            tasks_to_pull = expected_size - remaining_tasks
-            if tasks_to_pull < 500:  # Queue full enough to skip
-                await asyncio.sleep(10)
-                continue
-            self.logging.info(
-                "Queue too empty, attempting to find %s new tasks", tasks_to_pull
+            for i in range(10):
+                await asyncio.sleep(2)
+                if self.is_shutdown:
+                    break
+
+            remaining_tasks = await handler.wait_threshold(int(0.75 * expected_size))
+
+            tasks = await self.gather_tasks(
+                platform=platform, count=expected_size - remaining_tasks + 500
             )
+            if not tasks:
+                continue
 
             task_list = [
-                (
-                    task["puuid"],
-                    task["latest_match"],
-                    task["last_history_update"],
-                )
-                for task in await self.gather_tasks(
-                    platform=platform, count=tasks_to_pull
-                )
+                [
+                    pickle.dumps((
+                        task["puuid"],
+                        task["latest_match"],
+                        task["last_history_update"],
+                    )),
+                    task["puuid"]
+                ]
+                for task in tasks
             ]
-            to_add = [pickle.dumps(entry) for entry in task_list]
-            if not to_add:
-                await asyncio.sleep(10)
-                continue
-            await handler.send_tasks(to_add, persistent=True)
+
+            await handler.send_tasks(task_list, persistent=True)
 
     async def run(self):
         """Run."""
