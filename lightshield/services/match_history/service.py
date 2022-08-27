@@ -131,9 +131,8 @@ class Platform:
         try:
             task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
             await task_queue.init(
-                durable=True, prefetch_count=100, connection=self.handler.pika
+                durable=True, prefetch_count=100, connection=self.handler.pika,
             )
-
             self.matches_queue = QueueHandler(
                 "match_history_results_matches_%s" % self.platform
             )

@@ -31,10 +31,11 @@ class Platform:
         self.channel = await self.handler.pika.channel()
         await self.channel.set_qos(prefetch_count=self.parallel)
         task_queue = await self.channel.declare_queue(
-            "puuid_tasks_%s" % self.platform, durable=True, passive=True
+            "puuid_tasks_%s" % self.platform, durable=True, passive=True,
+            arguments={'x-message-deduplication': True}
         )
         await self.channel.declare_queue(
-            "puuid_results_found_%s" % self.platform, durable=True
+            "puuid_results_found_%s" % self.platform, durable=True,
         )
         await self.channel.declare_queue(
             "puuid_results_not_found_%s" % self.platform, durable=True
