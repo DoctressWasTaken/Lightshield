@@ -16,9 +16,6 @@ services:
       - "127.0.0.1:8888:8888"
     depends_on:
       - redis
-    profiles:
-      - all
-      - peripheral
   rabbitmq:
     hostname: rabbitmq
     build:
@@ -40,9 +37,6 @@ services:
     restart: always
     ports:
       - "127.0.0.1:6379:6379"
-    profiles:
-      - all
-      - peripheral
 
   tracker:
     build:
@@ -58,9 +52,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run tracker"
     restart: always
-    profiles:
-      - peripheral
-      - all
     depends_on:
       - redis
 
@@ -78,9 +69,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run league_ranking"
     restart: always
-    profiles:
-      - league_ranking
-      - all
     depends_on:
       - rabbitmq
       - proxy
@@ -100,9 +88,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector"
     restart: always
-    profiles:
-      - puuid_collector
-      - all
     depends_on:
       - rabbitmq
       - proxy
@@ -123,9 +108,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.tasks"
     restart: always
-    profiles:
-      - puuid_collector
-      - all
     depends_on:
       - rabbitmq
 
@@ -143,9 +125,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.results"
     restart: always
-    profiles:
-      - puuid_collector
-      - all
     depends_on:
       - rabbitmq
 
@@ -165,9 +144,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run match_history"
     restart: always
-    profiles:
-      - match_history
-      - all
     depends_on:
       - rabbitmq
       - proxy
@@ -188,9 +164,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run match_history.rabbitmq.tasks"
     restart: always
-    profiles:
-      - match_history
-      - all
     depends_on:
       - rabbitmq
 
@@ -208,9 +181,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run match_history.rabbitmq.results"
     restart: always
-    profiles:
-      - match_history
-      - all
     depends_on:
       - rabbitmq
 
@@ -232,9 +202,6 @@ services:
         source: ${DETAILS_LOCATION:-./data}
         target: /data
     restart: always
-    profiles:
-      - match_details
-      - all
     depends_on:
       - rabbitmq
       - proxy
@@ -255,9 +222,6 @@ services:
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     restart: always
-    profiles:
-      - match_details
-      - all
     depends_on:
       - rabbitmq
 
@@ -275,9 +239,6 @@ services:
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     restart: always
-    profiles:
-      - match_details
-      - all
     depends_on:
       - rabbitmq
 
