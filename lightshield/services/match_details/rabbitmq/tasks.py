@@ -6,7 +6,7 @@ import aio_pika
 import asyncpg
 
 from lightshield.services.match_details.rabbitmq import queries
-from lightshield.rabbitmq_defaults import QueueHandler, Buffer
+from lightshield.rabbitmq_defaults import QueueHandler
 from lightshield.config import Config
 
 
@@ -64,7 +64,6 @@ class Handler:
         # setup
         expected_size = 4000
 
-        task_backlog = []
         handler = QueueHandler("match_details_tasks_%s" % platform)
         self.handlers.append(handler)
         await handler.init(durable=True, connection=self.pika)
@@ -75,7 +74,7 @@ class Handler:
                 if self.is_shutdown:
                     break
 
-            remaining_tasks = await handler.wait_threshold(int(0.75 * expected_size))
+            await handler.wait_threshold(int(0.75 * expected_size))
 
             tasks = await self.gather_tasks(
                 platform=platform, count=expected_size + 500

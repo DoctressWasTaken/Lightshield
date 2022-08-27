@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from lightshield.config import Config
 from lightshield.services.match_history.rabbitmq import queries
-from lightshield.rabbitmq_defaults import QueueHandler, Buffer
+from lightshield.rabbitmq_defaults import QueueHandler
 
 
 class Handler:
@@ -78,7 +78,7 @@ class Handler:
                 if self.is_shutdown:
                     break
 
-            remaining_tasks = await handler.wait_threshold(int(0.75 * expected_size))
+            await handler.wait_threshold(int(0.75 * expected_size))
 
             tasks = await self.gather_tasks(
                 platform=platform, count=expected_size + 500
