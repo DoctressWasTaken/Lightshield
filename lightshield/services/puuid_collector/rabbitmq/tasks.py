@@ -61,32 +61,28 @@ class Handler:
 
     async def platform_handler(self, platform):
         self.logging.info("Worker %s up.", platform)
-        buffer = Buffer(platform)
+        expected_size = 4000
         # setup
-        task_backlog = []
         handler = QueueHandler("puuid_tasks_%s" % platform)
         self.handlers.append(handler)
         await handler.init(durable=True, connection=self.pika)
 
-        await handler.wait_threshold(0)
-
         while not self.is_shutdown:
-            remaining_tasks = await handler.wait_threshold(buffer.get_refill_count())
+            for i in range(10):
+                await asyncio.sleep(2)
+                if self.is_shutdown:
+                    break
 
-            if not buffer.needs_refill(remaining_tasks):
+            remaining_tasks = await handler.wait_threshold(int(0.75 * expected_size))
+
+            tasks = await self.gather_tasks(
+                platform=platform, count=expected_size - remaining_tasks + 500
+            )
+            if not tasks:
                 continue
 
-            while not self.is_shutdown:
-                tasks = await self.gather_tasks(
-                    platform=platform, count=buffer.buffer_size
-                )
-                task_list = [task["summoner_id"] for task in tasks]
-                to_add = [_id.encode() for _id in buffer.verify_tasks(task_list)]
-                if not to_add:
-                    await asyncio.sleep(10)
-                    continue
-                await handler.send_tasks(to_add, persistent=True)
-                break
+            task_list = [[task["summoner_id"], task["summoner_id"].encode()] for task in tasks]
+            await handler.send_tasks(task_list, persistent=True)
 
     async def run(self):
         """Run."""

@@ -106,6 +106,8 @@ services:
     depends_on:
       - rabbitmq
       - proxy
+      - puuid_collector_tasks
+      - puuid_collector_results
 
   puuid_collector_tasks:
     image: doctress/lightshield/puuid_collector_tasks:${TAG}
@@ -169,6 +171,8 @@ services:
     depends_on:
       - rabbitmq
       - proxy
+      - match_history_tasks
+      - match_history_results
 
   match_history_tasks:
     image: doctress/lightshield/match_history_tasks:${TAG}
@@ -234,6 +238,8 @@ services:
     depends_on:
       - rabbitmq
       - proxy
+      - match_details_tasks
+      - match_details_results
 
   match_details_tasks:
     image: doctress/lightshield/match_details_tasks:${TAG}
