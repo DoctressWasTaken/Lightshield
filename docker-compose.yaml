@@ -49,8 +49,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run tracker"
     restart: always
-    depends_on:
-      - redis
 
   league_ranking:
     hostname: league_ranking
@@ -66,9 +64,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run league_ranking"
     restart: always
-    depends_on:
-      - rabbitmq
-      - proxy
 
 ### PUUID Collector
 
@@ -85,11 +80,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector"
     restart: always
-    depends_on:
-      - rabbitmq
-      - proxy
-      - puuid_collector_tasks
-      - puuid_collector_results
 
   puuid_collector_tasks:
     image: doctress/lightshield/puuid_collector_tasks:${TAG}
@@ -105,8 +95,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.tasks"
     restart: always
-    depends_on:
-      - rabbitmq
 
   puuid_collector_results:
     image: doctress/lightshield/puuid_collector_results:${TAG}
@@ -122,8 +110,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.results"
     restart: always
-    depends_on:
-      - rabbitmq
 
 ### Match History
 
@@ -141,11 +127,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run match_history"
     restart: always
-    depends_on:
-      - rabbitmq
-      - proxy
-      - match_history_tasks
-      - match_history_results
 
   match_history_tasks:
     image: doctress/lightshield/match_history_tasks:${TAG}
@@ -161,8 +142,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run match_history.rabbitmq.tasks"
     restart: always
-    depends_on:
-      - rabbitmq
 
   match_history_results:
     image: doctress/lightshield/match_history_results:${TAG}
@@ -178,8 +157,6 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run match_history.rabbitmq.results"
     restart: always
-    depends_on:
-      - rabbitmq
 
 ### Match Details
 
@@ -199,11 +176,6 @@ services:
         source: ${DETAILS_LOCATION:-./data}
         target: /data
     restart: always
-    depends_on:
-      - rabbitmq
-      - proxy
-      - match_details_tasks
-      - match_details_results
 
   match_details_tasks:
     image: doctress/lightshield/match_details_tasks:${TAG}
@@ -219,8 +191,6 @@ services:
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     restart: always
-    depends_on:
-      - rabbitmq
 
   match_details_results:
     image: doctress/lightshield/match_details_results:${TAG}
@@ -236,8 +206,6 @@ services:
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     restart: always
-    depends_on:
-      - rabbitmq
 
 
 volumes:
