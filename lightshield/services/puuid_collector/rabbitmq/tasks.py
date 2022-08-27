@@ -76,7 +76,7 @@ class Handler:
             remaining_tasks = await handler.wait_threshold(int(0.75 * expected_size))
 
             tasks = await self.gather_tasks(
-                platform=platform, count=expected_size - remaining_tasks + 500
+                platform=platform, count=expected_size + 500
             )
             if not tasks:
                 continue
