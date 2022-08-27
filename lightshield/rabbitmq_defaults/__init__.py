@@ -57,11 +57,11 @@ class QueueHandler:
             *[
                 asyncio.create_task(
                     self.channel.default_exchange.publish(
-                        Message(task[1], delivery_mode=delivery_mode, headers={'x-deduplication-header': task[0]}),
+                        Message(task, delivery_mode=delivery_mode, headers={'x-deduplication-header': header}),
                         routing_key=self.queue,
                     )
                 )
-                for task in tasks
+                for header, task in tasks
             ]
         )
 

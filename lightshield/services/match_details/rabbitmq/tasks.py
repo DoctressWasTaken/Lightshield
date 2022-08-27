@@ -62,46 +62,40 @@ class Handler:
 
     async def platform_handler(self, platform):
         # setup
-        buffer = Buffer(platform, block_size=500, blocks=16)
+        expected_size = 4000
 
         task_backlog = []
         handler = QueueHandler("match_details_tasks_%s" % platform)
         self.handlers.append(handler)
         await handler.init(durable=True, connection=self.pika)
 
-        await handler.wait_threshold(0)
-
         while not self.is_shutdown:
-            remaining_tasks = await handler.wait_threshold(buffer.get_refill_count())
+            for i in range(10):
+                await asyncio.sleep(2)
+                if self.is_shutdown:
+                    break
 
-            if not buffer.needs_refill(remaining_tasks):
+            remaining_tasks = await handler.wait_threshold(int(0.75 * expected_size))
+
+            tasks = await self.gather_tasks(
+                platform=platform, count=expected_size - remaining_tasks + 500
+            )
+            if not tasks:
                 continue
 
-            while not self.is_shutdown:
-                tasks = await self.gather_tasks(
-                    platform=platform, count=buffer.buffer_size
-                )
-                # convert to list
+            task_list = [[task["match_id"], task["match_id"].encode()] for task in tasks]
 
-                task_list = [task["match_id"] for task in tasks]
-                to_add = [str(_id).encode() for _id in buffer.verify_tasks(task_list)]
+            await handler.send_tasks(task_list, persistent=True)
+            break
 
-                if not to_add:
-                    await asyncio.sleep(10)
-                    continue
-                self.logging.info(
-                    "%s\t| Refilling queue by %s tasks", platform, len(to_add)
-                )
-                await handler.send_tasks(to_add, persistent=True)
-                break
 
-    async def run(self):
-        """Run."""
-        await self.init()
-        await asyncio.gather(
-            *[
-                asyncio.create_task(self.platform_handler(platform))
-                for platform in self.platforms
-            ]
-        )
-        await self.handle_shutdown()
+async def run(self):
+    """Run."""
+    await self.init()
+    await asyncio.gather(
+        *[
+            asyncio.create_task(self.platform_handler(platform))
+            for platform in self.platforms
+        ]
+    )
+    await self.handle_shutdown()

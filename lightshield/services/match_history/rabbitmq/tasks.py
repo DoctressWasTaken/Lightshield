@@ -88,12 +88,12 @@ class Handler:
 
             task_list = [
                 [
+                    task["puuid"],
                     pickle.dumps((
                         task["puuid"],
                         task["latest_match"],
                         task["last_history_update"],
                     )),
-                    task["puuid"]
                 ]
                 for task in tasks
             ]
