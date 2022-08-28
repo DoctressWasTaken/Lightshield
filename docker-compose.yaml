@@ -169,9 +169,10 @@ services:
       context: .
       args:
         service: match_details
-    entrypoint: "poetry run lightshield run match_details"
+    entrypoint: "poetry run lightshield run match_details.worker"
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
       - type: bind
@@ -186,7 +187,7 @@ services:
       context: .
       args:
         service: match_details
-    entrypoint: "poetry run lightshield run match_details.rabbitmq.tasks"
+    entrypoint: "poetry run lightshield run match_details.tasks"
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -201,7 +202,7 @@ services:
       context: .
       args:
         service: match_details
-    entrypoint: "poetry run lightshield run match_details.rabbitmq.results"
+    entrypoint: "poetry run lightshield run match_details.results"
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

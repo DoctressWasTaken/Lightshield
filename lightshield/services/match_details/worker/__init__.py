@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 
-from lightshield.services.match_details.service import Platform
+from lightshield.services.match_details.worker.service import Platform
 import aio_pika
 from lightshield.config import Config
 
@@ -33,11 +33,13 @@ class Handler:
                     self.platforms[platform] = Platform(
                         region, platform, self.config, self, self.semaphores[region]
                     )
+        self.connector = self.config.get_db_connection()
 
     async def init(self):
         self.pika = await aio_pika.connect_robust(
             self.config.rabbitmq._string, loop=asyncio.get_event_loop()
         )
+        self.db = await self.connector.init()
 
     async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""

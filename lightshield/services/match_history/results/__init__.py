@@ -95,7 +95,7 @@ class Handler:
 
     async def platform_thread(self, platform):
         try:
-            matches_queue = QueueHandler("match_history_results_matches_%s" % platform)
+            matches_queue = QueueHandler("match_history_results_%s" % platform)
             await matches_queue.init(durable=True, connection=self.pika)
 
             self.buffered_tasks[platform] = {"matches": []}

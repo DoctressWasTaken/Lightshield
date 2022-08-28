@@ -11,7 +11,7 @@ import pickle
 
 class Platform:
     task_queue = None
-    matches_queue_200 = matches_queue_404 = summoner_queue = None
+    summoner_queue = None
 
     def __init__(self, region, platform, config, handler, semaphore):
         self.region = region
@@ -22,12 +22,40 @@ class Platform:
         self.service = config.services.match_details
         self.output_folder = self.service.output
         self.retry_after = datetime.now()
+
+        # Internal queue for updates
+        self.match_200 = asyncio.Queue()
+        self.match_404 = asyncio.Queue()
+
         self.proxy = handler.proxy
         self.endpoint_url = (
             f"{config.proxy.protocol}://{self.region.lower()}.api.riotgames.com"
             f"/lol/match/v5/matches/%s_%s"
         )
         self.request_counter = {}
+
+    async def update_users(self):
+        """Batch insert updates into postgres and marks the rabbitmq messages as completed."""
+
+        while True:
+            if self.summoner_updates.qsize() >= 50 or self.handler.is_shutdown:
+                summoners = []
+                while True:
+                    try:
+                        summoners.append(self.summoner_updates.get_nowait())
+                        self.summoner_updates.task_done()
+                    except:
+                        break
+                async with self.handler.db.acquire() as connection:
+                    async with connection.transaction():
+                        prep = await connection.prepare(queries.update_players)
+
+                        await prep.executemany([task["data"] for task in summoners])
+                        for task in summoners:
+                            await task["message"].ack()
+            if self.handler.is_shutdown:
+                break
+            await asyncio.sleep(2)
 
     async def add_tracking(self):
         now = int(datetime.now().timestamp() // 600 * 600)
@@ -45,29 +73,64 @@ class Platform:
         await task_queue.init(
             durable=True, prefetch_count=100, connection=self.handler.pika
         )
-
-        self.matches_queue_200 = QueueHandler(
-            "match_details_results_matches_200_%s" % self.platform
-        )
-        await self.matches_queue_200.init(durable=True, connection=self.handler.pika)
-
-        self.matches_queue_404 = QueueHandler(
-            "match_details_results_matches_404_%s" % self.platform
-        )
-        await self.matches_queue_404.init(durable=True, connection=self.handler.pika)
-
         self.summoner_queue = QueueHandler(
-            "match_details_results_summoners_%s" % self.platform
+            "match_details_results_%s" % self.platform
         )
         await self.summoner_queue.init(durable=True, connection=self.handler.pika)
+        inserter = asyncio.create_task(self.update_matches())
 
         cancel_consume = await task_queue.consume_tasks(self.process_tasks)
         conn = aiohttp.TCPConnector(limit=0)
         self.session = aiohttp.ClientSession(connector=conn)
         while not self.handler.is_shutdown:
             await asyncio.sleep(1)
-        await cancel_consume()
-        await asyncio.sleep(10)
+        await asyncio.gather(
+            inserter,
+            asyncio.create_task(cancel_consume()),
+            asyncio.create_task(asyncio.sleep(10))
+        )
+
+    async def update_matches(self):
+        """Batch insert updates into postgres and marks the rabbitmq messages as completed."""
+        self.logging.info("Started matches updater.")
+        while True:
+            if self.match_200.qsize() + self.match_404.qsize() >= 50 or self.handler.is_shutdown:
+                matches_200 = []
+                while True:
+                    try:
+                        matches_200.append(self.match_200.get_nowait())
+                        self.match_200.task_done()
+                    except:
+                        break
+                matches_404 = []
+                while True:
+                    try:
+                        matches_404.append(self.match_404.get_nowait())
+                        self.match_404.task_done()
+                    except:
+                        break
+                async with self.handler.db.acquire() as connection:
+                    async with connection.transaction():
+                        prep = await connection.prepare(
+                            queries.flush_found.format(
+                                platform_lower=platform.lower(),
+                                platform=platform,
+                            )
+                        )
+                        await prep.executemany([task["data"] for task in matches_200])
+                        for task in matches_200:
+                            await task["message"].ack()
+
+                        prep = await connection.prepare(
+                            queries.flush_missing.format(
+                                platform_lower=platform.lower(),
+                                platform=platform,
+                            )
+                        )
+                        await prep.executemany([task["data"] for task in matches_404])
+            if self.handler.is_shutdown:
+                break
+            await asyncio.sleep(2)
 
     async def process_tasks(self, message):
         async with message.process(ignore_processed=True):
@@ -87,14 +150,14 @@ class Platform:
                             data, _ = await asyncio.gather(response.json(), sleep)
                     match response.status:
                         case 200:
-                            await self.parse_response(data, matchId)
-                            await message.ack()
+                            await self.parse_response(data, matchId, message)
                             return
                         case 404:
-                            await self.matches_queue_404.send_task(
-                                str(matchId).encode()
+                            await self.match_404.put(
+                                {'data': [str(matchId)],
+                                 'message': message
+                                 }
                             )
-                            await message.ack()
                             return
                         case 429:
                             await asyncio.sleep(0.5)
@@ -108,21 +171,25 @@ class Platform:
                     await self.add_tracking()
             await message.reject(requeue=True)
 
-    async def parse_response(self, response, matchId):
+    async def parse_response(self, response, matchId, message):
         if response["info"]["queueId"] == 0:
-            await self.matches_queue_404.send_tasks([str(matchId).encode()])
+            await self.match_404.put(
+                {'data': [str(matchId)],
+                 'message': message
+                 }
+            )
             return
 
         queue = response["info"]["queueId"]
         creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
         patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
         if (
-            "gameStartTimestamp" in response["info"]
-            and "gameEndTimestamp" in response["info"]
+                "gameStartTimestamp" in response["info"]
+                and "gameEndTimestamp" in response["info"]
         ):
             game_duration = (
-                response["info"]["gameEndTimestamp"]
-                - response["info"]["gameStartTimestamp"]
+                    response["info"]["gameEndTimestamp"]
+                    - response["info"]["gameStartTimestamp"]
             )
         else:
             game_duration = response["info"]["gameDuration"]
@@ -151,19 +218,17 @@ class Platform:
         day = creation.strftime("%Y_%m_%d")
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
         # Match Update
-        await self.matches_queue_200.send_tasks(
-            [
-                pickle.dumps(
-                    (
-                        queue,
-                        creation,
-                        patch_int,
-                        game_duration,
-                        win,
-                        matchId,
-                    )
-                )
-            ]
+        await self.match_200.put(
+            {'data': (
+                queue,
+                creation,
+                patch_int,
+                game_duration,
+                win,
+                matchId,
+            ),
+                'message': message
+            }
         )
         # Saving
         path = os.path.join(self.output_folder, "details", patch, day, self.platform)
@@ -172,7 +237,7 @@ class Platform:
         filename = os.path.join(path, "%s_%s.json" % (self.platform, matchId))
         if not os.path.isfile(filename):
             with open(
-                filename,
-                "w+",
+                    filename,
+                    "w+",
             ) as file:
                 file.write(json.dumps(response))
