@@ -18,8 +18,10 @@ load_dotenv()
 default_services = (
     "tracker",
     "league_ranking",
-    "puuid_collector",
     "summoner_tracker",
+    "puuid_collector.worker",
+    "puuid_collector.tasks",
+    "puuid_collector.results",
     "match_history",
     "match_history.rabbitmq.tasks",
     "match_history.rabbitmq.results",
@@ -27,8 +29,6 @@ default_services = (
     "match_details.rabbitmq.tasks",
     "match_details.rabbitmq.results",
     "match_timeline",
-    "puuid_collector.rabbitmq.tasks",
-    "puuid_collector.rabbitmq.results",
 )
 
 

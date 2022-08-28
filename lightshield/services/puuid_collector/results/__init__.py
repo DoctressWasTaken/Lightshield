@@ -1,16 +1,12 @@
 """Summoner ID Task Selector."""
 import asyncio
 import logging
-import math
-import os
 import aio_pika
-import asyncpg
-import json
 from datetime import datetime
 import pickle
 
 from lightshield.config import Config
-from lightshield.services.puuid_collector.rabbitmq import queries
+from lightshield.services.puuid_collector import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 
 
@@ -49,7 +45,7 @@ class Handler:
             self.buffered_tasks[platform][_type].append(message.body)
             await message.ack()
 
-    async def insert_found(self, platform):
+    async def insert_summoners(self, platform):
         if not self.buffered_tasks[platform]["found"]:
             return
         tasks = self.buffered_tasks[platform]["found"].copy()
@@ -57,21 +53,14 @@ class Handler:
         tasks = [pickle.loads(task) for task in tasks]
         self.logging.info(" %s\t | Inserting %s tasks", platform, len(tasks))
         async with self.db.acquire() as connection:
-            prep = await connection.prepare(
-                queries.update_ranking.format(
-                    platform=platform,
-                    platform_lower=platform.lower(),
-                )
-            )
-            await prep.executemany([task[:2] for task in tasks])
             converted_results = [
                 [
-                    res[1],
-                    res[2],
-                    datetime.fromtimestamp(res[3] / 1000),
+                    task[0],
+                    task[1],
+                    datetime.fromtimestamp(task[2] / 1000),
                     platform,
                 ]
-                for res in tasks
+                for task in tasks
             ]
             prep = await connection.prepare(
                 queries.insert_summoner.format(
@@ -81,46 +70,17 @@ class Handler:
             )
             await prep.executemany(converted_results)
 
-    async def insert_not_found(self, platform):
-        if not self.buffered_tasks[platform]["not_found"]:
-            return
-        tasks = self.buffered_tasks[platform]["not_found"].copy()
-        self.buffered_tasks[platform]["not_found"] = []
-        tasks = [task.decode("utf-8") for task in tasks]
-        self.logging.info(" %s\t | Inserting %s not found", platform, len(tasks))
-
-        async with self.db.acquire() as connection:
-            await connection.execute(
-                queries.missing_summoner.format(
-                    platform=platform,
-                    platform_lower=platform.lower(),
-                ),
-                tasks,
-            )
-            del tasks
-        for i in range(30):
-            await asyncio.sleep(2)
-            if self.is_shutdown:
-                continue
-
     async def platform_thread(self, platform):
-        self.buffered_tasks[platform] = {"found": [], "not_found": []}
-        found_queue = QueueHandler("puuid_results_found_%s" % platform)
-        await found_queue.init(durable=True, connection=self.pika)
-        not_found_queue = QueueHandler("puuid_results_not_found_%s" % platform)
-        await not_found_queue.init(durable=True, connection=self.pika)
-
-        cancel_consume_found = await found_queue.consume_tasks(
+        self.buffered_tasks[platform] = {"found": []}
+        summoners_queue = QueueHandler("puuid_results_%s" % platform)
+        await summoners_queue.init(durable=True, connection=self.pika)
+        cancel_consume_found = await summoners_queue.consume_tasks(
             self.process_results, {"platform": platform, "_type": "found"}
-        )
-        cancel_consume_not_found = await not_found_queue.consume_tasks(
-            self.process_results, {"platform": platform, "_type": "not_found"}
         )
 
         while not self.is_shutdown:
 
-            await self.insert_found(platform)
-            await self.insert_not_found(platform)
+            await self.insert_summoners(platform)
 
             for _ in range(30):
                 await asyncio.sleep(1)
@@ -128,10 +88,8 @@ class Handler:
                     break
 
         await cancel_consume_found()
-        await cancel_consume_not_found()
         await asyncio.sleep(2)
-        await self.insert_found(platform)
-        await self.insert_not_found(platform)
+        await self.insert_summoners(platform)
 
     async def run(self):
         """Run."""

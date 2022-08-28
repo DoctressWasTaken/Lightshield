@@ -1,11 +1,10 @@
 """Summoner ID Task Selector."""
 import asyncio
 import logging
-import math
 import aio_pika
 import asyncpg
 
-from lightshield.services.puuid_collector.rabbitmq import queries
+from lightshield.services.puuid_collector import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 from lightshield.config import Config
 
