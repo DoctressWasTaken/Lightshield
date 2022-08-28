@@ -61,7 +61,9 @@ class QueueHandler:
                         Message(
                             task,
                             delivery_mode=delivery_mode,
-                            headers={"x-deduplication-header": header} if deduplicate else None,
+                            headers={"x-deduplication-header": header}
+                            if deduplicate
+                            else None,
                         ),
                         routing_key=self.queue,
                     )
@@ -71,7 +73,9 @@ class QueueHandler:
             return_exceptions=True
         )
 
-    async def send_task(self, task: bin, header: str = None, persistent=True, deduplicate=False):
+    async def send_task(
+        self, task: bin, header: str = None, persistent=True, deduplicate=False
+    ):
         """Insert task into the queue.
 
         Tasks have to be prepared as a byte like object.
@@ -81,9 +85,11 @@ class QueueHandler:
             DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT
         )
         await self.channel.default_exchange.publish(
-            Message(task, delivery_mode=delivery_mode,
-                    headers={"x-deduplication-header": header} if deduplicate else None,
-                    ),
+            Message(
+                task,
+                delivery_mode=delivery_mode,
+                headers={"x-deduplication-header": header} if deduplicate else None,
+            ),
             routing_key=self.queue,
         )
 

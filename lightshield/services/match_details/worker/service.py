@@ -10,6 +10,7 @@ import pickle
 
 from lightshield.services.match_details import queries
 
+
 class Platform:
     task_queue = None
     summoner_queue = None

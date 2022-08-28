@@ -51,6 +51,7 @@ class Platform:
             asyncio.create_task(cancel_consume()),
             asyncio.create_task(asyncio.sleep(10)),
         )
+
     async def insert_updates(self):
         """Batch insert updates into postgres and marks the rabbitmq messages as completed."""
         self.logging.info("Started ranking updater.")
@@ -119,13 +120,13 @@ class Platform:
                     # Summoner insert goes into the next rabbitmq queue
                     await self.results_queue.send_task(
                         pickle.dumps(
-                                (
-                                    data["puuid"],
-                                    data["name"],
-                                    data["revisionDate"],
-                                )
-                            ),
-                        persistent=True
+                            (
+                                data["puuid"],
+                                data["name"],
+                                data["revisionDate"],
+                            )
+                        ),
+                        persistent=True,
                     )
                     # Ranking update goes into the internal queue
                     await self.results.put(
@@ -134,9 +135,7 @@ class Platform:
                     self.logging.debug("200 | %s", url)
                     return
                 case 404:
-                    await self.not_found.put(
-                        {"data": account_id, "message": message}
-                    )
+                    await self.not_found.put({"data": account_id, "message": message})
                     self.logging.debug("404 | %s", url)
                     return
                 case 429:

@@ -73,7 +73,9 @@ class Handler:
     async def platform_thread(self, platform):
         self.buffered_tasks[platform] = {"found": []}
         summoners_queue = QueueHandler("puuid_results_%s" % platform)
-        await summoners_queue.init(durable=True, prefetch_count=100, connection=self.pika)
+        await summoners_queue.init(
+            durable=True, prefetch_count=100, connection=self.pika
+        )
         cancel_consume_found = await summoners_queue.consume_tasks(
             self.process_results, {"platform": platform, "_type": "found"}
         )
