@@ -76,6 +76,7 @@ services:
         service: puuid_collector
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     entrypoint: "poetry run lightshield run puuid_collector.worker"
