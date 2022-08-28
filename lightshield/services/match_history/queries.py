@@ -21,6 +21,7 @@ get_tasks = """
                        last_history_update
                 FROM base
                 WHERE category < 10
+                ORDER BY category, last_history_update
                 LIMIT $5
                     """
 

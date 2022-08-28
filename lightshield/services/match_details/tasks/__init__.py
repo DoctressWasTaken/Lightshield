@@ -63,7 +63,6 @@ class Handler:
     async def platform_handler(self, platform):
         # setup
         expected_size = 4000
-
         handler = QueueHandler("match_details_tasks_%s" % platform)
         self.handlers.append(handler)
         await handler.init(durable=True, connection=self.pika)
@@ -87,7 +86,6 @@ class Handler:
             ]
 
             await handler.send_tasks(task_list, persistent=True)
-            break
 
     async def run(self):
         """Run."""
