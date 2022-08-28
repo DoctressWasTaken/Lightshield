@@ -8,6 +8,7 @@ import aiohttp
 from lightshield.rabbitmq_defaults import QueueHandler
 import pickle
 
+from lightshield.services.match_details import queries
 
 class Platform:
     task_queue = None
@@ -33,40 +34,6 @@ class Platform:
             f"/lol/match/v5/matches/%s_%s"
         )
         self.request_counter = {}
-
-    async def update_users(self):
-        """Batch insert updates into postgres and marks the rabbitmq messages as completed."""
-
-        while True:
-            if self.summoner_updates.qsize() >= 50 or self.handler.is_shutdown:
-                summoners = []
-                while True:
-                    try:
-                        summoners.append(self.summoner_updates.get_nowait())
-                        self.summoner_updates.task_done()
-                    except:
-                        break
-                async with self.handler.db.acquire() as connection:
-                    async with connection.transaction():
-                        prep = await connection.prepare(queries.update_players)
-
-                        await prep.executemany([task["data"] for task in summoners])
-                        for task in summoners:
-                            await task["message"].ack()
-            if self.handler.is_shutdown:
-                break
-            await asyncio.sleep(2)
-
-    async def add_tracking(self):
-        now = int(datetime.now().timestamp() // 600 * 600)
-        if now not in self.request_counter:
-            if self.request_counter:
-                for key, val in self.request_counter.items():
-                    self.logging.info("Interval %s: Made %s requests", key, val)
-                for key in list(self.request_counter.keys()):
-                    del self.request_counter[key]
-            self.request_counter[now] = 0
-        self.request_counter[now] += 1
 
     async def run(self):
         task_queue = QueueHandler("match_details_tasks_%s" % self.platform)
@@ -114,8 +81,8 @@ class Platform:
                     async with connection.transaction():
                         prep = await connection.prepare(
                             queries.flush_found.format(
-                                platform_lower=platform.lower(),
-                                platform=platform,
+                                platform_lower=self.platform.lower(),
+                                platform=self.platform,
                             )
                         )
                         await prep.executemany([task["data"] for task in matches_200])
@@ -124,51 +91,51 @@ class Platform:
 
                         prep = await connection.prepare(
                             queries.flush_missing.format(
-                                platform_lower=platform.lower(),
-                                platform=platform,
+                                platform_lower=self.platform.lower(),
+                                platform=self.platform,
                             )
                         )
                         await prep.executemany([task["data"] for task in matches_404])
+                        for task in matches_404:
+                            await task["message"].ack()
+
             if self.handler.is_shutdown:
                 break
             await asyncio.sleep(2)
 
     async def process_tasks(self, message):
-        async with message.process(ignore_processed=True):
-            matchId = int(message.body.decode("utf-8"))
-            url = self.endpoint_url % (self.platform, matchId)
-            seconds = (self.retry_after - datetime.now()).total_seconds()
-            if seconds >= 0.1:
-                await asyncio.sleep(seconds)
-            while not self.handler.is_shutdown:
-                try:
-                    if self.handler.is_shutdown:
-                        await message.reject(requeue=True)
-                        return
-                    async with self.semaphore:
-                        sleep = asyncio.create_task(asyncio.sleep(1))
-                        async with self.session.get(url, proxy=self.proxy) as response:
-                            data, _ = await asyncio.gather(response.json(), sleep)
-                    match response.status:
-                        case 200:
-                            await self.parse_response(data, matchId, message)
-                            return
-                        case 404:
-                            await self.match_404.put(
-                                {"data": [str(matchId)], "message": message}
-                            )
-                            return
-                        case 429:
-                            await asyncio.sleep(0.5)
-                        case 430:
-                            self.retry_after = datetime.fromtimestamp(data["Retry-At"])
-                        case _:
-                            await asyncio.sleep(0.01)
-                except aiohttp.ClientProxyConnectionError:
+        matchId = int(message.body.decode("utf-8"))
+        url = self.endpoint_url % (self.platform, matchId)
+        seconds = (self.retry_after - datetime.now()).total_seconds()
+        if seconds >= 0.1:
+            await asyncio.sleep(seconds)
+        try:
+            if self.handler.is_shutdown:
+                await message.reject(requeue=True)
+                return
+            async with self.semaphore:
+                sleep = asyncio.create_task(asyncio.sleep(1))
+                async with self.session.get(url, proxy=self.proxy) as response:
+                    data, _ = await asyncio.gather(response.json(), sleep)
+            match response.status:
+                case 200:
+                    await self.parse_response(data, matchId, message)
+                    return
+                case 404:
+                    await self.match_404.put(
+                        {"data": [str(matchId)], "message": message}
+                    )
+                    return
+                case 429:
+                    await asyncio.sleep(0.5)
+                case 430:
+                    self.retry_after = datetime.fromtimestamp(data["Retry-At"])
+                case _:
                     await asyncio.sleep(0.01)
-                finally:
-                    await self.add_tracking()
-            await message.reject(requeue=True)
+        except aiohttp.ClientProxyConnectionError:
+            await asyncio.sleep(0.01)
+        # If didnt return reject (200 + 404 return before)
+        await message.reject(requeue=True)
 
     async def parse_response(self, response, matchId, message):
         if response["info"]["queueId"] == 0:

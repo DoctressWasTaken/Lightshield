@@ -307,4 +307,6 @@ class Connection:
             user=self.con.user,
             database=self.con.database,
             password=self.con.password,
+            min_size=1,
+            max_size=5,
         )

@@ -5,7 +5,7 @@ import math
 import aio_pika
 import asyncpg
 
-from lightshield.services.match_details.rabbitmq import queries
+from lightshield.services.match_details import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 from lightshield.config import Config
 

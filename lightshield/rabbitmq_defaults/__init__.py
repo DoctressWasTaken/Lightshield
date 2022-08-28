@@ -44,7 +44,7 @@ class QueueHandler:
                 self.logging.debug("Queue reached threshold of below %s.", threshold)
                 return count
 
-    async def send_tasks(self, tasks: list[bin], persistent=True):
+    async def send_tasks(self, tasks: list[list], persistent=True, deduplicate=False):
         """Insert tasks into the queue.
 
         Tasks have to be prepared as a byte like object.
@@ -53,6 +53,7 @@ class QueueHandler:
         delivery_mode = (
             DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT
         )
+
         await asyncio.gather(
             *[
                 asyncio.create_task(
@@ -60,7 +61,7 @@ class QueueHandler:
                         Message(
                             task,
                             delivery_mode=delivery_mode,
-                            headers={"x-deduplication-header": header},
+                            headers={"x-deduplication-header": header} if deduplicate else None,
                         ),
                         routing_key=self.queue,
                     )
@@ -70,7 +71,7 @@ class QueueHandler:
             return_exceptions=True
         )
 
-    async def send_task(self, task: bin, persistent=True):
+    async def send_task(self, task: bin, header: str = None, persistent=True, deduplicate=False):
         """Insert task into the queue.
 
         Tasks have to be prepared as a byte like object.
@@ -80,7 +81,9 @@ class QueueHandler:
             DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT
         )
         await self.channel.default_exchange.publish(
-            Message(task, delivery_mode=delivery_mode),
+            Message(task, delivery_mode=delivery_mode,
+                    headers={"x-deduplication-header": header} if deduplicate else None,
+                    ),
             routing_key=self.queue,
         )
 

@@ -5,7 +5,7 @@ import aio_pika
 import pickle
 
 from lightshield.config import Config
-from lightshield.services.match_details.rabbitmq import queries
+from lightshield.services.match_details import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 
 

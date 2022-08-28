@@ -83,7 +83,7 @@ class Handler:
             task_list = [
                 [task["summoner_id"], task["summoner_id"].encode()] for task in tasks
             ]
-            await handler.send_tasks(task_list, persistent=True)
+            await handler.send_tasks(task_list, persistent=True, deduplicate=True)
 
     async def run(self):
         """Run."""
