@@ -73,9 +73,7 @@ class Platform:
         await task_queue.init(
             durable=True, prefetch_count=100, connection=self.handler.pika
         )
-        self.summoner_queue = QueueHandler(
-            "match_details_results_%s" % self.platform
-        )
+        self.summoner_queue = QueueHandler("match_details_results_%s" % self.platform)
         await self.summoner_queue.init(durable=True, connection=self.handler.pika)
         inserter = asyncio.create_task(self.update_matches())
 
@@ -87,14 +85,17 @@ class Platform:
         await asyncio.gather(
             inserter,
             asyncio.create_task(cancel_consume()),
-            asyncio.create_task(asyncio.sleep(10))
+            asyncio.create_task(asyncio.sleep(10)),
         )
 
     async def update_matches(self):
         """Batch insert updates into postgres and marks the rabbitmq messages as completed."""
         self.logging.info("Started matches updater.")
         while True:
-            if self.match_200.qsize() + self.match_404.qsize() >= 50 or self.handler.is_shutdown:
+            if (
+                self.match_200.qsize() + self.match_404.qsize() >= 50
+                or self.handler.is_shutdown
+            ):
                 matches_200 = []
                 while True:
                     try:
@@ -154,9 +155,7 @@ class Platform:
                             return
                         case 404:
                             await self.match_404.put(
-                                {'data': [str(matchId)],
-                                 'message': message
-                                 }
+                                {"data": [str(matchId)], "message": message}
                             )
                             return
                         case 429:
@@ -173,23 +172,19 @@ class Platform:
 
     async def parse_response(self, response, matchId, message):
         if response["info"]["queueId"] == 0:
-            await self.match_404.put(
-                {'data': [str(matchId)],
-                 'message': message
-                 }
-            )
+            await self.match_404.put({"data": [str(matchId)], "message": message})
             return
 
         queue = response["info"]["queueId"]
         creation = datetime.fromtimestamp(response["info"]["gameCreation"] // 1000)
         patch = ".".join(response["info"]["gameVersion"].split(".")[:2])
         if (
-                "gameStartTimestamp" in response["info"]
-                and "gameEndTimestamp" in response["info"]
+            "gameStartTimestamp" in response["info"]
+            and "gameEndTimestamp" in response["info"]
         ):
             game_duration = (
-                    response["info"]["gameEndTimestamp"]
-                    - response["info"]["gameStartTimestamp"]
+                response["info"]["gameEndTimestamp"]
+                - response["info"]["gameStartTimestamp"]
             )
         else:
             game_duration = response["info"]["gameDuration"]
@@ -219,15 +214,16 @@ class Platform:
         patch_int = int("".join([el.zfill(2) for el in patch.split(".")]))
         # Match Update
         await self.match_200.put(
-            {'data': (
-                queue,
-                creation,
-                patch_int,
-                game_duration,
-                win,
-                matchId,
-            ),
-                'message': message
+            {
+                "data": (
+                    queue,
+                    creation,
+                    patch_int,
+                    game_duration,
+                    win,
+                    matchId,
+                ),
+                "message": message,
             }
         )
         # Saving
@@ -237,7 +233,7 @@ class Platform:
         filename = os.path.join(path, "%s_%s.json" % (self.platform, matchId))
         if not os.path.isfile(filename):
             with open(
-                    filename,
-                    "w+",
+                filename,
+                "w+",
             ) as file:
                 file.write(json.dumps(response))

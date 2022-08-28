@@ -117,9 +117,7 @@ class Platform:
                                 found_latest = True
                                 break
                             if self.service.queue:
-                                matches.append(
-                                    (platform, int(id), self.service.queue)
-                                )
+                                matches.append((platform, int(id), self.service.queue))
                             else:
                                 matches.append((platform, int(id)))
                     case 404:
@@ -137,12 +135,8 @@ class Platform:
             newest_match = latest_match
         matches = list(set(matches))
         if matches:
-            await self.matches_queue.send_task(
-                pickle.dumps(matches), persistent=True
-            )
-            self.logging.debug(
-                "Updated user %s, found %s matches", puuid, len(matches)
-            )
+            await self.matches_queue.send_task(pickle.dumps(matches), persistent=True)
+            self.logging.debug("Updated user %s, found %s matches", puuid, len(matches))
         else:
             self.logging.debug("Updated user %s, found no matches.", puuid)
         await self.summoner_updates.put(
@@ -171,7 +165,7 @@ class Platform:
             await asyncio.gather(
                 inserter,
                 asyncio.create_task(cancel_consume()),
-                asyncio.create_task(asyncio.sleep(10))
+                asyncio.create_task(asyncio.sleep(10)),
             )
         finally:
             self.logging.info("Exited worker")

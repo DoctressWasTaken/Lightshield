@@ -44,7 +44,6 @@ class Handler:
             self.buffered_tasks[platform][_type].append(message.body)
             await message.ack()
 
-
     async def change_summoners(self, platform):
         if not self.buffered_tasks[platform]["summoners"]:
             return
@@ -60,9 +59,7 @@ class Handler:
 
     async def platform_thread(self, platform):
         try:
-            summoner_queue = QueueHandler(
-                "match_details_results_%s" % platform
-            )
+            summoner_queue = QueueHandler("match_details_results_%s" % platform)
             await summoner_queue.init(durable=True, connection=self.pika)
 
             self.buffered_tasks[platform] = {
