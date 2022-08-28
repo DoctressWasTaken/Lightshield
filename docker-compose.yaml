@@ -78,7 +78,7 @@ services:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-    entrypoint: "poetry run lightshield run puuid_collector"
+    entrypoint: "poetry run lightshield run puuid_collector.worker"
     restart: always
 
   puuid_collector_tasks:
@@ -93,7 +93,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-    entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.tasks"
+    entrypoint: "poetry run lightshield run puuid_collector.tasks"
     restart: always
 
   puuid_collector_results:
@@ -108,7 +108,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-    entrypoint: "poetry run lightshield run puuid_collector.rabbitmq.results"
+    entrypoint: "poetry run lightshield run puuid_collector.results"
     restart: always
 
 ### Match History
