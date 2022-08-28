@@ -80,7 +80,9 @@ class Handler:
             if not tasks:
                 continue
 
-            task_list = [[task["summoner_id"], task["summoner_id"].encode()] for task in tasks]
+            task_list = [
+                [task["summoner_id"], task["summoner_id"].encode()] for task in tasks
+            ]
             await handler.send_tasks(task_list, persistent=True)
 
     async def run(self):

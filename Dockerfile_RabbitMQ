@@ -1,4 +1,4 @@
-FROM docker.io/rabbitmq:3.10.7
+FROM docker.io/rabbitmq:3.10.7-management
 
 WORKDIR plugins/
 
@@ -9,4 +9,4 @@ RUN apt-get install -y curl
 RUN curl -L https://github.com/noxdafox/rabbitmq-message-deduplication/releases/download/0.5.4/elixir-1.12.2.ez > elixir.ez
 RUN    curl -L https://github.com/noxdafox/rabbitmq-message-deduplication/releases/download/0.5.4/rabbitmq_message_deduplication-0.5.4.ez > rabbitmq_message_deduplication.ez
 
-RUN rabbitmq-plugins enable rabbitmq_message_deduplication rabbitmq_management
+RUN rabbitmq-plugins enable rabbitmq_message_deduplication

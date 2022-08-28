@@ -32,11 +32,14 @@ class Platform:
         self.channel = await self.handler.pika.channel()
         await self.channel.set_qos(prefetch_count=self.parallel)
         task_queue = await self.channel.declare_queue(
-            "puuid_tasks_%s" % self.platform, durable=True, passive=True,
-            arguments={'x-message-deduplication': True}
+            "puuid_tasks_%s" % self.platform,
+            durable=True,
+            passive=True,
+            arguments={"x-message-deduplication": True},
         )
         await self.channel.declare_queue(
-            "puuid_results_%s" % self.platform, durable=True,
+            "puuid_results_%s" % self.platform,
+            durable=True,
         )
 
         inserter = asyncio.create_task(self.insert_updates())
@@ -56,7 +59,10 @@ class Platform:
         """Batch insert updates into postgres and marks the rabbitmq messages as completed."""
 
         while True:
-            if self.results.qsize() + self.not_found.qsize() >= 50 or self.handler.is_shutdown:
+            if (
+                self.results.qsize() + self.not_found.qsize() >= 50
+                or self.handler.is_shutdown
+            ):
                 found = []
                 while True:
                     try:
@@ -79,19 +85,19 @@ class Platform:
                                 platform_lower=self.platform.lower(),
                             )
                         )
-                        await prep.executemany([task['data'] for task in found])
+                        await prep.executemany([task["data"] for task in found])
                         for task in found:
-                            await task['message'].ack()
+                            await task["message"].ack()
 
                         await connection.execute(
                             queries.missing_summoner.format(
                                 platform=self.platform,
                                 platform_lower=self.platform.lower(),
                             ),
-                            [task['data'] for task in not_found],
+                            [task["data"] for task in not_found],
                         )
                         for task in not_found:
-                            await task['message'].ack()
+                            await task["message"].ack()
             if self.handler.is_shutdown:
                 break
             await asyncio.sleep(2)
@@ -125,13 +131,14 @@ class Platform:
                             routing_key="puuid_results_found_%s" % self.platform,
                         )
                         # Ranking update goes into the internal queue
-                        await self.results.put({
-                            'data': [data['id'], data['puuid']],
-                            'message': message
-                        })
+                        await self.results.put(
+                            {"data": [data["id"], data["puuid"]], "message": message}
+                        )
                         self.logging.debug("200 | %s", url)
                     case 404:
-                        await self.not_found.put({'data': account_id, 'message': message})
+                        await self.not_found.put(
+                            {"data": account_id, "message": message}
+                        )
                         self.logging.debug("404 | %s", url)
                     case 429:
                         await message.reject(requeue=True)

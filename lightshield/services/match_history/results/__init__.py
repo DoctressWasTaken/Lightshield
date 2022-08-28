@@ -7,7 +7,7 @@ import aio_pika
 import pickle
 
 from lightshield.config import Config
-from lightshield.services.match_history.rabbitmq import queries
+from lightshield.services.match_history import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 
 
@@ -93,42 +93,20 @@ class Handler:
                     )
                     await prep.executemany(tasks)
 
-    async def insert_summoners(self, platform):
-        if not self.buffered_tasks[platform]["summoners"]:
-            return
-        tasks = self.buffered_tasks[platform]["summoners"].copy()
-        self.buffered_tasks[platform]["summoners"] = []
-        tasks = [pickle.loads(task) for task in tasks]
-        self.logging.debug(" %s\t | Updating %s summoners", platform, len(tasks))
-
-        async with self.db.acquire() as connection:
-            async with connection.transaction():
-                prep = await connection.prepare(queries.update_players)
-                await prep.executemany(tasks)
-
     async def platform_thread(self, platform):
         try:
             matches_queue = QueueHandler("match_history_results_matches_%s" % platform)
             await matches_queue.init(durable=True, connection=self.pika)
 
-            summoners_queue = QueueHandler(
-                "match_history_results_summoners_%s" % platform
-            )
-            await summoners_queue.init(durable=True, connection=self.pika)
-
-            self.buffered_tasks[platform] = {"matches": [], "summoners": []}
+            self.buffered_tasks[platform] = {"matches": []}
 
             cancel_consume_matches = await matches_queue.consume_tasks(
                 self.process_results, {"platform": platform, "_type": "matches"}
-            )
-            cancel_consume_summoners = await summoners_queue.consume_tasks(
-                self.process_results, {"platform": platform, "_type": "summoners"}
             )
 
             while not self.is_shutdown:
 
                 await self.insert_matches(platform)
-                await self.insert_summoners(platform)
 
                 for _ in range(30):
                     await asyncio.sleep(1)
@@ -136,10 +114,8 @@ class Handler:
                         break
 
             await cancel_consume_matches()
-            await cancel_consume_summoners()
             await asyncio.sleep(2)
             await self.insert_matches(platform)
-            await self.insert_summoners(platform)
         except Exception as err:
             self.logging.info(err)
 

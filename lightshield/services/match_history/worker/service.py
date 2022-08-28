@@ -6,12 +6,13 @@ from datetime import datetime, timedelta
 import aiohttp
 
 from lightshield.rabbitmq_defaults import QueueHandler
+from lightshield.services.match_history import queries
 
 
 class Platform:
     running = False
     _runner = None
-    matches_queue = summoner_queue = None
+    matches_queue = None
 
     def __init__(self, region, platform, config, handler, semaphore):
         self.config = config
@@ -21,6 +22,8 @@ class Platform:
         self.logging = logging.getLogger("%s" % platform)
         self.service = config.services.match_history
         self.retry_after = datetime.now()
+        # Internal queue for updates
+        self.summoner_updates = asyncio.Queue()
 
         # Region crossing semaphore to limit single service output
         self.semaphore = semaphore
@@ -42,6 +45,29 @@ class Platform:
             )
         else:
             self.session = aiohttp.ClientSession(connector=conn)
+
+    async def insert_updates(self):
+        """Batch insert updates into postgres and marks the rabbitmq messages as completed."""
+
+        while True:
+            if self.summoner_updates.qsize() >= 50 or self.handler.is_shutdown:
+                summoners = []
+                while True:
+                    try:
+                        summoners.append(self.summoner_updates.get_nowait())
+                        self.summoner_updates.task_done()
+                    except:
+                        break
+                async with self.handler.db.acquire() as connection:
+                    async with connection.transaction():
+                        prep = await connection.prepare(queries.update_players)
+
+                        await prep.executemany([task["data"] for task in summoners])
+                        for task in summoners:
+                            await task["message"].ack()
+            if self.handler.is_shutdown:
+                break
+            await asyncio.sleep(2)
 
     async def process_tasks(self, message):
         async with message.process(ignore_processed=True):
@@ -121,27 +147,23 @@ class Platform:
                 )
             else:
                 self.logging.debug("Updated user %s, found no matches.", puuid)
-            await self.summoner_queue.send_task(
-                pickle.dumps((puuid, newest_match, now))
+            await self.summoner_updates.put(
+                {"data": (puuid, newest_match, now), "message": message}
             )
-            await message.ack()
 
     async def run(self):
         self.logging.info("Started worker")
         try:
             task_queue = QueueHandler("match_history_tasks_%s" % self.platform)
             await task_queue.init(
-                durable=True, prefetch_count=100, connection=self.handler.pika,
+                durable=True,
+                prefetch_count=100,
+                connection=self.handler.pika,
             )
             self.matches_queue = QueueHandler(
                 "match_history_results_matches_%s" % self.platform
             )
             await self.matches_queue.init(durable=True, connection=self.handler.pika)
-
-            self.summoner_queue = QueueHandler(
-                "match_history_results_summoners_%s" % self.platform
-            )
-            await self.summoner_queue.init(durable=True, connection=self.handler.pika)
 
             cancel_consume = await task_queue.consume_tasks(self.process_tasks)
 

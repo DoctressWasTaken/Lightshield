@@ -124,9 +124,10 @@ services:
         service: match_history
     environment:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-    entrypoint: "poetry run lightshield run match_history"
+    entrypoint: "poetry run lightshield run match_history.worker"
     restart: always
 
   match_history_tasks:
@@ -141,7 +142,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-    entrypoint: "poetry run lightshield run match_history.rabbitmq.tasks"
+    entrypoint: "poetry run lightshield run match_history.tasks"
     restart: always
 
   match_history_results:
@@ -156,7 +157,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-    entrypoint: "poetry run lightshield run match_history.rabbitmq.results"
+    entrypoint: "poetry run lightshield run match_history.results"
     restart: always
 
 ### Match Details

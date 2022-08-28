@@ -1,26 +1,30 @@
-"""Summoner ID Updater Module."""
+"""Match History"""
 import asyncio
 import logging
 
-import aio_pika
-
-from lightshield.services.puuid_collector.worker.service import Platform
+from lightshield.services.match_history.worker.service import Platform
 from lightshield.config import Config
+
+import aio_pika
 
 
 class Handler:
+    platforms = {}
     is_shutdown = False
-    pika = None
+    db = None
 
     def __init__(self):
-        self.logging = logging.getLogger("Handler")
         self.config = Config()
+        self.logging = logging.getLogger("Handler")
         self.protocol = self.config.proxy.protocol
         self.proxy = self.config.proxy.string
-        self.platforms = {
-            platform: Platform(platform, self)
-            for platform in self.config.active_platforms
-        }
+        for region, platforms in self.config.mapping.items():
+            region_semaphore = asyncio.Semaphore(10)
+            for platform in platforms:
+                if platform in self.config.active_platforms:
+                    self.platforms[platform] = Platform(
+                        region, platform, self.config, self, region_semaphore
+                    )
         self.connector = self.config.get_db_connection()
 
     async def init(self):
@@ -30,20 +34,18 @@ class Handler:
         self.db = await self.connector.init()
 
     async def init_shutdown(self, *args, **kwargs):
-        """Shutdown handler"""
+        """Initiate shutdown."""
         self.is_shutdown = True
 
     async def handle_shutdown(self):
-        """Close db connection pool after services have shut down."""
         await self.pika.close()
 
     async def run(self):
         """Run."""
         await self.init()
-        await asyncio.gather(
-            *[
-                asyncio.create_task(platform.run())
-                for platform in self.platforms.values()
-            ]
-        )
+        tasks = []
+        for platform in self.platforms.values():
+            tasks.append(asyncio.create_task(platform.run()))
+
+        await asyncio.gather(*tasks)
         await self.handle_shutdown()

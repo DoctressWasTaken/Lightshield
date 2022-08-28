@@ -29,7 +29,9 @@ class QueueHandler:
             self.connection = await connect_robust(self.connect_string)
         self.channel = await self.connection.channel()
         await self.channel.set_qos(prefetch_count=prefetch_count)
-        await self.channel.declare_queue(self.queue, durable=durable, arguments={'x-message-deduplication': True})
+        await self.channel.declare_queue(
+            self.queue, durable=durable, arguments={"x-message-deduplication": True}
+        )
 
     async def wait_threshold(self, threshold) -> int:
         """Blocking loop until the queue has reached a lower threshold."""
@@ -55,13 +57,18 @@ class QueueHandler:
             *[
                 asyncio.create_task(
                     self.channel.default_exchange.publish(
-                        Message(task, delivery_mode=delivery_mode, headers={'x-deduplication-header': header}),
+                        Message(
+                            task,
+                            delivery_mode=delivery_mode,
+                            headers={"x-deduplication-header": header},
+                        ),
                         routing_key=self.queue,
                     )
                 )
                 for header, task in tasks
-            ]
-        , return_exceptions=True)
+            ],
+            return_exceptions=True
+        )
 
     async def send_task(self, task: bin, persistent=True):
         """Insert task into the queue.

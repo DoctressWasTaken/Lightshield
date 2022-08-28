@@ -43,4 +43,3 @@ update_players = """
                     last_activity = GREATEST(last_activity, $3)
                 WHERE puuid = $1
             """
-

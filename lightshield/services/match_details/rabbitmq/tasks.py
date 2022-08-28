@@ -82,11 +82,12 @@ class Handler:
             if not tasks:
                 continue
 
-            task_list = [[task["match_id"], str(task["match_id"]).encode()] for task in tasks]
+            task_list = [
+                [task["match_id"], str(task["match_id"]).encode()] for task in tasks
+            ]
 
             await handler.send_tasks(task_list, persistent=True)
             break
-
 
     async def run(self):
         """Run."""

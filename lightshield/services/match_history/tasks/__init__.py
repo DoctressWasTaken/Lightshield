@@ -1,14 +1,12 @@
 """Match History Task Selector."""
 import asyncio
 import logging
-import math
 import aio_pika
 import asyncpg
 import pickle
-from datetime import datetime, timedelta
 
 from lightshield.config import Config
-from lightshield.services.match_history.rabbitmq import queries
+from lightshield.services.match_history import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 
 
@@ -89,11 +87,13 @@ class Handler:
             task_list = [
                 [
                     task["puuid"],
-                    pickle.dumps((
-                        task["puuid"],
-                        task["latest_match"],
-                        task["last_history_update"],
-                    )),
+                    pickle.dumps(
+                        (
+                            task["puuid"],
+                            task["latest_match"],
+                            task["last_history_update"],
+                        )
+                    ),
                 ]
                 for task in tasks
             ]
