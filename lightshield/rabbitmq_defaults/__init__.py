@@ -84,14 +84,17 @@ class QueueHandler:
         delivery_mode = (
             DeliveryMode.PERSISTENT if persistent else DeliveryMode.NOT_PERSISTENT
         )
-        await self.channel.default_exchange.publish(
-            Message(
-                task,
-                delivery_mode=delivery_mode,
-                headers={"x-deduplication-header": header} if deduplicate else None,
-            ),
-            routing_key=self.queue,
-        )
+        try:
+            await self.channel.default_exchange.publish(
+                Message(
+                    task,
+                    delivery_mode=delivery_mode,
+                    headers={"x-deduplication-header": header} if deduplicate else None,
+                ),
+                routing_key=self.queue,
+            )
+        except Exception as err:
+            pass
 
     async def consume_tasks(self, func, arguments=None):
         """Start a consumer and return the cancel task."""
