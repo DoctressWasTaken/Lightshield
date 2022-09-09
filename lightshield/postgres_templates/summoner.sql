@@ -13,5 +13,7 @@ CREATE TABLE summoner
     -- Either through a match found or a summoner-v4 endpoint
     last_activity TIMESTAMP,
     -- summoner_tracker update timestamp. So it only updates every x days
-    last_updated DATE
+    last_updated DATE,
+    -- Reservation timestamp
+    match_history_reserved TIMESTAMP DEFAULT NULL
 );

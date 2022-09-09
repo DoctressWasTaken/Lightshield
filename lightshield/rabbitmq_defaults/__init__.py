@@ -103,3 +103,8 @@ class QueueHandler:
         queue = await self.channel.declare_queue(self.queue, passive=True)
         tag = await queue.consume(partial(func, **arguments))
         return partial(queue.cancel, tag)
+
+    async def get_queue(self):
+        """Return a consume func"""
+        return await self.channel.declare_queue(self.queue, passive=True)
+

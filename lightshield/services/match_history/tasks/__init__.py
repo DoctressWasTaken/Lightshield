@@ -50,12 +50,14 @@ class Handler:
         while not self.is_shutdown:
             async with self.db.acquire() as connection:
                 try:
+                    query = queries.get_tasks.format(
+                            found_newer_wait=self.service.min_age.newer_activity,
+                            no_activity_wait=self.service.min_age.no_activity,
+                            min_activity_age=self.service.min_age.activity_min_age
+                        )
                     return await connection.fetch(
-                        queries.get_tasks,
+                        query,
                         platform,
-                        self.service.min_age.newer_activity,
-                        self.service.min_age.no_activity,
-                        self.service.min_age.activity_min_age,
                         count,
                     )
                 except asyncpg.InternalServerError:
@@ -64,41 +66,44 @@ class Handler:
 
     async def platform_handler(self, platform):
         # setup
-        expected_size = 4000
+        expected_size = 12000
 
         handler = QueueHandler("match_history_tasks_%s" % platform)
         self.handlers.append(handler)
         await handler.init(durable=True, connection=self.pika)
 
         while not self.is_shutdown:
-            for i in range(10):
-                await asyncio.sleep(2)
+
+            actual_count = await handler.wait_threshold(int(0.75 * expected_size))
+            self.logging.info("Refilling %s by %s to %s", platform, expected_size - actual_count + 500, expected_size + 500)
+            try:
+                tasks = await self.gather_tasks(
+                    platform=platform, count=expected_size - actual_count + 500
+                )
+                self.logging.info("Found %s tasks for %s", len(tasks), platform)
+                if tasks:
+                    task_list = [
+                        [
+                            task["puuid"],
+                            pickle.dumps(
+                                (
+                                    task["puuid"],
+                                    task["latest_match"],
+                                    task["last_history_update"],
+                                )
+                            ),
+                        ]
+                        for task in tasks
+                    ]
+                    await handler.send_tasks(task_list, persistent=True)
+                else:
+                    await asyncio.sleep(10)
+            except Exception as err:
+                self.logging.error(err)
+            for _ in range(10):
                 if self.is_shutdown:
                     break
-
-            await handler.wait_threshold(int(0.75 * expected_size))
-
-            tasks = await self.gather_tasks(
-                platform=platform, count=expected_size + 500
-            )
-            if not tasks:
-                continue
-
-            task_list = [
-                [
-                    task["puuid"],
-                    pickle.dumps(
-                        (
-                            task["puuid"],
-                            task["latest_match"],
-                            task["last_history_update"],
-                        )
-                    ),
-                ]
-                for task in tasks
-            ]
-
-            await handler.send_tasks(task_list, persistent=True)
+                await asyncio.sleep(2)
 
     async def run(self):
         """Run."""

@@ -12,17 +12,15 @@ from lightshield.rabbitmq_defaults import QueueHandler
 
 
 class Handler:
-    platforms = {}
     is_shutdown = False
     db = None
     pika = None
-    buffered_tasks = {}
+    messages = []
 
     def __init__(self):
         self.logging = logging.getLogger("Task Selector")
         self.config = Config()
         self.connector = self.config.get_db_connection()
-        self.platforms = self.config.active_platforms
 
     async def init(self):
         self.db = await self.connector.init()
@@ -40,94 +38,64 @@ class Handler:
         await self.db.close()
         await self.pika.close()
 
-    async def process_results(self, message, platform, _type):
-        """Put results from queue into list."""
-        async with message.process(ignore_processed=True):
-            self.buffered_tasks[platform][_type].append(message.body)
-            await message.ack()
-
-    async def insert_matches(self, platform):
-        if not self.buffered_tasks[platform]["matches"]:
-            return
-        raw_tasks = self.buffered_tasks[platform]["matches"].copy()
-        self.buffered_tasks[platform]["matches"] = []
-        tasks_3 = {}
-        tasks_2 = {}
-        counter = 0
-        for package in [pickle.loads(task) for task in raw_tasks]:
-            for match in package:
-                try:
-                    match_platform = match[0]
-                except Exception as err:
-                    self.logging.error(err)
-                    self.logging.info(match)
-                    raise err
-
-                if len(match) == 3:
-                    if match_platform not in tasks_3:
-                        tasks_3[match_platform] = []
-                    tasks_3[match_platform].append(match)
-                else:
-                    if match_platform not in tasks_2:
-                        tasks_2[match_platform] = []
-                    tasks_2[match_platform].append(match)
-                counter += 1
-
-        self.logging.debug(" %s\t | %s matches inserted", platform, counter)
-        async with self.db.acquire() as connection:
-
-            if tasks_3:
-                for match_platform, tasks in tasks_3.items():
-                    prep = await connection.prepare(
-                        queries.insert_queue_known.format(
-                            platform_lower=match_platform.lower()
-                        )
-                    )
-                    await prep.executemany(tasks)
-            if tasks_2:
-                for match_platform, tasks in tasks_2.items():
-                    prep = await connection.prepare(
-                        queries.insert_queue_known.format(
-                            platform_lower=match_platform.lower()
-                        )
-                    )
-                    await prep.executemany(tasks)
-
-    async def platform_thread(self, platform):
-        try:
-            matches_queue = QueueHandler("match_history_results_%s" % platform)
-            await matches_queue.init(durable=True, connection=self.pika)
-
-            self.buffered_tasks[platform] = {"matches": []}
-
-            cancel_consume_matches = await matches_queue.consume_tasks(
-                self.process_results, {"platform": platform, "_type": "matches"}
-            )
-
-            while not self.is_shutdown:
-
-                await self.insert_matches(platform)
-
-                for _ in range(30):
-                    await asyncio.sleep(1)
-                    if self.is_shutdown:
-                        break
-
-            await cancel_consume_matches()
-            await asyncio.sleep(2)
-            await self.insert_matches(platform)
-        except Exception as err:
-            self.logging.info(err)
+    async def on_message(self, message):
+        self.messages.append(message)
 
     async def run(self):
         """Run."""
         await self.init()
+        results_queue = QueueHandler("match_history_results")
+        await results_queue.init(durable=True, prefetch_count=5000, connection=self.pika)
+        try:
+            while not self.is_shutdown:
+                self.messages = []
+                cancel_consume = await results_queue.consume_tasks(self.on_message)
+                await asyncio.sleep(5)  # Collect tasks
+                await cancel_consume()
 
-        await asyncio.gather(
-            *[
-                asyncio.create_task(self.platform_thread(platform=platform))
-                for platform in self.platforms
-            ]
-        )
+                if not self.messages:
+                    continue
+                matches = {}
+                summoners = []
+                for message in self.messages:
+                    content = pickle.loads(message.body)
+                    for match in content['matches']:
+                        if match[0] not in matches:
+                            matches[match[0]] = {
+                                'no_queue': [],
+                                'queue': []
+                            }
+                        if len(match) == 2:
+                            matches[match[0]]['no_queue'].append(match)
+                        else:
+                            matches[match[0]]['queue'].append(match)
+                    summoners.append(content['summoner'])
+                async with self.db.acquire() as connection:
+                    for platform, matches in matches.items():
+                        if matches['queue']:
 
+                            prep = await connection.prepare(
+                                queries.insert_queue_known.format(
+                                    platform_lower=platform.lower()
+                                )
+                            )
+                            await prep.executemany(matches['queue'])
+                        if matches['no_queue']:
+                            prep = await connection.prepare(
+                                queries.insert_queue_unknown.format(
+                                    platform_lower=platform.lower()
+                                )
+                            )
+                            await prep.executemany(matches['no_queue'])
+                    prep = await connection.prepare(
+                        queries.update_players
+                    )
+                    await prep.executemany(summoners)
+                for message in self.messages:
+                    await message.ack()
+                self.logging.info("Consumed %s", len(self.messages))
+
+
+        except Exception as err:
+            self.logging.error(err)
         await self.handle_shutdown()

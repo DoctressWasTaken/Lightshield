@@ -20,13 +20,14 @@ flush_found = """UPDATE "match_{platform_lower:s}"
 
 flush_missing = """UPDATE "match_{platform_lower:s}"
                                    SET find_fails = find_fails + 1
-                                   WHERE match_id = $1
+                                   WHERE match_id = ANY($1::BIGINT[])
                                 """
 
 summoners_update_only = """UPDATE summoner
                     SET last_activity = $1,
                         platform = $2,
-                        name = $3
+                        name = $3,
+                        last_updated = NOW()
                     WHERE puuid = $4 
                         AND last_activity < $1
                 """

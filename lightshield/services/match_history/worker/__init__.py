@@ -4,6 +4,7 @@ import logging
 
 from lightshield.services.match_history.worker.service import Platform
 from lightshield.config import Config
+from lightshield.rabbitmq_defaults import QueueHandler
 
 import aio_pika
 
@@ -35,6 +36,8 @@ class Handler:
 
     async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
+
+        await asyncio.gather(*[asyncio.create_task(platform.shutdown()) for platform in self.platforms.values()])
         self.is_shutdown = True
 
     async def handle_shutdown(self):
@@ -43,9 +46,11 @@ class Handler:
     async def run(self):
         """Run."""
         await self.init()
+        results_queue = QueueHandler("match_history_results")
+        await results_queue.init(durable=True, connection=self.pika)
         tasks = []
         for platform in self.platforms.values():
-            tasks.append(asyncio.create_task(platform.run()))
+            tasks.append(asyncio.create_task(platform.run(results_queue)))
 
         await asyncio.gather(*tasks)
         await self.handle_shutdown()

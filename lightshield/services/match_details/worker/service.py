@@ -78,28 +78,34 @@ class Platform:
                         self.match_404.task_done()
                     except:
                         break
-                async with self.handler.db.acquire() as connection:
-                    async with connection.transaction():
-                        prep = await connection.prepare(
-                            queries.flush_found.format(
-                                platform_lower=self.platform.lower(),
-                                platform=self.platform,
-                            )
-                        )
-                        await prep.executemany([task["data"] for task in matches_200])
-                        for task in matches_200:
-                            await task["message"].ack()
+                try:
+                    async with self.handler.db.acquire() as connection:
+                        async with connection.transaction():
+                            if matches_200:
+                                prep = await connection.prepare(
+                                    queries.flush_found.format(
+                                        platform_lower=self.platform.lower(),
+                                        platform=self.platform,
+                                    )
+                                )
+                                tasks = [task["data"] for task in matches_200]
+                                await prep.executemany(tasks)
+                                for task in matches_200:
+                                    await task["message"].ack()
 
-                        prep = await connection.prepare(
-                            queries.flush_missing.format(
-                                platform_lower=self.platform.lower(),
-                                platform=self.platform,
-                            )
-                        )
-                        await prep.executemany([task["data"] for task in matches_404])
-                        for task in matches_404:
-                            await task["message"].ack()
-
+                            if matches_404:
+                                tasks = [task["data"] for task in matches_404]
+                                await connection.execute(
+                                    queries.flush_missing.format(
+                                        platform_lower=self.platform.lower(),
+                                        platform=self.platform,
+                                    ),
+                                    tasks
+                                )
+                                for task in matches_404:
+                                    await task["message"].ack()
+                except Exception as err:
+                    self.logging.error(err)
             if self.handler.is_shutdown:
                 break
             await asyncio.sleep(2)
@@ -124,7 +130,7 @@ class Platform:
                     return
                 case 404:
                     await self.match_404.put(
-                        {"data": [str(matchId)], "message": message}
+                        {"data": matchId, "message": message}
                     )
                     return
                 case 429:
@@ -140,7 +146,7 @@ class Platform:
 
     async def parse_response(self, response, matchId, message):
         if response["info"]["queueId"] == 0:
-            await self.match_404.put({"data": [str(matchId)], "message": message})
+            await self.match_404.put({"data": matchId, "message": message})
             return
 
         queue = response["info"]["queueId"]
