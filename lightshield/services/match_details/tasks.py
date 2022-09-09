@@ -62,30 +62,37 @@ class Handler:
 
     async def platform_handler(self, platform):
         # setup
-        expected_size = 4000
+        expected_size = 12000
+
         handler = QueueHandler("match_details_tasks_%s" % platform)
         self.handlers.append(handler)
         await handler.init(durable=True, connection=self.pika)
 
         while not self.is_shutdown:
-            for i in range(10):
+
+            actual_count = await handler.wait_threshold(int(0.75 * expected_size))
+            self.logging.debug("Refilling %s by %s to %s", platform, expected_size - actual_count + 500, expected_size + 500)
+            try:
+
+                tasks = await self.gather_tasks(
+                    platform=platform, count=expected_size - actual_count + 500
+                )
+                if tasks:
+                    self.logging.debug("Found %s tasks for %s", len(tasks), platform)
+
+                    task_list = [
+                        [task["match_id"], str(task["match_id"]).encode()] for task in tasks
+                    ]
+
+                    await handler.send_tasks(task_list, persistent=True)
+                else:
+                    await asyncio.sleep(10)
+            except Exception as err:
+                self.logging.error(err)
+            for _ in range(10):
                 await asyncio.sleep(2)
                 if self.is_shutdown:
                     break
-
-            await handler.wait_threshold(int(0.75 * expected_size))
-
-            tasks = await self.gather_tasks(
-                platform=platform, count=expected_size + 500
-            )
-            if not tasks:
-                continue
-
-            task_list = [
-                [task["match_id"], str(task["match_id"]).encode()] for task in tasks
-            ]
-
-            await handler.send_tasks(task_list, persistent=True)
 
     async def run(self):
         """Run."""

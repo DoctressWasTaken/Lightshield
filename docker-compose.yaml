@@ -175,9 +175,6 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./config_in_docker.yaml:/project/config.yaml:ro
-      - type: bind
-        source: ${DETAILS_LOCATION:-./data}
-        target: /data
     restart: always
 
   match_details_tasks:
@@ -210,6 +207,20 @@ services:
       - ./config_in_docker.yaml:/project/config.yaml:ro
     restart: always
 
+  match_details_data_handler:
+    image: doctress/lightshield/match_details_data_handler:${TAG}
+    build:
+      dockerfile: Dockerfile_Service
+      context: .
+      args:
+        service: match_details
+    entrypoint: "poetry run lightshield run match_details.data_handler"
+    environment:
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./config_in_docker.yaml:/project/config.yaml:ro
+    restart: always
 
 volumes:
   rabbitmq_data:

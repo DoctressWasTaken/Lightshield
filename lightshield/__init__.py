@@ -28,6 +28,7 @@ default_services = (
     "match_details.worker",
     "match_details.tasks",
     "match_details.results",
+    "match_details.data_handler",
     "match_timeline",
 )
 

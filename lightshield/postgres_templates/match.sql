@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS match
     find_fails SMALLINT DEFAULT 0,
     details    BOOLEAN,
     timeline   BOOLEAN,
+    -- Shared reservation column for details and timeline
+    update_reserved TIMESTAMP DEFAULT NULL,
     PRIMARY KEY (match_id, platform)
 )
     PARTITION BY LIST (platform)

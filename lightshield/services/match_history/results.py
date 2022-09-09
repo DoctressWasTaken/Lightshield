@@ -79,21 +79,32 @@ class Handler:
                                     platform_lower=platform.lower()
                                 )
                             )
-                            await prep.executemany(matches['queue'])
+                            for _ in range(5):
+                                try:
+                                    await prep.executemany(matches['queue'])
+                                    break
+                                except Exception as err:
+                                    self.logging.error(err)
+
                         if matches['no_queue']:
                             prep = await connection.prepare(
                                 queries.insert_queue_unknown.format(
                                     platform_lower=platform.lower()
                                 )
                             )
-                            await prep.executemany(matches['no_queue'])
+                            for _ in range(5):
+                                try:
+                                    await prep.executemany(matches['no_queue'])
+                                    break
+                                except Exception as err:
+                                    self.logging.error(err)
                     prep = await connection.prepare(
                         queries.update_players
                     )
                     await prep.executemany(summoners)
                 for message in self.messages:
                     await message.ack()
-                self.logging.info("Consumed %s", len(self.messages))
+                self.logging.debug("Consumed %s", len(self.messages))
 
 
         except Exception as err:

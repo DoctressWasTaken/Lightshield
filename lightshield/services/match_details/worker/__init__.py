@@ -2,10 +2,12 @@
 import asyncio
 import logging
 import os
+import types
 
 from lightshield.services.match_details.worker.service import Platform
 import aio_pika
 from lightshield.config import Config
+from lightshield.rabbitmq_defaults import QueueHandler
 
 
 class Handler:
@@ -21,8 +23,6 @@ class Handler:
         self.proxy = self.config.proxy.string
 
         self.service = self.config.services.match_details
-        self.output_folder = self.service.output
-        self.logging.info("Output folder: %s", self.output_folder)
         self.semaphores = {}
         for region in self.config.mapping:
             self.semaphores[region] = asyncio.Semaphore(10)
@@ -44,6 +44,7 @@ class Handler:
     async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
         self.logging.info("Received shutdown signal.")
+        await asyncio.gather(*[asyncio.create_task(platform.shutdown()) for platform in self.platforms.values()])
         self.is_shutdown = True
 
     async def handle_shutdown(self):
@@ -52,9 +53,19 @@ class Handler:
     async def run(self):
         """Run."""
         await self.init()
+        output_queues = types.SimpleNamespace()
+        output_queues.match = QueueHandler("match_details_results")
+        await output_queues.match.init(durable=True, connection=self.pika)
+
+        output_queues.data = QueueHandler("match_details_data")
+        await output_queues.data.init(durable=True, connection=self.pika)
+
+        output_queues.summoners = QueueHandler("match_details_summoner_updates")
+        await output_queues.summoners.init(durable=True, connection=self.pika)
+
         tasks = []
         for platform in self.platforms.values():
-            tasks.append(asyncio.create_task(platform.run()))
+            tasks.append(asyncio.create_task(platform.run(output_queues)))
 
         await asyncio.gather(*tasks)
         await self.handle_shutdown()

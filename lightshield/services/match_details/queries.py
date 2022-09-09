@@ -1,11 +1,17 @@
 tasks = """
-               SELECT  match_id
-               FROM "match_{platform_lower:s}"
-                   WHERE details IS NULL
-                    AND find_fails < 10
-                ORDER BY find_fails NULLS FIRST,
-                        match_id DESC 
-               LIMIT $1
+               UPDATE "match_{platform_lower:s}"
+               SET update_reserved = NOW() + '30 minutes'::INTERVAL
+               WHERE match_id  IN (
+                   SELECT  match_id
+                   FROM "match_{platform_lower:s}"
+                       WHERE details IS NULL
+                        AND find_fails < 10
+                        AND (update_reserved IS NULL OR update_reserved <= NOW())
+                    ORDER BY find_fails NULLS FIRST,
+                            match_id DESC 
+                   LIMIT $1
+               )
+               RETURNING match_id
                """
 
 flush_found = """UPDATE "match_{platform_lower:s}"
@@ -14,12 +20,14 @@ flush_found = """UPDATE "match_{platform_lower:s}"
                     version = $3,
                     duration = $4,
                     win = $5,
-                    details = TRUE
+                    details = TRUE,
+                    update_reserved = NULL
                     WHERE match_id = $6
                 """
 
 flush_missing = """UPDATE "match_{platform_lower:s}"
-                                   SET find_fails = find_fails + 1
+                                   SET  find_fails = find_fails + 1,
+                                        update_reserved = NULL
                                    WHERE match_id = ANY($1::BIGINT[])
                                 """
 

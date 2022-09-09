@@ -75,13 +75,13 @@ class Handler:
         while not self.is_shutdown:
 
             actual_count = await handler.wait_threshold(int(0.75 * expected_size))
-            self.logging.info("Refilling %s by %s to %s", platform, expected_size - actual_count + 500, expected_size + 500)
+            self.logging.debug("Refilling %s by %s to %s", platform, expected_size - actual_count + 500, expected_size + 500)
             try:
                 tasks = await self.gather_tasks(
                     platform=platform, count=expected_size - actual_count + 500
                 )
-                self.logging.info("Found %s tasks for %s", len(tasks), platform)
                 if tasks:
+                    self.logging.debug("Found %s tasks for %s", len(tasks), platform)
                     task_list = [
                         [
                             task["puuid"],
