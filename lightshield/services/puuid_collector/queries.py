@@ -1,11 +1,18 @@
-tasks = """SELECT summoner_id 
+tasks = """UPDATE "ranking_{platform_lower:s}"
+            SET update_reserved = NOW() + '30 minutes'::INTERVAL
+            WHERE summoner_id IN (
+                    SELECT summoner_id 
                    FROM "ranking_{platform_lower:s}"
                    WHERE puuid IS NULL
-                   LIMIT $1   
+                   AND (update_reserved IS NULL OR update_reserved < NOW())
+                   LIMIT $1 
+                   )
+            RETURNING summoner_id  
     """
 
 update_ranking = """UPDATE "ranking_{platform_lower:s}"
-                    SET puuid = $2
+                    SET puuid = $2,
+                    update_reserved = NULL
                     WHERE summoner_id =  $1
                 """
 

@@ -31,6 +31,7 @@ get_tasks = """
                 WHERE category < 10
                 ORDER BY category, last_history_update
                 LIMIT $2
+                FOR UPDATE
                 )
                 RETURNING puuid, latest_match, last_history_update
                     """

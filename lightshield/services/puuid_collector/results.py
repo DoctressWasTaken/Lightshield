@@ -8,6 +8,7 @@ import pickle
 from lightshield.config import Config
 from lightshield.services.puuid_collector import queries
 from lightshield.rabbitmq_defaults import QueueHandler
+from lightshield.services import fail_loop
 
 
 class Handler:
@@ -68,7 +69,7 @@ class Handler:
                     platform_lower=platform.lower(),
                 )
             )
-            await prep.executemany(converted_results)
+            await fail_loop(prep.executemany, [converted_results], self.logging)
 
     async def platform_thread(self, platform):
         self.buffered_tasks[platform] = {"found": []}

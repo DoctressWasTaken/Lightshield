@@ -48,7 +48,6 @@ class Platform:
         else:
             self.session = aiohttp.ClientSession(connector=conn)
 
-
     async def process_page(self, url, task_instance):
         async with self.semaphore:
             if self.handler.is_shutdown:
@@ -56,7 +55,7 @@ class Platform:
                 return
             sleep = asyncio.create_task(asyncio.sleep(1))
             async with self.session.get(
-                    url, proxy=self.config.proxy.string
+                url, proxy=self.config.proxy.string
             ) as response:
                 data = await response.json()
                 await sleep
@@ -95,16 +94,18 @@ class Platform:
         found_latest = False
         newest_match = None
         while (
-                task_instance.calls_to_make
-                and not task_instance.is_404
-                and not self.handler.is_shutdown
-                and not found_latest
+            task_instance.calls_to_make
+            and not task_instance.is_404
+            and not self.handler.is_shutdown
+            and not found_latest
         ):
             seconds = (self.retry_after - datetime.now()).total_seconds()
             if seconds >= 0.1:
                 await asyncio.sleep(seconds)
             try:
-                if response_matches := await self.process_page(task_instance.calls_to_make[0], task_instance):
+                if response_matches := await self.process_page(
+                    task_instance.calls_to_make[0], task_instance
+                ):
                     if not newest_match:
                         newest_match = int(response_matches[0].split("_")[1])
                     for match in response_matches:
@@ -129,7 +130,7 @@ class Platform:
             newest_match = latest_match
         package = {
             "matches": list(set(matches)),
-            "summoner": [puuid, newest_match, now]
+            "summoner": [puuid, newest_match, now],
         }
         await self.results_queue.send_task(pickle.dumps(package), persistent=True)
         await message.ack()

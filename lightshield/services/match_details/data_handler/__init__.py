@@ -7,7 +7,10 @@ import pickle
 from lightshield.config import Config
 from lightshield.services.match_details import queries
 from lightshield.rabbitmq_defaults import QueueHandler
-from lightshield.services.match_details.data_handler.parse_tables import generate_player, generate_central
+from lightshield.services.match_details.data_handler.parse_tables import (
+    generate_player,
+    generate_central,
+)
 
 
 class Handler:
@@ -68,17 +71,19 @@ class Handler:
                     info = content["info"]
                     central = await generate_central(info)
                     bans = {}
-                    if 'bans' in info['teams'][0]:
-                        ban_list = [team['bans'] for team in info['teams']][0]
-                        bans = {entry['pickTurn']: entry['championId'] for entry in ban_list}
-                    for player in info['participants']:
+                    if "bans" in info["teams"][0]:
+                        ban_list = [team["bans"] for team in info["teams"]][0]
+                        bans = {
+                            entry["pickTurn"]: entry["championId"] for entry in ban_list
+                        }
+                    for player in info["participants"]:
                         tasks.append(await generate_player(player, bans, central))
 
                 keys = list(tasks[0].keys())
 
                 listed_data = {}
                 for entry in tasks:
-                    platform = entry['platformId']
+                    platform = entry["platformId"]
                     if platform not in listed_data:
                         listed_data[platform] = []
                     listed_data[platform].append(tuple(entry.values()))
@@ -93,8 +98,10 @@ class Handler:
                                 ON CONFLICT DO NOTHING                        
                             """ % (
                             key.lower(),
-                            ", ".join(["\"%s\"" % key for key in keys]),
-                            ", ".join(["$%s" % (index + 1) for index in range(len(keys))])
+                            ", ".join(['"%s"' % key for key in keys]),
+                            ", ".join(
+                                ["$%s" % (index + 1) for index in range(len(keys))]
+                            ),
                         )
                         prep = await connection.prepare(query)
                         for _ in range(5):
@@ -114,7 +121,5 @@ class Handler:
         """Run."""
         await self.init()
 
-        await asyncio.gather(
-            asyncio.create_task(self.process_data())
-        )
+        await asyncio.gather(asyncio.create_task(self.process_data()))
         await self.handle_shutdown()

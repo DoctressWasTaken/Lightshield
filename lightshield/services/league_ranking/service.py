@@ -4,148 +4,175 @@ from datetime import datetime
 
 import aiohttp
 
-from lightshield.services.league_ranking.rank_manager import RankManager
 from lightshield.services.league_ranking import queries
+from lightshield.services import ServiceTemplate
+from lightshield.services import fail_loop
 
 
-class Service:
+class LeagueRankingService(ServiceTemplate):
     empty_page = False
     active_rank = None
     is_shutdown = False
+    proxy = None
+    db = None
 
-    def __init__(self, name, config, handler):
-        self.name = name
-        self.logging = logging.getLogger("%s" % name)
-        self.config = config
-        self.handler = handler
-        self.rankmanager = RankManager(config, self.logging, handler, self)
+    def __init__(self, platform, config):
+        super().__init__(platform, config)
+
         self.retry_after = datetime.now()
         self.url = (
-            f"{self.config.proxy.protocol}://{self.name.lower()}.api.riotgames.com/lol/"
+            f"{self.config.proxy.protocol}://{self.platform.lower()}.api.riotgames.com/lol/"
             + "league-exp/v4/entries/RANKED_SOLO_5x5/%s/%s?page=%s"
         )
         self.preset = {}
         self.to_update = {}
+        self.user_rankings = {}
 
-    async def shutdown(self):
-        self.is_shutdown = True
-
-    async def fetch(self, page, session):
-        """Handle request."""
-
-        url = self.url % (*self.active_rank, page)
+    async def worker(self, rank, division, pages, session):
+        """Iterate over pages pulled from a queue until an empty one is found."""
         try:
-            async with session.get(url, proxy=self.handler.proxy) as response:
-                data = await response.json()
-            match response.status:
-                case 200:
-                    if not data:
-                        self.empty_page = True
-                    else:
-                        for entry in data:
-                            rank = [entry["tier"], entry["rank"], entry["leaguePoints"]]
-                            if (
-                                entry["summonerId"] not in self.preset
-                                or self.preset[entry["summonerId"]]
-                                != entry["leaguePoints"]
-                            ):
-                                self.to_update[entry["summonerId"]] = rank
-                    self.logging.debug(url)
-                    return None
-                case 430:
-                    wait_until = datetime.fromtimestamp(data["Retry-At"])
-                    seconds = (wait_until - datetime.now()).total_seconds()
-                    seconds = max(0.1, seconds)
-                    await asyncio.sleep(seconds)
-                    return page
-                case 429:
-                    await asyncio.sleep(0.5)
-                    return page
-                case _:
-                    return page
-        except aiohttp.ContentTypeError:
-            return page
-
-    async def run(self):
-        """Runner."""
-        self.logging.info("Started.")
-        await self.rankmanager.init()
-        while not self.is_shutdown:
-            self.active_rank = await self.rankmanager.get_next()
-            self.to_update = {}
-            await self.get_preset()
-            pages = list(range(1, 6))
-            next_page = 6
-            self.empty_page = False
-            async with aiohttp.ClientSession() as session:
-                while pages and not self.is_shutdown:
-                    tasks = [
-                        asyncio.create_task(self.fetch(page, session)) for page in pages
-                    ]
-                    pages = list(filter(None, await asyncio.gather(*tasks)))
-
-                    if not self.empty_page:
-                        while len(pages) < 5:
-                            pages.append(next_page)
-                            next_page += 1
-
-            if self.to_update:
-                await asyncio.gather(asyncio.sleep(1), self.update_data())
-            # Insert data
-            await self.rankmanager.update(key=self.active_rank)
-
-    async def get_preset(self):
-        """Get the already existing data."""
-        self.preset = {}
-        try:
-            async with self.handler.db.acquire() as connection:
-                latest = await connection.fetch(
-                    queries.preexisting.format(
-                        platform_lower=self.name.lower(),
-                        platform=self.name,
-                    ),
-                    *self.active_rank,
-                )
-            if latest:
-                self.preset = {
-                    line["summoner_id"]: line["leaguepoints"] for line in latest
-                }
-            del latest
-        except Exception as err:
-            self.logging.error(err)
-            raise err
-
-    async def update_data(self):
-        """Update all changed users in the DB."""
-        try:
-            to_update_list = [[key] + val for key, val in self.to_update.items()]
-            del self.to_update
-            updated = len(to_update_list)
-            batch = to_update_list[:5000]
-            async with self.handler.db.acquire() as connection:
-                while to_update_list and not self.is_shutdown:
+            while not self.is_shutdown:
+                page = pages.get_nowait()
+                url = self.url % (rank, division, page)
+                async with session.get(url, proxy=self.config.proxy.string) as response:
                     try:
-                        prep = await connection.prepare(
-                            queries.update.format(
-                                platform=self.name,
-                                platform_lower=self.name.lower(),
-                            )
-                        )
-                        await prep.executemany(batch)
-                    except asyncio.exceptions.TimeoutError:
-                        self.logging.error("Inserting entries timed out")
+                        api_response = await response.json()
+                    except aiohttp.ContentTypeError:
+                        pages.task_done()
+                        await pages.put(page)
                         continue
-                    if len(to_update_list) > 5000:
-                        to_update_list = to_update_list[5000:]
-                    else:
-                        to_update_list = []
-                    batch = to_update_list[:5000]
-                self.logging.info(
-                    "Updated %s users in %s %s.",
-                    updated - len(to_update_list),
-                    *self.active_rank,
-                )
-            del to_update_list
+                match response.status:
+                    case 200:
+                        if not api_response:
+                            pages.task_done()
+                            return
+                        for player in api_response:
+                            self.user_rankings[player["summonerId"]] = player[
+                                "leaguePoints"
+                            ]
+                        await pages.put(page + 10)
+                    case 430:
+                        wait_until = datetime.fromtimestamp(api_response["Retry-At"])
+                        seconds = (wait_until - datetime.now()).total_seconds()
+                        seconds = max(0.1, seconds)
+                        await asyncio.sleep(seconds)
+                        await pages.put(page)
+                    case 429:
+                        await asyncio.sleep(0.5)
+                        await pages.put(page)
+                    case _:
+                        await pages.put(page)
+                pages.task_done()
+        except asyncio.QueueEmpty as err:
+            self.logging.info(err)
+            return
         except Exception as err:
-            self.logging.error(err)
-            raise err
+            self.logging.info(err)
+
+    async def init_ranks(self):
+        all_ranks = []
+        for platform in self.config.platform_templates:
+            for rank in self.config.ranks:
+                if rank in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
+                    all_ranks.append([platform, rank, "I"])
+                    continue
+                for division in self.config.divisions:
+                    all_ranks.append([platform, rank, division])
+        async with self.db.acquire() as connection:
+            prep = await connection.prepare(
+                """
+                INSERT INTO rank_distribution (platform, rank, division)
+                VALUES($1, $2, $3)
+                ON CONFLICT DO NOTHING
+            """
+            )
+            await fail_loop(prep.executemany, [all_ranks], self.logging)
+
+    async def process_division(self, rank, division):
+        self.logging.debug("Started %s %s", rank, division)
+        pages = asyncio.Queue()
+        for i in range(10):
+            await pages.put(i + 1)
+
+        async with aiohttp.ClientSession() as session:
+            workers = [
+                asyncio.create_task(self.worker(rank, division, pages, session))
+                for _ in range(5)
+            ]
+            async with self.db.acquire() as connection:
+                preexisting = await connection.fetch(
+                    queries.preexisting.format(
+                        platform_lower=self.platform.lower(),
+                        platform=self.platform,
+                    ),
+                    rank,
+                    division,
+                )
+            await asyncio.gather(*workers)
+            for player in preexisting:
+                if (
+                    player["summoner_id"] in self.user_rankings
+                    and player["leaguepoints"]
+                    == self.user_rankings[player["summoner_id"]]
+                ):
+                    del self.user_rankings[player["summoner_id"]]
+
+            async with self.db.acquire() as connection:
+                prep = await connection.prepare(
+                    queries.update.format(
+                        platform=self.platform,
+                        platform_lower=self.platform.lower(),
+                    )
+                )
+                await fail_loop(
+                    prep.executemany,
+                    [
+                        [
+                            [key, rank, division, value]
+                            for key, value in self.user_rankings.items()
+                        ]
+                    ],
+                    self.logging,
+                )
+
+        self.logging.debug("Done %s %s", rank, division)
+
+    async def run(self, db):
+        """Runner."""
+        self.db = db
+        await self.init_ranks()
+        while not self.is_shutdown:
+            async with self.db.acquire() as connection:
+                next = await connection.fetchrow(
+                    """
+                    SELECT rank, division
+                    FROM rank_distribution
+                    WHERE platform = $1
+                    AND last_updated IS NULL OR last_updated < NOW() - '{cycle_length:0f} hours'::INTERVAL
+                    ORDER BY last_updated NULLS FIRST
+                    LIMIT 1
+                """.format(
+                        cycle_length=self.config.services.league_ranking.cycle_length
+                    ),
+                    self.platform,
+                )
+            if not next:
+                for _ in range(30):
+                    if self.is_shutdown:
+                        return
+                    await asyncio.sleep(2)
+                continue
+            await self.process_division(next["rank"], next["division"])
+            async with self.db.acquire() as connection:
+                await connection.fetchrow(
+                    """
+                    UPDATE rank_distribution
+                    SET last_updated = NOW()
+                    WHERE rank = $1
+                        AND division = $2
+                        AND platform = $3
+                        """,
+                    next["rank"],
+                    next["division"],
+                    self.platform,
+                )

@@ -7,6 +7,7 @@ import pickle
 from lightshield.config import Config
 from lightshield.services.match_details import queries
 from lightshield.rabbitmq_defaults import QueueHandler
+from lightshield.services import fail_loop
 
 
 class Handler:
@@ -68,23 +69,20 @@ class Handler:
                 tasks = []
                 for message in self.summoners:
                     content = pickle.loads(message.body)
-                    tasks += [[
-                        content['last_activity'],
-                        content['platform'],
-                        player['name'],
-                        player['puuid']]
-                        for player in content['summoners']
+                    tasks += [
+                        [
+                            content["last_activity"],
+                            content["platform"],
+                            player["name"],
+                            player["puuid"],
+                        ]
+                        for player in content["summoners"]
                     ]
                 if tasks:
                     async with self.db.acquire() as connection:
                         prep = await connection.prepare(queries.summoners_update_only)
+                        await fail_loop(prep.executemany, tasks, self.logging)
 
-                        for _ in range(5):
-                            try:
-                                await prep.executemany(tasks)
-                                break
-                            except Exception as err:
-                                self.logging.error(err)
                 for message in self.summoners:
                     await message.ack()
             logger.info("Consumed %s", len(self.summoners))
@@ -92,9 +90,7 @@ class Handler:
             logger.error(err)
 
     async def process_matches(self):
-        """Process summoners into the database.
-
-        """
+        """Process summoners into the database."""
         logger = logging.getLogger("Matches")
         queue = QueueHandler("match_details_results")
         await queue.init(durable=True, prefetch_count=5000, connection=self.pika)
@@ -111,41 +107,47 @@ class Handler:
                 missing = {}
                 for message in self.matches:
                     match = pickle.loads(message.body)
-                    platform = match['platform']
-                    if match['found']:
+                    platform = match["platform"]
+                    if match["found"]:
                         if platform not in found:
                             found[platform] = []
-                        found[platform].append([
-                            match['data']['queue'],
-                            match['data']['creation'],
-                            match['data']['patch'],
-                            match['data']['duration'],
-                            match['data']['win'],
-                            match['data']['matchId'],
-                        ])
+                        found[platform].append(
+                            [
+                                match["data"]["queue"],
+                                match["data"]["creation"],
+                                match["data"]["patch"],
+                                match["data"]["duration"],
+                                match["data"]["win"],
+                                match["data"]["matchId"],
+                            ]
+                        )
                     else:
                         if platform not in missing:
                             missing[platform] = []
-                        missing[platform].append([
-                            match['data']['matchId']
-                        ])
+                        missing[platform].append([match["data"]["matchId"]])
                 async with self.db.acquire() as connection:
-                    if found:
-                        for platform, values in found.items():
+                    for platform, values in found.items():
+                        if found:
                             prep = await connection.prepare(
                                 queries.flush_found.format(
                                     platform_lower=platform.lower(),
                                     platform=platform,
-                                ))
-                            await prep.executemany(values)
-                    if missing:
-                        for platform, values in missing.items():
-                            await connection.execute(
-                                queries.flush_missing.format(
-                                    platform_lower=platform.lower(),
-                                    platform=platform,
-                                ),
-                                values
+                                )
+                            )
+                            await fail_loop(prep.executemany, values, self.logging)
+
+                    for platform, values in missing.items():
+                        if missing:
+                            await fail_loop(
+                                connection.execute,
+                                [
+                                    queries.flush_missing.format(
+                                        platform_lower=platform.lower(),
+                                        platform=platform,
+                                    ),
+                                    values,
+                                ],
+                                self.logging,
                             )
                 for message in self.matches:
                     await message.ack()
@@ -159,7 +161,7 @@ class Handler:
 
         await asyncio.gather(
             asyncio.create_task(self.process_matches()),
-            asyncio.create_task(self.process_summoners())
+            asyncio.create_task(self.process_summoners()),
         )
 
         await self.handle_shutdown()

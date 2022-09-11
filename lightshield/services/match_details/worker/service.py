@@ -2,15 +2,20 @@ import asyncio
 import json
 import logging
 import os
-
+import time
 from datetime import datetime, timedelta
+import time
 
 import aiohttp
 from lightshield.rabbitmq_defaults import QueueHandler
 import pickle
 
 from lightshield.services.match_details import queries
-from lightshield.services.match_details.worker.parse_data import parse_details, parse_summoners
+from lightshield.services.match_details.worker.parse_data import (
+    parse_details,
+    parse_summoners,
+)
+
 
 class Platform:
     task_queue = None
@@ -77,29 +82,44 @@ class Platform:
                     data, _ = await asyncio.gather(response.json(), sleep)
             match response.status:
                 case 200:
+
                     match_package = await parse_details(data, matchId, self.platform)
                     summoner_package = await parse_summoners(data, self.platform)
                     await asyncio.gather(
-                        *list(filter(None,[asyncio.create_task(self.output_queues.data.send_task(
-                            pickle.dumps(data)
-                        )) if match_package['found'] else None,
-                        asyncio.create_task(self.output_queues.match.send_task(
-                        pickle.dumps(match_package)
-                    )),
-                        asyncio.create_task(self.output_queues.summoners.send_task(
-                        pickle.dumps(summoner_package)
-                    )),
-                        ]))
+                        *list(
+                            filter(
+                                None,
+                                [
+                                    asyncio.create_task(
+                                        self.output_queues.data.send_task(
+                                            pickle.dumps(data)
+                                        )
+                                    )
+                                    if match_package["found"]
+                                    else None,
+                                    asyncio.create_task(
+                                        self.output_queues.match.send_task(
+                                            pickle.dumps(match_package)
+                                        )
+                                    ),
+                                    asyncio.create_task(
+                                        self.output_queues.summoners.send_task(
+                                            pickle.dumps(summoner_package)
+                                        )
+                                    ),
+                                ],
+                            )
+                        )
                     )
                     await message.ack()
                     return
                 case 404:
                     await self.output_queues.match.send_task(
-                        {"found": False,
-                         "platform": self.platform,
-                         "data": {
-                             "matchId": matchId
-                         }}
+                        {
+                            "found": False,
+                            "platform": self.platform,
+                            "data": {"matchId": matchId},
+                        }
                     )
                     await message.ack()
                     return

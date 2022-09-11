@@ -19,6 +19,7 @@ aio-pika = "^8.0.3"
 
 [tool.poetry.dev-dependencies]
 black = "*"
+coverage = "^6.4.4"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

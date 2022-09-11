@@ -1,0 +1,1 @@
+from lightshield.services.league_ranking.tests import TestLeagueRanking

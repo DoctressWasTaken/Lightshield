@@ -37,7 +37,12 @@ class Handler:
     async def init_shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
 
-        await asyncio.gather(*[asyncio.create_task(platform.shutdown()) for platform in self.platforms.values()])
+        await asyncio.gather(
+            *[
+                asyncio.create_task(platform.shutdown())
+                for platform in self.platforms.values()
+            ]
+        )
         self.is_shutdown = True
 
     async def handle_shutdown(self):

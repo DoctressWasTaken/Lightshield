@@ -8,6 +8,7 @@ import asyncpg
 from lightshield.services.match_details import queries
 from lightshield.rabbitmq_defaults import QueueHandler
 from lightshield.config import Config
+from lightshield.services import fail_loop
 
 
 class Handler:
@@ -49,12 +50,16 @@ class Handler:
         while not self.is_shutdown:
             async with self.db.acquire() as connection:
                 try:
-                    return await connection.fetch(
-                        queries.tasks.format(
-                            platform=platform,
-                            platform_lower=platform.lower(),
-                        ),
-                        count,
+                    return await fail_loop(
+                        connection.fetch,
+                        [
+                            queries.tasks.format(
+                                platform=platform,
+                                platform_lower=platform.lower(),
+                            ),
+                            count,
+                        ],
+                        self.logging,
                     )
                 except asyncpg.InternalServerError:
                     self.logging.info("Internal server error with db.")
@@ -71,7 +76,12 @@ class Handler:
         while not self.is_shutdown:
 
             actual_count = await handler.wait_threshold(int(0.75 * expected_size))
-            self.logging.debug("Refilling %s by %s to %s", platform, expected_size - actual_count + 500, expected_size + 500)
+            self.logging.debug(
+                "Refilling %s by %s to %s",
+                platform,
+                expected_size - actual_count + 500,
+                expected_size + 500,
+            )
             try:
 
                 tasks = await self.gather_tasks(
@@ -81,7 +91,8 @@ class Handler:
                     self.logging.debug("Found %s tasks for %s", len(tasks), platform)
 
                     task_list = [
-                        [task["match_id"], str(task["match_id"]).encode()] for task in tasks
+                        [task["match_id"], str(task["match_id"]).encode()]
+                        for task in tasks
                     ]
 
                     await handler.send_tasks(task_list, persistent=True)

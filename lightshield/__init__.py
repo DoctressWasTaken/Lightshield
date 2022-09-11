@@ -37,7 +37,7 @@ async def shutdown(services):
     """Init shutdown in all active services."""
     logging.info("Shutting down.")
     for service in services.values():
-        await service.init_shutdown()
+        await service.shutdown()
 
 
 async def print_config(*args, **kwargs):

@@ -6,9 +6,10 @@ WORKDIR /project
 RUN pip install poetry
 COPY wait-for-it.sh .
 COPY pyproject.toml poetry.lock ./
-RUN poetry install
+RUN poetry install --no-dev
 COPY lightshield/templates/ lightshield/templates/
 COPY lightshield/cli_commands/ lightshield/cli_commands/
 COPY lightshield/rabbitmq_defaults/ lightshield/rabbitmq_defaults/
 COPY lightshield/*.py lightshield/
+COPY lightshield/services/*.py lightshield/services/
 COPY lightshield/services/$service/ lightshield/services/$service/

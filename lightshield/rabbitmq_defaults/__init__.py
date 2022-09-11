@@ -107,4 +107,3 @@ class QueueHandler:
     async def get_queue(self):
         """Return a consume func"""
         return await self.channel.declare_queue(self.queue, passive=True)
-

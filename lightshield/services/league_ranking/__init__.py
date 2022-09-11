@@ -2,38 +2,27 @@
 import asyncio
 import logging
 
-from lightshield.services.league_ranking.rank_manager import RankManager
-from lightshield.services.league_ranking.service import Service
+from lightshield.services.league_ranking.service import LeagueRankingService
 from lightshield.config import Config
+from lightshield.services import HandlerTemplate
 
 
-class Handler:
-    db = None
-
+class Handler(HandlerTemplate):
     def __init__(self):
-        self.config = Config()
-        self.logging = logging.getLogger("Handler")
-        self.connection = self.config.get_db_connection()
-        self.proxy = self.config.proxy.string
+        super().__init__()
+
         self.platforms = {
-            platform: Service(platform, self.config, self)
+            platform: LeagueRankingService(platform, self.config)
             for platform in self.config.active_platforms
         }
 
-    async def init_shutdown(self, *args, **kwargs):
-        """Initiate shutdown."""
-        for platform in self.platforms.values():
-            await platform.shutdown()
-
-    async def handle_shutdown(self):
-        await self.db.close()
-
     async def run(self):
         """Run."""
-        self.db = await self.connection.init()
+        await self.init_db()
+        self.logging.info("Starting service")
         tasks = []
         for platform in self.platforms.values():
-            tasks.append(asyncio.create_task(platform.run()))
+            tasks.append(asyncio.create_task(platform.run(self.db)))
 
         await asyncio.gather(*tasks)
-        await self.handle_shutdown()
+        await self.cleanup()

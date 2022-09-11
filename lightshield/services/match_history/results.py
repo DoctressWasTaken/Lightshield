@@ -1,7 +1,7 @@
 """Summoner ID Task Selector."""
 import asyncio
 import logging
-
+import random
 import aio_pika
 
 import pickle
@@ -9,6 +9,7 @@ import pickle
 from lightshield.config import Config
 from lightshield.services.match_history import queries
 from lightshield.rabbitmq_defaults import QueueHandler
+from lightshield.services import fail_loop
 
 
 class Handler:
@@ -45,7 +46,9 @@ class Handler:
         """Run."""
         await self.init()
         results_queue = QueueHandler("match_history_results")
-        await results_queue.init(durable=True, prefetch_count=5000, connection=self.pika)
+        await results_queue.init(
+            durable=True, prefetch_count=5000, connection=self.pika
+        )
         try:
             while not self.is_shutdown:
                 self.messages = []
@@ -59,53 +62,41 @@ class Handler:
                 summoners = []
                 for message in self.messages:
                     content = pickle.loads(message.body)
-                    for match in content['matches']:
+                    for match in content["matches"]:
                         if match[0] not in matches:
-                            matches[match[0]] = {
-                                'no_queue': [],
-                                'queue': []
-                            }
+                            matches[match[0]] = {"no_queue": [], "queue": []}
                         if len(match) == 2:
-                            matches[match[0]]['no_queue'].append(match)
+                            matches[match[0]]["no_queue"].append(match)
                         else:
-                            matches[match[0]]['queue'].append(match)
-                    summoners.append(content['summoner'])
-                async with self.db.acquire() as connection:
-                    for platform, matches in matches.items():
-                        if matches['queue']:
-
+                            matches[match[0]]["queue"].append(match)
+                    summoners.append(content["summoner"])
+                for platform, matches in matches.items():
+                    async with self.db.acquire() as connection:
+                        if matches["queue"]:
                             prep = await connection.prepare(
                                 queries.insert_queue_known.format(
                                     platform_lower=platform.lower()
                                 )
                             )
-                            for _ in range(5):
-                                try:
-                                    await prep.executemany(matches['queue'])
-                                    break
-                                except Exception as err:
-                                    self.logging.error(err)
+                            await fail_loop(
+                                prep.executemany, [matches["queue"]], self.logging
+                            )
 
-                        if matches['no_queue']:
+                        if matches["no_queue"]:
                             prep = await connection.prepare(
                                 queries.insert_queue_unknown.format(
                                     platform_lower=platform.lower()
                                 )
                             )
-                            for _ in range(5):
-                                try:
-                                    await prep.executemany(matches['no_queue'])
-                                    break
-                                except Exception as err:
-                                    self.logging.error(err)
-                    prep = await connection.prepare(
-                        queries.update_players
-                    )
-                    await prep.executemany(summoners)
+                            await fail_loop(
+                                prep.executemany, [matches["no_queue"]], self.logging
+                            )
+
+                        prep = await connection.prepare(queries.update_players)
+                        await fail_loop(prep.executemany, [summoners], self.logging)
                 for message in self.messages:
                     await message.ack()
                 self.logging.debug("Consumed %s", len(self.messages))
-
 
         except Exception as err:
             self.logging.error(err)

@@ -24,7 +24,7 @@ For documentation on the config file check [here.](Config.md)
 
 #### Setup Database
 
-Lightshield is set up to run with one of 2 databases, PostgreSQL and CrateDB. After setting the option of which to use
+Lightshield is set up to run with one database, PostgreSQL . After setting the option of which to use
 in the config file execute the initial table setup script:
 ```shell
 lightshield init-database

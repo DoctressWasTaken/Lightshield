@@ -8,6 +8,7 @@ import pickle
 from lightshield.config import Config
 from lightshield.services.match_history import queries
 from lightshield.rabbitmq_defaults import QueueHandler
+from lightshield.services import fail_loop
 
 
 class Handler:
@@ -51,17 +52,16 @@ class Handler:
             async with self.db.acquire() as connection:
                 try:
                     query = queries.get_tasks.format(
-                            found_newer_wait=self.service.min_age.newer_activity,
-                            no_activity_wait=self.service.min_age.no_activity,
-                            min_activity_age=self.service.min_age.activity_min_age
-                        )
-                    return await connection.fetch(
-                        query,
-                        platform,
-                        count,
+                        found_newer_wait=self.service.min_age.newer_activity,
+                        no_activity_wait=self.service.min_age.no_activity,
+                        min_activity_age=self.service.min_age.activity_min_age,
+                    )
+                    return await fail_loop(
+                        connection.fetch, [query, platform, count], self.logging
                     )
                 except asyncpg.InternalServerError:
                     self.logging.info("Internal server error with db.")
+
             await asyncio.sleep(1)
 
     async def platform_handler(self, platform):
@@ -75,7 +75,12 @@ class Handler:
         while not self.is_shutdown:
 
             actual_count = await handler.wait_threshold(int(0.75 * expected_size))
-            self.logging.debug("Refilling %s by %s to %s", platform, expected_size - actual_count + 500, expected_size + 500)
+            self.logging.debug(
+                "Refilling %s by %s to %s",
+                platform,
+                expected_size - actual_count + 500,
+                expected_size + 500,
+            )
             try:
                 tasks = await self.gather_tasks(
                     platform=platform, count=expected_size - actual_count + 500
