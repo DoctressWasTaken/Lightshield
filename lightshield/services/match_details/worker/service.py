@@ -82,7 +82,6 @@ class Platform:
                     data, _ = await asyncio.gather(response.json(), sleep)
             match response.status:
                 case 200:
-
                     match_package = await parse_details(data, matchId, self.platform)
                     summoner_package = await parse_summoners(data, self.platform)
                     await asyncio.gather(

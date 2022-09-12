@@ -81,7 +81,7 @@ class Handler:
                 if tasks:
                     async with self.db.acquire() as connection:
                         prep = await connection.prepare(queries.summoners_update_only)
-                        await fail_loop(prep.executemany, tasks, self.logging)
+                        await fail_loop(prep.executemany, [tasks], self.logging)
 
                 for message in self.summoners:
                     await message.ack()
@@ -134,7 +134,7 @@ class Handler:
                                     platform=platform,
                                 )
                             )
-                            await fail_loop(prep.executemany, values, self.logging)
+                            await fail_loop(prep.executemany, [values], self.logging)
 
                     for platform, values in missing.items():
                         if missing:

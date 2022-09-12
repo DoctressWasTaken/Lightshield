@@ -19,6 +19,7 @@ get_tasks = """
                     categories AS (
                     SELECT *,
                             CASE
+                                WHEN last_history_update IS NULL THEN 1
                                 WHEN found_activity AND age >= {found_newer_wait:.0f} THEN 2
                                 WHEN age >= {no_activity_wait:.0f} THEN 3
                                 WHEN age < {no_activity_wait:.0f} AND found_activity THEN 12

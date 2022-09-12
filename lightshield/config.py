@@ -246,7 +246,7 @@ class Config:
                         services, ["match_history", "min_age", "newer_activity"], 3
                     ),
                     no_activity=self._get_deep(
-                        services, ["match_history", "min_age", "newer_activity"], 10
+                        services, ["match_history", "min_age", "no_activity"], 10
                     ),
                     activity_min_age=self._get_deep(
                         services, ["match_history", "min_age", "activity_min_age"], 6

@@ -15,6 +15,7 @@ class LeagueRankingService(ServiceTemplate):
     is_shutdown = False
     proxy = None
     db = None
+    last_page = 0
 
     def __init__(self, platform, config):
         super().__init__(platform, config)
@@ -50,7 +51,8 @@ class LeagueRankingService(ServiceTemplate):
                             self.user_rankings[player["summonerId"]] = player[
                                 "leaguePoints"
                             ]
-                        await pages.put(page + 10)
+                        await pages.put(self.last_page + 1)
+                        self.last_page += 1
                     case 430:
                         wait_until = datetime.fromtimestamp(api_response["Retry-At"])
                         seconds = (wait_until - datetime.now()).total_seconds()
@@ -91,8 +93,9 @@ class LeagueRankingService(ServiceTemplate):
     async def process_division(self, rank, division):
         self.logging.debug("Started %s %s", rank, division)
         pages = asyncio.Queue()
-        for i in range(10):
-            await pages.put(i + 1)
+        for _ in range(10):
+            await pages.put(self.last_page + 1)
+            self.last_page = 1
 
         async with aiohttp.ClientSession() as session:
             workers = [
@@ -135,7 +138,7 @@ class LeagueRankingService(ServiceTemplate):
                     self.logging,
                 )
 
-        self.logging.debug("Done %s %s", rank, division)
+        self.logging.info("Done %s %s", rank, division)
 
     async def run(self, db):
         """Runner."""
@@ -148,7 +151,7 @@ class LeagueRankingService(ServiceTemplate):
                     SELECT rank, division
                     FROM rank_distribution
                     WHERE platform = $1
-                    AND last_updated IS NULL OR last_updated < NOW() - '{cycle_length:0f} hours'::INTERVAL
+                    AND (last_updated IS NULL OR last_updated < NOW() - '{cycle_length:0f} hours'::INTERVAL)
                     ORDER BY last_updated NULLS FIRST
                     LIMIT 1
                 """.format(
@@ -163,16 +166,19 @@ class LeagueRankingService(ServiceTemplate):
                     await asyncio.sleep(2)
                 continue
             await self.process_division(next["rank"], next["division"])
-            async with self.db.acquire() as connection:
-                await connection.fetchrow(
-                    """
-                    UPDATE rank_distribution
-                    SET last_updated = NOW()
-                    WHERE rank = $1
-                        AND division = $2
-                        AND platform = $3
-                        """,
-                    next["rank"],
-                    next["division"],
-                    self.platform,
-                )
+            try:
+                async with self.db.acquire() as connection:
+                    await connection.fetchrow(
+                        """
+                        UPDATE rank_distribution
+                        SET last_updated = NOW()
+                        WHERE rank = $1
+                            AND division = $2
+                            AND platform = $3
+                            """,
+                        next["rank"],
+                        next["division"],
+                        self.platform,
+                    )
+            except Exception as err:
+                self.logging.error(err)

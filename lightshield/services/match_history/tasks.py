@@ -27,6 +27,18 @@ class Handler:
         for platform in self.platforms:
             self.buffered_tasks[platform] = {}
         self.service = self.config.services.match_history
+        self.logging.info(
+            "Time to be considered a new activity: %s hours.",
+            self.service.min_age.activity_min_age,
+        )
+        self.logging.info(
+            "Days without a newer game until update: %s.",
+            self.service.min_age.no_activity,
+        )
+        self.logging.info(
+            "Days with a newer game until update: %s.",
+            self.service.min_age.newer_activity,
+        )
 
     async def init(self):
         self.db = await self.connector.init()
