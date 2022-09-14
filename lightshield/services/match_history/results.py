@@ -29,12 +29,12 @@ class Handler:
             self.config.rabbitmq._string, loop=asyncio.get_event_loop()
         )
 
-    async def init_shutdown(self, *args, **kwargs):
+    async def shutdown(self, *args, **kwargs):
         """Shutdown handler"""
         self.logging.info("Received shutdown signal.")
         self.is_shutdown = True
 
-    async def handle_shutdown(self):
+    async def cleanup(self):
         """Close db connection pool after services have shut down."""
         await self.db.close()
         await self.pika.close()
@@ -100,4 +100,4 @@ class Handler:
 
         except Exception as err:
             self.logging.error(err)
-        await self.handle_shutdown()
+        await self.cleanup()

@@ -41,7 +41,7 @@ class Handler:
         )
         self.db = await self.connector.init()
 
-    async def init_shutdown(self, *args, **kwargs):
+    async def shutdown(self, *args, **kwargs):
         """Initiate shutdown."""
         self.logging.info("Received shutdown signal.")
         await asyncio.gather(
@@ -52,7 +52,7 @@ class Handler:
         )
         self.is_shutdown = True
 
-    async def handle_shutdown(self):
+    async def cleanup(self):
         await self.pika.close()
 
     async def run(self):
@@ -73,4 +73,4 @@ class Handler:
             tasks.append(asyncio.create_task(platform.run(output_queues)))
 
         await asyncio.gather(*tasks)
-        await self.handle_shutdown()
+        await self.cleanup()
