@@ -286,11 +286,6 @@ async def generate_player(player, bans, central):
         )
     player_data["ban"] = bans.get(player["participantId"], None)
     player_data = {**player_data, **central}
-    player_data["puuid"] = (
-        int(blake2b(player_data["puuid"].encode(), digest_size=8).hexdigest(), base=16)
-        - pow(2, 63)
-        - 1
-    )
     for dt_var in [
         "gameStartTimestamp",
         "gameCreation",
