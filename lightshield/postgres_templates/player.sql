@@ -1,3 +1,4 @@
+CREATE SCHEMA IF NOT EXISTS match_data;
 CREATE TABLE match_data.player
 (
     -- Central
