@@ -15,7 +15,7 @@ CREATE TABLE ranking
 
     -- Last updated value
     last_updated   TIMESTAMP,
-    puuid_reserved TIMESTAMP,
+    update_reserved TIMESTAMP,
     PRIMARY KEY (summoner_id, platform)
 )
     PARTITION BY LIST (platform)
