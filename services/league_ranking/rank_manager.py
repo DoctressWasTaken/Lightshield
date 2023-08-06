@@ -9,6 +9,7 @@ tiers = [
     "SILVER",
     "GOLD",
     "PLATINUM",
+    "EMERALD",
     "DIAMOND",
     "MASTER",
     "GRANDMASTER",
