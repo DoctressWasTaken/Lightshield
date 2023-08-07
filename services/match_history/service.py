@@ -94,7 +94,7 @@ class Platform:
                                 WHERE puuid IN (
                                     SELECT puuid
                                     FROM summoner
-                                    WHERE last_platform = any($1::platform[])
+                                    WHERE last_platform = any($1::platform[]) AND puuid <> 'BOT'
                                     ORDER BY CASE WHEN last_updated IS NULL THEN 0 ELSE 1 END, last_updated
                                     LIMIT $2
                                     FOR UPDATE
